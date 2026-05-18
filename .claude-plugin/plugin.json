@@ -1,7 +1,7 @@
 {
   "name": "speclinker",
   "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 REQ-ID 체이닝, UA 대시보드 통합",
-  "version": "2.5.0",
+  "version": "2.6.0",
   "author": {
     "name": "DreamyDreamss"
   },
@@ -33,8 +33,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/build-ua.sh"]
+            "command": "node",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/build-ua.js"]
           }
         ]
       }
