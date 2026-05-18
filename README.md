@@ -103,25 +103,17 @@ Claude Code CLI에서:
 /plugin install speclinker@speclinker
 ```
 
-설치 위치: `~/.claude/plugins/speclinker/`
+설치 위치: `~/.claude/plugins/cache/speclinker/speclinker/<버전>/`
 
-### 3단계 — UA 코어 빌드 (필수)
+### 3단계 — UA 코어 빌드 (자동)
 
-UA(Understand Anything) 코어는 소스 그대로 배포되므로 설치 후 한 번만 빌드합니다.
+UA 코어 빌드는 **Claude Code 세션 시작 시 자동으로 실행**됩니다 (`SessionStart` 훅).  
+최초 설치 후 Claude Code를 열면 빌드가 자동으로 진행됩니다.
 
-**Windows (PowerShell):**
-```powershell
-cd "$env:USERPROFILE\.claude\plugins\speclinker\ua"
-pnpm install
-pnpm --filter @understand-anything/core build
-```
-
-**Mac / Linux:**
-```bash
-cd ~/.claude/plugins/speclinker/ua
-pnpm install
-pnpm --filter @understand-anything/core build
-```
+> **수동 빌드가 필요한 경우** (훅이 실행 안 됐을 때):
+> ```bash
+> bash ~/.claude/plugins/cache/speclinker/speclinker/<버전>/scripts/build-ua.sh
+> ```
 
 빌드 완료 확인:
 ```

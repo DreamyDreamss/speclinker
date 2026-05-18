@@ -26,5 +26,18 @@
     "./ua/agents/domain-analyzer.md",
     "./ua/agents/file-analyzer.md",
     "./ua/agents/project-scanner.md"
-  ]
+  ],
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/build-ua.sh"]
+          }
+        ]
+      }
+    ]
+  }
 }
