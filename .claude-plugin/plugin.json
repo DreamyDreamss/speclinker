@@ -2,36 +2,29 @@
   "name": "speclinker",
   "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 REQ-ID 체이닝, UA 대시보드 통합",
   "version": "2.4.0",
-  "author": "gen-harness",
+  "author": {
+    "name": "DreamyDreamss"
+  },
   "skills": [
-    "skills/sl-init",
-    "skills/sl-genesis",
-    "skills/sl-recon",
-    "skills/sl-aidd",
-    "skills/sl-dev",
-    "skills/sl-test",
-    "skills/sl-rtm",
-    "skills/sl-analyze",
-    "skills/sl-change",
-    "ua/skills/understand",
-    "ua/skills/understand-domain",
-    "ua/skills/understand-diff",
-    "ua/skills/understand-dashboard"
+    "./ua/skills/understand",
+    "./ua/skills/understand-domain",
+    "./ua/skills/understand-diff",
+    "./ua/skills/understand-dashboard"
   ],
   "agents": [
-    "agents/spec-agent.md",
-    "agents/rd-agent.md",
-    "agents/srs-agent.md",
-    "agents/sad-agent.md",
-    "agents/ddd-api-agent.md",
-    "agents/ddd-db-agent.md",
-    "agents/ddd-ui-agent.md",
-    "agents/rtm-agent.md",
-    "agents/dev-agent.md",
-    "agents/test-agent.md",
-    "ua/agents/architecture-analyzer.md",
-    "ua/agents/domain-analyzer.md",
-    "ua/agents/file-analyzer.md",
-    "ua/agents/project-scanner.md"
+    "./agents/spec-agent.md",
+    "./agents/rd-agent.md",
+    "./agents/srs-agent.md",
+    "./agents/sad-agent.md",
+    "./agents/ddd-api-agent.md",
+    "./agents/ddd-db-agent.md",
+    "./agents/ddd-ui-agent.md",
+    "./agents/rtm-agent.md",
+    "./agents/dev-agent.md",
+    "./agents/test-agent.md",
+    "./ua/agents/architecture-analyzer.md",
+    "./ua/agents/domain-analyzer.md",
+    "./ua/agents/file-analyzer.md",
+    "./ua/agents/project-scanner.md"
   ]
 }

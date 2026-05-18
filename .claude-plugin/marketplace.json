@@ -9,10 +9,7 @@
   "plugins": [
     {
       "name": "speclinker",
-      "source": {
-        "source": "github",
-        "repo": "DreamyDreamss/speclinker"
-      },
+      "source": "./",
       "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 REQ-ID 체이닝, UA 대시보드 통합"
     }
   ]
