@@ -94,13 +94,13 @@ SI/ITO 개발 전주기 자동화 플러그인 — 요구사항 정의부터 코
 Claude Code CLI에서:
 
 ```
-/plugin marketplace add github:DreamyDreamss/speclinker
+/plugin marketplace add DreamyDreamss/speclinker
 ```
 
 ### 2단계 — 플러그인 설치
 
 ```
-/plugin install speclinker@speclinker
+/plugin install speclinker@DreamyDreamss/speclinker
 ```
 
 설치 위치: `~/.claude/plugins/speclinker/`
@@ -196,7 +196,7 @@ cp ~/.claude/plugins/speclinker/templates/mcp/.mcp.json.example .mcp.json
 ## 업데이트
 
 ```
-/plugin update speclinker@speclinker
+/plugin update speclinker@DreamyDreamss/speclinker
 ```
 
 업데이트 후 UA 코어를 다시 빌드합니다 (ua/packages/core 변경 시):
@@ -211,7 +211,7 @@ cd ~/.claude/plugins/speclinker/ua && pnpm install && pnpm --filter @understand-
 
 | 증상 | 원인 | 해결 |
 |------|------|------|
-| `/sl-init` 인식 안 됨 | 플러그인 미설치 | `/plugin install speclinker@speclinker` 재실행 |
+| `/sl-init` 인식 안 됨 | 플러그인 미설치 | `/plugin install speclinker@DreamyDreamss/speclinker` 재실행 |
 | `/understand-dashboard` 실행 안 됨 | UA 코어 미빌드 | 3단계 빌드 재실행 |
 | `python not found` | Python 미설치·PATH 누락 | Python 3 설치 후 터미널 재시작 |
 | `.sh` 실행 안 됨 (Windows) | Git Bash 미설치 | [git-scm.com](https://git-scm.com/downloads) 설치 |

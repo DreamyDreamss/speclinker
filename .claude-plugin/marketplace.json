@@ -8,8 +8,7 @@
   },
   "plugins": [
     {
-      "name": "speclinker",
-      "source": "."
+      "name": "speclinker"
     }
   ]
 }
