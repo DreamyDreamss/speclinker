@@ -1,0 +1,10 @@
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+ua/packages/*/dist/
+ua/packages/dashboard/dist/
+scripts/node_modules/
+.env
+.env.local
+*.log

@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "db-{별칭}": {
+      "command": "python",
+      "args": ["D:/gen-harness/mcp-servers/oracle_schema_server.py"],
+      "env": {
+        "PROJECT_DIR": "여기에_프로젝트_루트_절대경로_입력",
+        "ENV": "local",
+        "ORA_HOST": "여기에_Oracle_호스트_IP_입력",
+        "ORA_PORT": "1521",
+        "ORA_SERVICE": "여기에_SERVICE_NAME_입력",
+        "ORA_USER": "여기에_아이디_입력",
+        "ORA_PASSWORD": "여기에_비밀번호_입력"
+      }
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "atlassian": {
+      "command": "uvx",
+      "args": ["mcp-atlassian"],
+      "env": {
+        "JIRA_URL": "https://여기에_온프레미스_지라_주소_입력",
+        "JIRA_USERNAME": "여기에_지라_사용자명_입력",
+        "JIRA_API_TOKEN": "여기에_지라_PAT_또는_비밀번호_입력",
+        "CONFLUENCE_URL": "https://여기에_온프레미스_위키_주소_입력",
+        "CONFLUENCE_USERNAME": "여기에_위키_사용자명_입력",
+        "CONFLUENCE_API_TOKEN": "여기에_위키_PAT_또는_비밀번호_입력"
+      }
+    }
+  }
+}

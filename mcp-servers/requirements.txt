@@ -1,0 +1,21 @@
+# MCP Schema Inspector 서버 공통 의존성
+# pip install -r requirements.txt
+
+mcp[cli]>=1.0.0
+fastmcp>=0.1.0
+sqlalchemy>=2.0.0
+pandas>=2.0.0
+python-dotenv>=1.0.0
+
+# DB2
+ibm_db>=3.2.0
+ibm_db_sa>=0.4.0
+
+# MariaDB / MySQL
+PyMySQL>=1.1.0
+
+# Oracle (Thin 모드 — Oracle Client 설치 불필요)
+python-oracledb>=2.0.0
+
+# PostgreSQL (참고용 — PostgreSQL은 npx 패키지 사용)
+# psycopg2-binary>=2.9.0

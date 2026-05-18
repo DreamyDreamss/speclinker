@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "atlassian": {
+      "command": "uvx",
+      "args": ["mcp-atlassian"],
+      "env": {
+        "JIRA_URL": "https://여기에_회사명.atlassian.net",
+        "JIRA_USERNAME": "여기에_이메일_입력",
+        "JIRA_API_TOKEN": "여기에_API_토큰_입력",
+        "CONFLUENCE_URL": "https://여기에_회사명.atlassian.net/wiki",
+        "CONFLUENCE_USERNAME": "여기에_이메일_입력",
+        "CONFLUENCE_API_TOKEN": "여기에_API_토큰_입력"
+      }
+    }
+  }
+}

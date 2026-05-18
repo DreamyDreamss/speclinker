@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "db-{별칭}": {
+      "command": "python",
+      "args": ["D:/gen-harness/mcp-servers/mariadb_schema_server.py"],
+      "env": {
+        "PROJECT_DIR": "여기에_프로젝트_루트_절대경로_입력",
+        "ENV": "local",
+        "MDB_HOST": "여기에_MariaDB_호스트_IP_입력",
+        "MDB_PORT": "3306",
+        "MDB_DATABASE": "여기에_DB명_입력",
+        "MDB_USER": "여기에_아이디_입력",
+        "MDB_PASSWORD": "여기에_비밀번호_입력"
+      }
+    }
+  }
+}

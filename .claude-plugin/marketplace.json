@@ -1,0 +1,15 @@
+{
+  "name": "speclinker",
+  "metadata": {
+    "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 REQ-ID 체이닝, UA 대시보드 통합"
+  },
+  "owner": {
+    "name": "DreamyDreamss"
+  },
+  "plugins": [
+    {
+      "name": "speclinker",
+      "source": "."
+    }
+  ]
+}

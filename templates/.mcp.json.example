@@ -1,0 +1,33 @@
+{
+  "mcpServers": {
+    "db-local": {
+      "command": "python",
+      "args": ["<PLUGIN_PATH>/mcp-servers/mariadb_schema_server.py"],
+      "env": {
+        "PROJECT_DIR": "<프로젝트_루트_절대경로>",
+        "ENV": "local",
+        "MDB_HOST": "127.0.0.1",
+        "MDB_PORT": "3306",
+        "MDB_DATABASE": "<DB명>",
+        "MDB_USER": "<아이디>",
+        "MDB_PASSWORD": "<비밀번호>"
+      }
+    },
+    "jira": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-server-atlassian"],
+      "env": {
+        "JIRA_URL": "https://<팀>.atlassian.net",
+        "JIRA_USER": "<이메일>",
+        "JIRA_TOKEN": "<API토큰>"
+      }
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-server-github"],
+      "env": {
+        "GITHUB_TOKEN": "<Personal_Access_Token>"
+      }
+    }
+  }
+}

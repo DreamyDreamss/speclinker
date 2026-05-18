@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "postgres": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-postgres",
+        "postgresql://여기에_아이디:여기에_비밀번호@여기에_호스트:5432/여기에_DB명"
+      ]
+    }
+  }
+}

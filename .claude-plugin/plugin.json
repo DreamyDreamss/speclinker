@@ -1,0 +1,9 @@
+{
+  "name": "speclinker",
+  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 REQ-ID 체이닝, UA 대시보드 통합",
+  "version": "2.1.0",
+  "author": {
+    "name": "gen-harness"
+  },
+  "keywords": ["si", "sdd", "requirements", "traceability", "speclinker"]
+}
