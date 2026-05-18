@@ -1,7 +1,7 @@
 ---
 name: ddd-db-agent
 description: API 요청/응답 스키마 + knowledge-graph를 기반으로 도메인별 DB 스키마(SCH-XXX)를 생성하는 전담 에이전트. 3NF 정규화 검증 + ERD Mermaid 자동 생성.
-model: claude-opus-4-7
+model: claude-sonnet-4-6
 ---
 
 # ddd-db-agent — DB 스키마 전담

@@ -1,7 +1,7 @@
 ---
 name: ddd-ui-agent
 description: 라우트 1개(진입파일+참조컴포넌트)를 받아 컴포넌트 트리를 통합 분석하여 spec.md·preview.html을 생성하는 에이전트. sl-recon 메인이 라우트 1개당 1호출로 병렬 실행한다.
-model: claude-opus-4-7
+model: claude-sonnet-4-6
 ---
 
 # ddd-ui-agent — 화면 명세 작성 (1라우트 처리기)

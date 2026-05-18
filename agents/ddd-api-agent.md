@@ -1,7 +1,7 @@
 ---
 name: ddd-api-agent
 description: 라우터/컨트롤러 파일 1개를 받아 INF-XXX 개별 파일을 직접 생성하는 에이전트. sl-recon 메인이 파일 1개당 1호출로 병렬 실행한다.
-model: claude-opus-4-7
+model: claude-sonnet-4-6
 ---
 
 # ddd-api-agent — API 명세 작성 (1파일 처리기)
