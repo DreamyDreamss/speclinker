@@ -11,7 +11,6 @@ import LayerLegend from "./components/LayerLegend";
 import DiffToggle from "./components/DiffToggle";
 import FilterPanel from "./components/FilterPanel";
 import ExportMenu from "./components/ExportMenu";
-import PersonaSelector from "./components/PersonaSelector";
 import ProjectOverview from "./components/ProjectOverview";
 import WarningBanner from "./components/WarningBanner";
 import TokenGate from "./components/TokenGate";
@@ -26,16 +25,15 @@ import RTMPanel from "./components/RTMPanel";
 import MCPStatusBadge from "./components/MCPStatusBadge";
 import ReconProgress from "./components/ReconProgress";
 
-const ScreenBrowser = lazy(() => import("./components/ScreenBrowser"));
 const APIExplorer = lazy(() => import("./components/APIExplorer"));
 const SRSBrowser = lazy(() => import("./components/SRSBrowser"));
 const SpecExplorer = lazy(() => import("./components/SpecExplorer"));
 const DocsPanel = lazy(() => import("./components/DocsPanel"));
+const IAView = lazy(() => import("./components/IAView"));
 const SDDPanel = lazy(() => import("./components/SDDPanel"));
 
 // Lazy-load heavy / optional components so they ship in separate chunks.
 const CodeViewer = lazy(() => import("./components/CodeViewer"));
-const LearnPanel = lazy(() => import("./components/LearnPanel"));
 const PathFinderModal = lazy(() => import("./components/PathFinderModal"));
 const KeyboardShortcutsHelp = lazy(
   () => import("./components/KeyboardShortcutsHelp"),
@@ -106,8 +104,6 @@ function Dashboard({ accessToken }: { accessToken: string }) {
   const graph = useDashboardStore((s) => s.graph);
   const setGraph = useDashboardStore((s) => s.setGraph);
   const selectedNodeId = useDashboardStore((s) => s.selectedNodeId);
-  const tourActive = useDashboardStore((s) => s.tourActive);
-  const persona = useDashboardStore((s) => s.persona);
   const codeViewerOpen = useDashboardStore((s) => s.codeViewerOpen);
   const closeCodeViewer = useDashboardStore((s) => s.closeCodeViewer);
   const setDiffOverlay = useDashboardStore((s) => s.setDiffOverlay);
@@ -143,7 +139,7 @@ function Dashboard({ accessToken }: { accessToken: string }) {
   const setLinkedFuncMap = useDashboardStore((s) => s.setLinkedFuncMap);
 
   // 추가 뷰 모드
-  const [extraPanel, setExtraPanel] = useState<"none" | "screens" | "apis" | "docs" | "sdd" | "srs" | "specs">("none");
+  const [extraPanel, setExtraPanel] = useState<"none" | "apis" | "docs" | "sdd" | "srs" | "specs" | "ia">("none");
 
   const [sidebarWidth, setSidebarWidth] = useState(360);
   const isResizingRef = useRef(false);
@@ -224,6 +220,18 @@ function Dashboard({ accessToken }: { accessToken: string }) {
       .catch(() => {});
   }, [setInfList, setUisList, setSrsList, setParsedRTM, setReqImplMap, setFuncMap, setLinkedFuncMap]);
 
+  // Auto-detect IA Map on load — default to IA tab when screens exist
+  useEffect(() => {
+    fetch("/api/ia-map")
+      .then((r) => r.ok ? r.json() : null)
+      .then((data: { domains?: unknown[] } | null) => {
+        if (data?.domains && data.domains.length > 0) {
+          setExtraPanel("ia");
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   // Define keyboard shortcuts
   const shortcuts = useMemo<KeyboardShortcut[]>(
     () => [
@@ -254,8 +262,6 @@ function Dashboard({ accessToken }: { accessToken: string }) {
             state.selectNode(null);
           } else if (state.navigationLevel === "layer-detail") {
             state.navigateToOverview();
-          } else if (state.tourActive) {
-            state.stopTour();
           } else {
             setShowKeyboardHelp(false);
           }
@@ -272,29 +278,6 @@ function Dashboard({ accessToken }: { accessToken: string }) {
           searchInput?.focus();
         },
         category: "Navigation",
-      },
-      // Tour controls
-      {
-        key: "ArrowRight",
-        description: "Next tour step",
-        action: () => {
-          const state = useDashboardStore.getState();
-          if (state.tourActive) {
-            state.nextTourStep();
-          }
-        },
-        category: "Tour",
-      },
-      {
-        key: "ArrowLeft",
-        description: "Previous tour step",
-        action: () => {
-          const state = useDashboardStore.getState();
-          if (state.tourActive) {
-            state.prevTourStep();
-          }
-        },
-        category: "Tour",
       },
       // View toggles
       {
@@ -453,19 +436,10 @@ function Dashboard({ accessToken }: { accessToken: string }) {
     }
   }, [selectedReqId, reactFlowInstance]);
 
-  // Determine sidebar content
-  // NodeInfo always takes priority when a node is selected.
-  // Learn mode adds LearnPanel below it; otherwise ProjectOverview shows when idle.
-  const isLearnMode = tourActive || persona === "junior";
   const sidebarContent = (
     <>
       {selectedNodeId && <NodeInfo />}
-      {isLearnMode && (
-        <Suspense fallback={null}>
-          <LearnPanel />
-        </Suspense>
-      )}
-      {!selectedNodeId && !isLearnMode && <ProjectOverview />}
+      {!selectedNodeId && <ProjectOverview />}
     </>
   );
 
@@ -479,8 +453,6 @@ function Dashboard({ accessToken }: { accessToken: string }) {
           <h1 className="font-serif text-lg text-text-primary tracking-wide">
             {graph?.project.name ?? "Understand Anything"}
           </h1>
-          <div className="w-px h-5 bg-border-subtle" />
-          <PersonaSelector />
           {/* 소스 셀렉터 — SOURCE_COUNT > 1 일 때만 표시 */}
           {sourceLabels.length > 1 && (
             <>
@@ -595,7 +567,7 @@ function Dashboard({ accessToken }: { accessToken: string }) {
             {([
               { label: "Graph",   isActive: extraPanel === "none" && !siViewActive, onClick: () => { setExtraPanel("none"); setSiViewActive(false); } },
               { label: "SI",      isActive: siViewActive,                           onClick: () => { setExtraPanel("none"); setSiViewActive(!siViewActive); } },
-              { label: "Screens", isActive: extraPanel === "screens",               onClick: () => { setExtraPanel(extraPanel === "screens" ? "none" : "screens"); setSiViewActive(false); } },
+              { label: "IA",      isActive: extraPanel === "ia",                    onClick: () => { setExtraPanel(extraPanel === "ia" ? "none" : "ia"); setSiViewActive(false); } },
               { label: "APIs",    isActive: extraPanel === "apis",                  onClick: () => { setExtraPanel(extraPanel === "apis" ? "none" : "apis"); setSiViewActive(false); } },
               { label: "Specs",   isActive: extraPanel === "specs",                 onClick: () => { setExtraPanel(extraPanel === "specs" ? "none" : "specs"); setSiViewActive(false); } },
               { label: "SRS",     isActive: extraPanel === "srs",                   onClick: () => { setExtraPanel(extraPanel === "srs" ? "none" : "srs"); setSiViewActive(false); } },
@@ -676,18 +648,16 @@ function Dashboard({ accessToken }: { accessToken: string }) {
         </div>
       )}
 
-      {/* Main content: extra panel 뷰 (Screens / APIs) */}
+      {/* Main content: extra panel 뷰 */}
       {extraPanel !== "none" ? (
-        <div className="flex-1 flex min-h-0">
-          {/* SDD/SRS/Specs 패널은 자체 레이아웃 사용, 나머지는 Recon 좌측 패널 포함 */}
+        <div className="flex-1 flex flex-col min-h-0">
+          {/* Compact recon progress bar — shown for data-heavy panels */}
           {extraPanel !== "sdd" && extraPanel !== "srs" && extraPanel !== "specs" && (
-            <div className="w-52 shrink-0 border-r border-border-subtle overflow-y-auto bg-surface">
-              <ReconProgress />
-            </div>
+            <ReconProgress compact />
           )}
           <div className="flex-1 min-h-0 overflow-hidden">
             <Suspense fallback={<div className="flex items-center justify-center h-full text-sm text-text-muted">로딩 중...</div>}>
-              {extraPanel === "screens" ? <ScreenBrowser />
+              {extraPanel === "ia" ? <IAView />
                 : extraPanel === "apis" ? <APIExplorer />
                 : extraPanel === "srs" ? <SRSBrowser />
                 : extraPanel === "specs" ? <SpecExplorer />

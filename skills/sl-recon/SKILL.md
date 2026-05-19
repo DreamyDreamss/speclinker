@@ -624,7 +624,34 @@ for d in plan['domains']:
 
 ---
 
-## STEP 7 — si-graph 갱신 확인
+## STEP 7 — IA 맵 생성
+
+INF + UIS + screen_inventory를 조합하여 화면 계층 맵을 생성한다.
+
+```bash
+!python3 -c "
+import os, sys
+env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
+           if '=' in l and not l.startswith('#'))
+plugin = env.get('PLUGIN_PATH','')
+script = os.path.join(plugin, 'scripts', 'ia_map_builder.py') if plugin else ''
+if script and os.path.exists(script):
+    import subprocess
+    subprocess.run([sys.executable, script, '.'], check=False)
+else:
+    print('ia_map_builder.py 없음 — PLUGIN_PATH 확인')
+"
+```
+
+```bash
+!test -f _tmp/ia-map.json \
+  && python3 -c \"import json; d=json.load(open('_tmp/ia-map.json')); print(f'IA 맵 생성 완료: 화면 {d[\\\"totalScreens\\\"]}개, API 연결 {d[\\\"totalApis\\\"]}건')\" \
+  || echo "ia-map.json 없음 — ia_map_builder.py 실패 확인 필요"
+```
+
+---
+
+## STEP 8 — si-graph 갱신 확인
 
 ```bash
 !test -f .understand-anything/si-graph.json \
@@ -656,6 +683,10 @@ for d in plan['domains']:
 - docs/00_FUNC/FUNC_MAP.md              (화면→SRS→INF→DB 직결 매핑 — RTM 대체)
 - docs/03_기능명세서/SRS_v1.0.md        (SRS 색인)
 - docs/03_기능명세서/domains/SRS_{도메인}.md × N개
+
+[IA 맵]
+- _tmp/ia-map.json                      (화면 계층 구조 + 화면↔INF 연결 매트릭스)
+  → /understand-dashboard 실행 후 "IA" 탭에서 확인 가능
 
 다음 단계: /sl-dev (코드 수정 필요 시) 또는 납품
 ```

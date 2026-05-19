@@ -37,9 +37,9 @@
 | `agents/rd-agent.md` | REQ-ID 추출 + RD 생성 | Opus | ReAct + Tree-of-Thoughts |
 | `agents/srs-agent.md` | SRS 상세화 | Opus | Chain-of-Thought + Reflexion |
 | `agents/sad-agent.md` | 아키텍처 설계서 | Opus | 패턴 매칭 + Self-Critique |
-| `agents/ddd-api-agent.md` | API 명세 (INF-XXX) | Opus | DSPy-style 구조화 출력 |
-| `agents/ddd-db-agent.md` | DB 스키마 (SCH-XXX) | Opus | 3NF 검증 + ERD 생성 |
-| `agents/ddd-ui-agent.md` | 화면 설계 (UIS-F-XXX) | Opus | 소스 증거 원칙 + ASCII 와이어 |
+| `agents/ddd-api-agent.md` | API 명세 (INF-XXX) | Sonnet | DSPy-style 구조화 출력 |
+| `agents/ddd-db-agent.md` | DB 스키마 (SCH-XXX) | Sonnet | 3NF 검증 + ERD 생성 |
+| `agents/ddd-ui-agent.md` | 화면 설계 (UIS-F-XXX) | Sonnet | 소스 증거 원칙 + ASCII 와이어 |
 | `agents/rtm-agent.md` | RTM 체인 + 품질 게이트 | Opus | Constitutional AI |
 
 ### 코드·테스트 에이전트
@@ -49,7 +49,16 @@
 | 코드 생성 | `agents/dev-agent.md` | Sonnet | 반복 실행 태스크 |
 | 테스트 | `agents/test-agent.md` | Sonnet | 반복 실행 태스크 |
 
-모델 분리 전략: 단일 Opus 대비 약 40~60% 비용 절감
+### UA 인프라 에이전트 (sl-recon STEP 1 내부 호출)
+
+| 에이전트 | 역할 | 모델 |
+|--------|------|------|
+| `ua/agents/project-scanner.md` | 파일 구조·언어·프레임워크 스캔 | inherit |
+| `ua/agents/file-analyzer.md` | 노드·엣지 추출 (knowledge-graph 생성) | inherit |
+| `ua/agents/architecture-analyzer.md` | 레이어 분류 | inherit |
+| `ua/agents/domain-analyzer.md` | 도메인 플로우 분석 (domain-graph 생성) | inherit |
+
+모델 분리 전략: 단일 Opus 대비 약 60~70% 비용 절감 (Sonnet 에이전트 10개 중 5개)
 
 ## FUNC-ID 체이닝 원칙 (범용 주축)
 
@@ -122,11 +131,11 @@ FUNC 선택 → func_context_bundle.py (스펙 자동수집)
 ## 플러그인 설치 및 사용
 
 ```bash
-# 마켓플레이스 등록
-/plugin marketplace add https://github.com/your-org/gen-harness
+# 마켓플레이스 등록 (최초 1회)
+/plugin marketplace add DreamyDreamss/speclinker
 
 # 설치
-/plugin install speclinker@gen-harness
+/plugin install speclinker@speclinker
 
 # 사용
 /sl-init          # 프로젝트 초기화

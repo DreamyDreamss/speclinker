@@ -103,36 +103,6 @@ const NODE_TYPE_TO_CATEGORY: Record<NodeType, NodeCategory> = {
 
 // ── Helper components that must live inside <ReactFlow> ────────────────
 
-/** Pans/zooms to tour-highlighted nodes. */
-function TourFitView() {
-  const tourHighlightedNodeIds = useDashboardStore((s) => s.tourHighlightedNodeIds);
-  const { fitView } = useReactFlow();
-  const prevRef = useRef<string[]>([]);
-
-  useEffect(() => {
-    const prev = prevRef.current;
-    const changed =
-      tourHighlightedNodeIds.length > 0 &&
-      (tourHighlightedNodeIds.length !== prev.length ||
-        tourHighlightedNodeIds.some((id, i) => id !== prev[i]));
-    prevRef.current = tourHighlightedNodeIds;
-
-    if (changed) {
-      requestAnimationFrame(() => {
-        fitView({
-          nodes: tourHighlightedNodeIds.map((id) => ({ id })),
-          duration: 500,
-          padding: 0.3,
-          maxZoom: 1.2,
-          minZoom: 0.01,
-        });
-      });
-    }
-  }, [tourHighlightedNodeIds, fitView]);
-
-  return null;
-}
-
 /** Centers the graph on the selected node (e.g. from search). */
 function SelectedNodeFitView() {
   const selectedNodeId = useDashboardStore((s) => s.selectedNodeId);
@@ -257,7 +227,6 @@ function useLayerDetailTopology() {
   const activeLayerId = useDashboardStore((s) => s.activeLayerId);
   const activeDirPrefix = useDashboardStore((s) => s.activeDirPrefix);
   const selectNode = useDashboardStore((s) => s.selectNode);
-  const persona = useDashboardStore((s) => s.persona);
   const diffMode = useDashboardStore((s) => s.diffMode);
   const changedNodeIds = useDashboardStore((s) => s.changedNodeIds);
   const affectedNodeIds = useDashboardStore((s) => s.affectedNodeIds);
@@ -293,9 +262,6 @@ function useLayerDetailTopology() {
       }
     }
 
-    // All node types visible at each persona level (single source of truth).
-    // Sub-file types (function, class) are only shown for junior/experienced.
-    const subFileTypes = new Set(["function", "class"]);
     const allVisibleTypes = new Set([
       "file", "module", "concept",
       "config", "document", "service", "table",
@@ -307,7 +273,6 @@ function useLayerDetailTopology() {
     let filteredGraphNodes = graph.nodes.filter((n) => {
       if (!expandedLayerNodeIds.has(n.id)) return false;
       if (!allVisibleTypes.has(n.type)) return false;
-      if (persona === "non-technical" && subFileTypes.has(n.type)) return false;
       return true;
     });
 
@@ -541,7 +506,7 @@ function useLayerDetailTopology() {
 
     const laid = applyDagreLayout(allFlowNodes, allFlowEdges, "TB", dims);
     return { nodes: laid.nodes, edges: laid.edges, portalNodes, portalEdges, filteredEdges: filteredGraphEdges };
-  }, [graph, activeLayerId, activeDirPrefix, persona, handleNodeSelect, diffMode, changedNodeIds, affectedNodeIds, focusNodeId, nodeTypeFilters, drillIntoLayer, drillIntoDirPrefix, filterComplexities]);
+  }, [graph, activeLayerId, activeDirPrefix, handleNodeSelect, diffMode, changedNodeIds, affectedNodeIds, focusNodeId, nodeTypeFilters, drillIntoLayer, drillIntoDirPrefix, filterComplexities]);
 }
 
 /**
@@ -551,13 +516,11 @@ function useLayerDetailTopology() {
 function useLayerDetailGraph() {
   const selectedNodeId = useDashboardStore((s) => s.selectedNodeId);
   const searchResults = useDashboardStore((s) => s.searchResults);
-  const tourHighlightedNodeIds = useDashboardStore((s) => s.tourHighlightedNodeIds);
 
   const topo = useLayerDetailTopology();
 
   const nodes = useMemo(() => {
     const searchMap = new Map(searchResults.map((r) => [r.nodeId, r.score]));
-    const tourSet = new Set(tourHighlightedNodeIds);
 
     // Build neighbor set for selection highlighting
     const neighborNodeIds = new Set<string>();
@@ -576,7 +539,6 @@ function useLayerDetailGraph() {
       const searchScore = searchMap.get(node.id);
       const isHighlighted = searchScore !== undefined;
       const isSelected = selectedNodeId === node.id;
-      const isTourHighlighted = tourSet.has(node.id);
       const hasSelection = !!selectedNodeId;
       const isNeighbor = hasSelection && neighborNodeIds.has(node.id) && !isSelected;
       const isSelectionFaded = hasSelection && !neighborNodeIds.has(node.id);
@@ -588,16 +550,15 @@ function useLayerDetailGraph() {
         data.isHighlighted === isHighlighted &&
         data.searchScore === searchScore &&
         data.isSelected === isSelected &&
-        data.isTourHighlighted === isTourHighlighted &&
         data.isNeighbor === isNeighbor &&
         data.isSelectionFaded === isSelectionFaded
       ) {
         return node;
       }
 
-      return { ...node, data: { ...data, isHighlighted, searchScore, isSelected, isTourHighlighted, isNeighbor, isSelectionFaded } };
+      return { ...node, data: { ...data, isHighlighted, searchScore, isSelected, isTourHighlighted: false, isNeighbor, isSelectionFaded } };
     });
-  }, [topo.nodes, topo.filteredEdges, selectedNodeId, searchResults, tourHighlightedNodeIds]);
+  }, [topo.nodes, topo.filteredEdges, selectedNodeId, searchResults]);
 
   const edges = useMemo(() => {
     if (!selectedNodeId) return topo.edges;
@@ -730,7 +691,6 @@ function GraphViewInner() {
           maskColor="var(--glass-bg)"
           className="!bg-surface !border !border-border-subtle"
         />
-        <TourFitView />
         <SelectedNodeFitView />
       </ReactFlow>
     </div>

@@ -13,7 +13,7 @@ import "@xyflow/react/dist/style.css";
 import CustomNode from "./CustomNode";
 import type { CustomNodeData } from "./CustomNode";
 import { useDashboardStore } from "../store";
-import { applyForceLayout, NODE_WIDTH, NODE_HEIGHT } from "../utils/layout";
+import { applyDagreLayout, NODE_WIDTH, NODE_HEIGHT } from "../utils/layout";
 import type { KnowledgeGraph } from "@understand-anything/core/types";
 
 const nodeTypes = {
@@ -83,7 +83,7 @@ function computeLayout(
     target: e.target,
   }));
 
-  const { nodes: layoutedNodes } = applyForceLayout(tmpNodes, tmpEdges, dims, communityMap);
+  const { nodes: layoutedNodes } = applyDagreLayout(tmpNodes, tmpEdges, "LR", dims);
 
   const positionMap = new Map<string, { x: number; y: number }>();
   for (const n of layoutedNodes) {
@@ -99,7 +99,6 @@ function KnowledgeGraphViewInner() {
   const focusNodeId = useDashboardStore((s) => s.focusNodeId);
   const selectNode = useDashboardStore((s) => s.selectNode);
   const searchResultsRaw = useDashboardStore((s) => s.searchResults);
-  const tourHighlightedNodeIds = useDashboardStore((s) => s.tourHighlightedNodeIds);
   const nodeTypeFilters = useDashboardStore((s) => s.nodeTypeFilters);
 
   const onNodeClick = useCallback(
@@ -110,11 +109,6 @@ function KnowledgeGraphViewInner() {
   const searchResults = useMemo(
     () => new Map(searchResultsRaw.map((r) => [r.nodeId, r.score])),
     [searchResultsRaw],
-  );
-
-  const tourSet = useMemo(
-    () => new Set(tourHighlightedNodeIds),
-    [tourHighlightedNodeIds],
   );
 
   // Filter graph — only recompute when graph data or filters change
@@ -166,8 +160,6 @@ function KnowledgeGraphViewInner() {
         !isNeighbor;
       const searchScore = searchResults.get(node.id);
       const isHighlighted = searchScore !== undefined;
-      const isTourHighlighted = tourSet.has(node.id);
-
       const data: CustomNodeData = {
         label: node.name,
         nodeType: node.type,
@@ -176,7 +168,7 @@ function KnowledgeGraphViewInner() {
         isHighlighted,
         searchScore,
         isSelected,
-        isTourHighlighted,
+        isTourHighlighted: false,
         isDiffChanged: false,
         isDiffAffected: false,
         isDiffFaded: false,
@@ -233,7 +225,7 @@ function KnowledgeGraphViewInner() {
     });
 
     return { nodes: rfNodes, edges: rfEdges };
-  }, [filteredGraph, selectedNodeId, focusNodeId, searchResults, tourSet, onNodeClick, positionMap, edgeCounts]);
+  }, [filteredGraph, selectedNodeId, focusNodeId, searchResults, onNodeClick, positionMap, edgeCounts]);
 
   if (!graph) {
     return (

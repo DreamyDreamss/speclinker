@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useDashboardStore } from "../store";
 
-export default function ReconProgress() {
+export default function ReconProgress({ compact = false }: { compact?: boolean }) {
   const reconProgress = useDashboardStore((s) => s.reconProgress);
   const setReconProgress = useDashboardStore((s) => s.setReconProgress);
 
@@ -30,6 +30,24 @@ export default function ReconProgress() {
   const totalSch = reconProgress.reduce((s, d) => s + d.schCount, 0);
   const totalUi  = reconProgress.reduce((s, d) => s + d.uiCount,  0);
 
+  if (compact) {
+    return (
+      <div className="flex items-center gap-3 px-4 py-1.5 border-b border-border-subtle bg-surface shrink-0">
+        <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Recon</span>
+        <span className="text-[10px] font-mono text-blue-400">INF {totalInf}</span>
+        <span className="text-[10px] font-mono text-emerald-400">DB {totalSch}</span>
+        <span className="text-[10px] font-mono text-violet-400">UI {totalUi}</span>
+        <div className="flex items-center gap-2 ml-2">
+          {reconProgress.map((d) => (
+            <span key={d.domain} className="text-[9px] text-text-muted/60 font-mono" title={`${d.domain}: ${d.infCount}I ${d.schCount}D ${d.uiCount}U`}>
+              {d.domain.slice(0, 8)}
+            </span>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 border-b border-border-subtle">
       {/* Summary */}
@@ -51,40 +69,37 @@ export default function ReconProgress() {
 
       {/* Per-domain breakdown */}
       <div className="space-y-2.5">
-        {reconProgress.map((d) => {
-          const hasAny = d.infCount + d.schCount + d.uiCount > 0;
-          return (
-            <div key={d.domain}>
-              <div className="flex items-center justify-between mb-1">
-                <span
-                  className="text-[10px] font-medium text-text-secondary truncate max-w-[100px]"
-                  title={d.domain}
-                >
-                  {d.domain}
-                </span>
-                <div className="flex items-center gap-1 shrink-0">
-                  {d.infCount > 0 && <span className="text-[9px] font-mono text-blue-400">{d.infCount}I</span>}
-                  {d.schCount > 0 && <span className="text-[9px] font-mono text-emerald-400">{d.schCount}D</span>}
-                  {d.uiCount  > 0 && <span className="text-[9px] font-mono text-violet-400">{d.uiCount}U</span>}
-                </div>
-              </div>
-              <div className="flex gap-0.5 h-1">
-                <div
-                  className={`h-full rounded-sm transition-all ${d.infCount > 0 ? "bg-blue-500" : "bg-border-subtle"}`}
-                  style={{ flex: 1 }}
-                />
-                <div
-                  className={`h-full rounded-sm transition-all ${d.schCount > 0 ? "bg-emerald-500" : "bg-border-subtle"}`}
-                  style={{ flex: 1 }}
-                />
-                <div
-                  className={`h-full rounded-sm transition-all ${d.uiCount > 0 ? "bg-violet-500" : "bg-border-subtle"}`}
-                  style={{ flex: 1 }}
-                />
+        {reconProgress.map((d) => (
+          <div key={d.domain}>
+            <div className="flex items-center justify-between mb-1">
+              <span
+                className="text-[10px] font-medium text-text-secondary truncate max-w-[100px]"
+                title={d.domain}
+              >
+                {d.domain}
+              </span>
+              <div className="flex items-center gap-1 shrink-0">
+                {d.infCount > 0 && <span className="text-[9px] font-mono text-blue-400">{d.infCount}I</span>}
+                {d.schCount > 0 && <span className="text-[9px] font-mono text-emerald-400">{d.schCount}D</span>}
+                {d.uiCount  > 0 && <span className="text-[9px] font-mono text-violet-400">{d.uiCount}U</span>}
               </div>
             </div>
-          );
-        })}
+            <div className="flex gap-0.5 h-1">
+              <div
+                className={`h-full rounded-sm transition-all ${d.infCount > 0 ? "bg-blue-500" : "bg-border-subtle"}`}
+                style={{ flex: 1 }}
+              />
+              <div
+                className={`h-full rounded-sm transition-all ${d.schCount > 0 ? "bg-emerald-500" : "bg-border-subtle"}`}
+                style={{ flex: 1 }}
+              />
+              <div
+                className={`h-full rounded-sm transition-all ${d.uiCount > 0 ? "bg-violet-500" : "bg-border-subtle"}`}
+                style={{ flex: 1 }}
+              />
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

@@ -1,13 +1,9 @@
 import { create } from "zustand";
 import { SearchEngine } from "@understand-anything/core/search";
 import type { SearchResult } from "@understand-anything/core/search";
-import type {
-  KnowledgeGraph,
-  TourStep,
-} from "@understand-anything/core/types";
+import type { KnowledgeGraph } from "@understand-anything/core/types";
 import type { ReactFlowInstance } from "@xyflow/react";
 
-export type Persona = "non-technical" | "junior" | "experienced";
 export type NavigationLevel = "overview" | "layer-detail";
 export type NodeType = "file" | "function" | "class" | "module" | "concept" | "config" | "document" | "service" | "table" | "endpoint" | "pipeline" | "schema" | "resource" | "domain" | "flow" | "step" | "article" | "entity" | "topic" | "claim" | "source" | "req" | "srs" | "tc" | "uis" | "inf" | "sch";
 export type Complexity = "simple" | "moderate" | "complex";
@@ -77,12 +73,6 @@ interface DashboardStore {
   codeViewerOpen: boolean;
   codeViewerNodeId: string | null;
 
-  tourActive: boolean;
-  currentTourStep: number;
-  tourHighlightedNodeIds: string[];
-
-  persona: Persona;
-
   diffMode: boolean;
   changedNodeIds: Set<string>;
   affectedNodeIds: Set<string>;
@@ -116,7 +106,6 @@ interface DashboardStore {
   navigateToOverview: () => void;
   setFocusNode: (nodeId: string | null) => void;
   setSearchQuery: (query: string) => void;
-  setPersona: (persona: Persona) => void;
   openCodeViewer: (nodeId: string) => void;
   closeCodeViewer: () => void;
 
@@ -131,12 +120,6 @@ interface DashboardStore {
   setFilters: (filters: Partial<FilterState>) => void;
   resetFilters: () => void;
   hasActiveFilters: () => boolean;
-
-  startTour: () => void;
-  stopTour: () => void;
-  setTourStep: (step: number) => void;
-  nextTourStep: () => void;
-  prevTourStep: () => void;
 
   // View mode
   viewMode: ViewMode;
@@ -206,27 +189,6 @@ interface DashboardStore {
   setReconProgress: (data: Array<{ domain: string; infCount: number; schCount: number; uiCount: number }> | null) => void;
 }
 
-function getSortedTour(graph: KnowledgeGraph): TourStep[] {
-  const tour = graph.tour ?? [];
-  return [...tour].sort((a, b) => a.order - b.order);
-}
-
-/** Navigate tour step to the correct layer for the first highlighted node. */
-function navigateTourToLayer(
-  graph: KnowledgeGraph,
-  nodeIds: string[],
-): Partial<DashboardStore> {
-  if (nodeIds.length === 0) return {};
-  const layerId = findNodeLayer(graph, nodeIds[0]);
-  if (layerId) {
-    return {
-      navigationLevel: "layer-detail" as const,
-      activeLayerId: layerId,
-    };
-  }
-  return {};
-}
-
 export const useDashboardStore = create<DashboardStore>()((set, get) => ({
   graph: null,
   selectedNodeId: null,
@@ -240,12 +202,6 @@ export const useDashboardStore = create<DashboardStore>()((set, get) => ({
   activeDirPrefix: null,
   codeViewerOpen: false,
   codeViewerNodeId: null,
-
-  tourActive: false,
-  currentTourStep: 0,
-  tourHighlightedNodeIds: [],
-
-  persona: "junior",
 
   diffMode: false,
   changedNodeIds: new Set<string>(),
@@ -420,8 +376,6 @@ export const useDashboardStore = create<DashboardStore>()((set, get) => ({
     set({ searchQuery: query, searchResults });
   },
 
-  setPersona: (persona) => set({ persona }),
-
   openCodeViewer: (nodeId) => set({ codeViewerOpen: true, codeViewerNodeId: nodeId }),
   closeCodeViewer: () => set({ codeViewerOpen: false, codeViewerNodeId: null }),
 
@@ -476,70 +430,6 @@ export const useDashboardStore = create<DashboardStore>()((set, get) => ({
       || filters.complexities.size !== ALL_COMPLEXITIES.length
       || filters.layerIds.size > 0
       || filters.edgeCategories.size !== ALL_EDGE_CATEGORIES.length;
-  },
-
-  startTour: () => {
-    const { graph } = get();
-    if (!graph || !graph.tour || graph.tour.length === 0) return;
-    const sorted = getSortedTour(graph);
-    const layerNav = navigateTourToLayer(graph, sorted[0].nodeIds);
-    set({
-      tourActive: true,
-      currentTourStep: 0,
-      tourHighlightedNodeIds: sorted[0].nodeIds,
-      selectedNodeId: null,
-      ...layerNav,
-    });
-  },
-
-  stopTour: () =>
-    set({
-      tourActive: false,
-      currentTourStep: 0,
-      tourHighlightedNodeIds: [],
-    }),
-
-  setTourStep: (step) => {
-    const { graph } = get();
-    if (!graph || !graph.tour || graph.tour.length === 0) return;
-    const sorted = getSortedTour(graph);
-    if (step < 0 || step >= sorted.length) return;
-    const layerNav = navigateTourToLayer(graph, sorted[step].nodeIds);
-    set({
-      currentTourStep: step,
-      tourHighlightedNodeIds: sorted[step].nodeIds,
-      ...layerNav,
-    });
-  },
-
-  nextTourStep: () => {
-    const { graph, currentTourStep } = get();
-    if (!graph || !graph.tour || graph.tour.length === 0) return;
-    const sorted = getSortedTour(graph);
-    if (currentTourStep < sorted.length - 1) {
-      const next = currentTourStep + 1;
-      const layerNav = navigateTourToLayer(graph, sorted[next].nodeIds);
-      set({
-        currentTourStep: next,
-        tourHighlightedNodeIds: sorted[next].nodeIds,
-        ...layerNav,
-      });
-    }
-  },
-
-  prevTourStep: () => {
-    const { graph, currentTourStep } = get();
-    if (!graph || !graph.tour || graph.tour.length === 0) return;
-    if (currentTourStep > 0) {
-      const sorted = getSortedTour(graph);
-      const prev = currentTourStep - 1;
-      const layerNav = navigateTourToLayer(graph, sorted[prev].nodeIds);
-      set({
-        currentTourStep: prev,
-        tourHighlightedNodeIds: sorted[prev].nodeIds,
-        ...layerNav,
-      });
-    }
   },
 
   viewMode: "structural",

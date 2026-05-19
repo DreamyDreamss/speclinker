@@ -191,6 +191,7 @@ export default defineConfig({
         const watchPaths = [
           path.join(graphDir, ".understand-anything"),
           path.join(graphDir, "docs"),
+          path.join(graphDir, "_tmp"),
         ];
 
         for (const wp of watchPaths) {
@@ -378,17 +379,35 @@ export default defineConfig({
                 .filter(e => e.isDirectory() && !e.name.startsWith("_"))
                 .map(e => e.name);
               for (const domain of domains) {
-                const files = fs.readdirSync(path.join(designDir, domain)).filter(f => f.endsWith(".md"));
+                const domainPath = path.join(designDir, domain);
+                const topFiles = fs.readdirSync(domainPath).filter(f => f.endsWith(".md"));
+                const infSubDir = path.join(domainPath, "INF");
+                const infSubFiles = fs.existsSync(infSubDir)
+                  ? fs.readdirSync(infSubDir).filter(f => f.endsWith(".md"))
+                  : [];
                 result.push({
                   domain,
-                  infCount: files.filter(f => /^INF-\d+/.test(f)).length,
-                  schCount: files.filter(f => /^SCH-\d+/.test(f) || /^DB_/.test(f)).length,
-                  uiCount:  files.filter(f => /^UIS-F-\d+/.test(f) || /^UI_/.test(f)).length,
+                  infCount: topFiles.filter(f => /^INF-\d+/.test(f)).length + infSubFiles.filter(f => /^INF-\d+/.test(f)).length,
+                  schCount: topFiles.filter(f => /^SCH-\d+/.test(f) || /^DB_/.test(f)).length,
+                  uiCount:  topFiles.filter(f => /^UIS-F-\d+/.test(f) || /^UI_/.test(f)).length,
                 });
               }
             }
             res.setHeader("Content-Type", "application/json");
             res.end(JSON.stringify(result));
+            return;
+          }
+
+          // IA 맵 (ia_map_builder.py 출력)
+          if (url.pathname === "/api/ia-map") {
+            const graphDir2 = process.env.GRAPH_DIR || process.cwd();
+            const iaMapPath = path.join(graphDir2, "_tmp", "ia-map.json");
+            res.setHeader("Content-Type", "application/json");
+            if (fs.existsSync(iaMapPath)) {
+              res.end(fs.readFileSync(iaMapPath, "utf-8"));
+            } else {
+              res.end(JSON.stringify({ domains: [], matrix: { screens: [], apis: [], links: [] }, totalScreens: 0, totalApis: 0 }));
+            }
             return;
           }
 

@@ -3,6 +3,7 @@
 screen_inventory.py
 knowledge-graph의 node type 기반으로 화면(page) 인벤토리 생성.
 type="page" 노드를 1차 기준, import 엣지로 참조 컴포넌트를 추적한다.
+Spring MVC @Controller + JSP 패턴도 지원한다.
 
 Usage: python3 screen_inventory.py <workspace_dir> [kg_path]
   workspace_dir : project.env / docs/ 가 있는 디렉토리 (Claude 실행 위치)
@@ -10,7 +11,7 @@ Usage: python3 screen_inventory.py <workspace_dir> [kg_path]
 Output: _tmp/screen_inventory.json 에 저장 + 요약 stdout
 """
 
-import json, os, sys, collections
+import json, os, sys, collections, re
 
 # ── 인자 처리 ─────────────────────────────────────────────────────────────────
 workspace_dir = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else os.getcwd()
@@ -65,6 +66,236 @@ for edge in kg.get('edges', []):
         imports_map[src].append(tgt)
 
 EXCLUDE_IN_PATH = ('node_modules', '__tests__', '.test.', '.spec.', '.d.ts', 'dist/', 'build/')
+
+# ── Spring MVC 유틸리티 ───────────────────────────────────────────────────────
+
+def _get_source_roots(wdir):
+    """project.env의 SOURCE_N_PATH 목록 반환"""
+    roots = []
+    try:
+        env = dict(l.strip().split('=', 1) for l in open(os.path.join(wdir, 'project.env'), encoding='utf-8')
+                   if '=' in l and not l.startswith('#'))
+        for i in range(1, int(env.get('SOURCE_COUNT', 1)) + 1):
+            p = env.get(f'SOURCE_{i}_PATH', '')
+            if p and os.path.isdir(p):
+                roots.append(p)
+    except Exception:
+        pass
+    return roots or [wdir]
+
+
+def _find_jsp_root(src_roots):
+    """WEB-INF/jsp 디렉토리 탐색"""
+    SKIP_DIRS = {'node_modules', '.git', 'target', 'build', 'test', 'sample'}
+    for src_root in src_roots:
+        for root, dirs, _ in os.walk(src_root):
+            dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
+            if os.path.basename(root) == 'jsp' and 'WEB-INF' in root.replace('\\', '/'):
+                return root
+    return None
+
+
+def _extract_method_blocks(content):
+    """컨트롤러 소스에서 (annotation_text, body_text) 쌍 추출"""
+    ANNO_RE = re.compile(r'@(Request|Get|Post|Put|Delete|Patch|Head|Options)Mapping')
+    results = []
+    lines   = content.split('\n')
+    n       = len(lines)
+    i       = 0
+
+    while i < n:
+        if not ANNO_RE.search(lines[i]):
+            i += 1
+            continue
+
+        # 어노테이션 수집 (괄호 균형 맞을 때까지)
+        ann_lines   = []
+        paren_depth = 0
+        while i < n:
+            ann_lines.append(lines[i])
+            paren_depth += lines[i].count('(') - lines[i].count(')')
+            i += 1
+            if paren_depth == 0:
+                break
+        ann_text = '\n'.join(ann_lines)
+
+        # public/protected/private 메서드 시그니처까지 스킵
+        while i < n and not re.search(r'\b(public|protected|private)\s', lines[i]):
+            i += 1
+
+        # 메서드 바디 수집 (중괄호 추적)
+        body_lines  = []
+        brace_depth = 0
+        started     = False
+        while i < n:
+            body_lines.append(lines[i])
+            brace_depth += lines[i].count('{') - lines[i].count('}')
+            if '{' in lines[i]:
+                started = True
+            if started and brace_depth == 0:
+                i += 1
+                break
+            i += 1
+
+        if body_lines:
+            results.append((ann_text, '\n'.join(body_lines)))
+
+    return results
+
+
+def _resolve_jsp_file(full_url, view_name, method_path, jsp_root):
+    """URL / view name으로 JSP 파일 경로 결정"""
+    if not jsp_root:
+        return None
+
+    norm = lambda p: p.replace('\\', '/')
+
+    # 1) explicit ModelAndView view name
+    if view_name:
+        c = os.path.join(jsp_root, view_name + '.jsp')
+        if os.path.exists(c):
+            return c
+
+    # 2) URL 전체 경로
+    url_path = full_url.lstrip('/')
+    c = os.path.join(jsp_root, url_path + '.jsp')
+    if os.path.exists(c):
+        return c
+
+    # 3) 파일명 검색 (메서드 매핑값만 사용)
+    if method_path:
+        fname = method_path.lstrip('/').split('/')[-1] + '.jsp'
+        for root, dirs, files in os.walk(jsp_root):
+            dirs[:] = [d for d in dirs if d not in ('node_modules',)]
+            if fname in files:
+                return os.path.join(root, fname)
+
+    return None
+
+
+# ── 1-D: Spring MVC @Controller + JSP 화면 탐지 ──────────────────────────────
+
+SKIP_METHOD_RE = re.compile(
+    r'method\s*=\s*RequestMethod\.(POST|PUT|DELETE|PATCH)'
+    r'|@(PostMapping|PutMapping|DeleteMapping|PatchMapping)'
+)
+# annotation에서 JSON 응답 신호
+ANNO_JSON_RE = re.compile(
+    r'produces\s*=\s*["\{][^"]*application/json'
+    r'|MediaType\.APPLICATION_JSON'
+)
+CLASS_MAPPING_RE  = re.compile(r'@RequestMapping\s*\(\s*(?:value\s*=\s*)?"(/[^"]*)"')
+METHOD_MAPPING_RE = re.compile(r'@(?:Request|Get)Mapping\s*\(\s*(?:value\s*=\s*)?"([^"]+)"')
+METHOD_MAPPING_BARE_RE = re.compile(r'@GetMapping\s*\(\s*\)')
+VIEW_NAME_RE      = re.compile(r'new\s+ModelAndView\s*\(\s*"([^"]+)"')
+RETURN_STRING_RE  = re.compile(r'return\s+"([^"]+)"')
+
+# 메서드 바디에서 JSON 응답 신호 (jwork 전용 + 표준 Spring)
+JSON_SIGNALS = (
+    'MAPPING_JACKSON_JSON_VIEW', 'MappingJackson2JsonView',  # jwork/Spring JSON view
+    'GridResultUtil',                                          # jwork grid
+    '@ResponseBody',                                           # 표준 Spring ResponseBody
+    'ResponseEntity',                                          # REST 반환 타입
+    'application/json',                                        # produces
+    'writeValueAsString', 'ObjectMapper',                      # 직접 JSON 직렬화
+    'PrintWriter', 'response.getWriter',                       # 직접 response write
+)
+
+# 비즈니스 로직이 없는 패키지 제외
+SKIP_JAVA_PKGS = ('sample', 'jwork', 'test', 'tests')
+
+def _scan_spring_mvc(wdir):
+    """Spring MVC 컨트롤러에서 화면 인벤토리 추출"""
+    src_roots = _get_source_roots(wdir)
+    jsp_root  = _find_jsp_root(src_roots)
+
+    if jsp_root:
+        print(f'[Spring MVC] JSP 루트: {jsp_root}')
+    else:
+        print('[Spring MVC] WEB-INF/jsp 디렉토리 없음 — 컨트롤러 파일을 entryFile로 사용')
+
+    found = []
+
+    for src_root in src_roots:
+        for dirpath, dirs, filenames in os.walk(src_root):
+            dirs[:] = [d for d in dirs if d not in ('node_modules', '.git', 'target', 'build')]
+            # 비즈니스 외 패키지 제외 (경로 기준)
+            norm_dp = dirpath.replace('\\', '/')
+            if any(f'/{pkg}/' in norm_dp or norm_dp.endswith(f'/{pkg}') for pkg in SKIP_JAVA_PKGS):
+                dirs[:] = []
+                continue
+
+            for fname in filenames:
+                if not fname.endswith('Controller.java'):
+                    continue
+                fpath = os.path.join(dirpath, fname)
+                try:
+                    content = open(fpath, encoding='utf-8', errors='ignore').read()
+                except Exception:
+                    continue
+
+                if '@Controller' not in content or '@RestController' in content:
+                    continue
+
+                # 클래스 레벨 @RequestMapping
+                cm = CLASS_MAPPING_RE.search(content)
+                class_path = cm.group(1).rstrip('/*') if cm else ''
+
+                for ann_text, body_text in _extract_method_blocks(content):
+                    # POST/PUT/DELETE/PATCH 메서드 스킵
+                    if SKIP_METHOD_RE.search(ann_text):
+                        continue
+
+                    # annotation 레벨 JSON 신호 스킵 (produces=application/json 등)
+                    if ANNO_JSON_RE.search(ann_text):
+                        continue
+
+                    # 메서드 바디 JSON 응답 신호 스킵
+                    if any(sig in body_text for sig in JSON_SIGNALS):
+                        continue
+
+                    # @ResponseBody 어노테이션이 ann_text 전체 블록에 있으면 스킵
+                    if '@ResponseBody' in ann_text:
+                        continue
+
+                    # 메서드 레벨 매핑 경로
+                    mm = METHOD_MAPPING_RE.search(ann_text)
+                    if mm:
+                        method_path = mm.group(1).strip('/')
+                    elif METHOD_MAPPING_BARE_RE.search(ann_text):
+                        method_path = ''
+                    else:
+                        continue
+
+                    # 전체 URL 조합
+                    if method_path:
+                        full_url = class_path.rstrip('/') + '/' + method_path.lstrip('/')
+                    else:
+                        full_url = class_path
+                    if not full_url.startswith('/'):
+                        full_url = '/' + full_url
+
+                    # 명시적 view name 추출
+                    vn_match = VIEW_NAME_RE.search(body_text)
+                    explicit_view = None
+                    if vn_match:
+                        vn = vn_match.group(1)
+                        if not any(sig in vn for sig in JSON_SIGNALS):
+                            explicit_view = vn
+
+                    # JSP 파일 결정
+                    jsp_file = _resolve_jsp_file(full_url, explicit_view, method_path, jsp_root)
+                    entry_file = jsp_file if jsp_file else fpath
+
+                    found.append({
+                        'route':          full_url,
+                        'entryFile':      entry_file,
+                        'source':         'spring-mvc:controller',
+                        'controllerFile': fpath,
+                    })
+
+    print(f'[Spring MVC] 화면 감지: {len(found)}개')
+    return found
 
 # ── 1. graph node type 기반 화면 탐지 ─────────────────────────────────────────
 PAGE_NODE_TYPES   = {'page'}
@@ -137,7 +368,12 @@ if not routes:
                 route_path = '/' + route_path
             routes.append({'route': route_path, 'entryFile': p, 'source': 'fallback:nextjs-pages'})
 
-    # JSP fallback
+    # 1-D: Spring MVC @Controller + JSP (graph 탐지 실패 시)
+    if not routes:
+        spring_routes = _scan_spring_mvc(workspace_dir)
+        routes.extend(spring_routes)
+
+    # JSP fallback (Spring MVC도 없을 때)
     if not routes:
         for p, np in zip(all_paths, normed):
             if not np.endswith('.jsp') or any(x in np for x in EXCLUDE_IN_PATH):
@@ -159,9 +395,22 @@ if not routes:
                 route = '/' + fname.replace('Page', '').replace('Screen', '').replace('View', '')
                 routes.append({'route': route, 'entryFile': p, 'source': 'fallback:spa'})
 
+# knowledge graph에서 Spring MVC 컨트롤러가 탐지된 경우에도 보완 실행
+# (graph가 controller를 router/entrypoint로 잡았지만 JSP 매핑이 누락된 경우)
+if routes and all(r.get('source', '').startswith('graph:') for r in routes):
+    spring_routes = _scan_spring_mvc(workspace_dir)
+    if spring_routes:
+        existing_urls = {r['route'] for r in routes}
+        for sr in spring_routes:
+            if sr['route'] not in existing_urls:
+                routes.append(sr)
+
 # ── 2. import BFS 추적 (2단계) ────────────────────────────────────────────────
-def trace_imports(entry_file, depth=2):
-    visited, queue = {entry_file}, [entry_file]
+def trace_imports(entry_file, depth=2, extra_files=None):
+    visited = {entry_file}
+    if extra_files:
+        visited.update(extra_files)
+    queue = [entry_file]
     for _ in range(depth):
         next_q = []
         for f in queue:
@@ -177,12 +426,21 @@ uis_counter = {d['name']: d['uis']['start'] for d in plan['domains']}
 
 def norm_path(p): return p.replace('\\', '/')
 
-def assign_domain(entry_file):
+def assign_domain(entry_file, route=''):
     np = norm_path(entry_file)
+    # rootPaths 직접 매핑
     for d in plan['domains']:
         if any(np.startswith(norm_path(r).rstrip('/')) for r in d.get('rootPaths', [])):
             return d['name']
-    # 경로 매칭 실패 시 파일 경로 일부로 재시도 (대소문자 무관)
+    # URL 세그먼트로 도메인 추측 (Spring MVC: /order/... → order)
+    if route:
+        segments = [s for s in route.lstrip('/').split('/') if s]
+        if segments:
+            seg0 = segments[0].lower()
+            for d in plan['domains']:
+                if d['name'].lower() == seg0 or seg0 in d['name'].lower() or d['name'].lower() in seg0:
+                    return d['name']
+    # 파일 경로 내 도메인명 매칭
     np_lower = np.lower()
     for d in plan['domains']:
         if d['name'].lower() in np_lower:
@@ -190,7 +448,7 @@ def assign_domain(entry_file):
     return plan['domains'][0]['name']  # fallback
 
 result = []
-seen = set()
+seen   = set()
 
 for r in routes:
     key = norm_path(r['entryFile'])
@@ -198,17 +456,24 @@ for r in routes:
         continue
     seen.add(key)
 
-    domain = assign_domain(r['entryFile'])
+    domain = assign_domain(r['entryFile'], r.get('route', ''))
     if uis_counter.get(domain) is None:
         continue
     uis_id = uis_counter[domain]
     uis_counter[domain] += 1
 
+    # Spring MVC: controller 파일을 componentFiles에 포함
+    extra = []
+    if r.get('source', '').startswith('spring-mvc') and r.get('controllerFile'):
+        ctrl = r['controllerFile']
+        if ctrl != r['entryFile']:
+            extra = [ctrl]
+
     result.append({
         'route':          r['route'],
         'domain':         domain,
         'entryFile':      r['entryFile'],
-        'componentFiles': trace_imports(r['entryFile']),
+        'componentFiles': trace_imports(r['entryFile'], extra_files=extra) + [f for f in extra if f not in trace_imports(r['entryFile'])],
         'uisId':          uis_id,
         'infDir':         '../../INF/',
         'source':         r.get('source', 'unknown'),
@@ -228,7 +493,7 @@ print(f'감지 화면: {len(result)}개')
 print(f'탐지 방식: {dict(sources)}')
 for r in result[:5]:
     nf = len(r.get('componentFiles', []))
-    print(f'  {r["route"]:30} → {os.path.basename(r["entryFile"])} (+참조 {nf}개)')
+    print(f'  {r["route"]:40} → {os.path.basename(r["entryFile"])} (+참조 {nf}개)')
 if len(result) > 5:
     print(f'  ... 외 {len(result)-5}개')
 print(f'저장: {out_path}')

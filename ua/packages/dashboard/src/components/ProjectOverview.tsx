@@ -2,7 +2,6 @@ import { useDashboardStore } from "../store";
 
 export default function ProjectOverview() {
   const graph = useDashboardStore((s) => s.graph);
-  const startTour = useDashboardStore((s) => s.startTour);
 
   if (!graph) {
     return (
@@ -13,8 +12,6 @@ export default function ProjectOverview() {
   }
 
   const { project, nodes, edges, layers } = graph;
-  const hasTour = graph.tour.length > 0;
-
   // Count node types
   const typeCounts: Record<string, number> = {};
   for (const node of nodes) {
@@ -210,15 +207,6 @@ export default function ProjectOverview() {
         Analyzed: {new Date(project.analyzedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
       </div>
 
-      {/* Start Tour button */}
-      {hasTour && (
-        <button
-          onClick={startTour}
-          className="w-full bg-accent/10 border border-accent/30 text-accent text-sm font-medium py-2.5 px-4 rounded-lg hover:bg-accent/20 transition-all duration-200"
-        >
-          Start Guided Tour
-        </button>
-      )}
     </div>
   );
 }
