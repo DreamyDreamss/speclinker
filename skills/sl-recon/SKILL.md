@@ -407,15 +407,39 @@ print(f'라우터/컨트롤러 파일 총 {total_files}개 → {len(result)}개 
 "
 ```
 
+### call chain 사전 계산 (서비스·DAO·쿼리 파일 경로 주입)
+
+컨트롤러만 전달하면 에이전트가 서비스/DAO 경로를 스스로 추론해야 하는데, 토큰 압박 하에서 이 단계가 생략되어 `resultData: {}` 가 반복된다. **사전에 call chain을 계산하여 에이전트에게 전달한다.**
+
+```bash
+!python3 -c "
+import os, sys
+env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8') if '=' in l and not l.startswith('#'))
+plugin = env.get('PLUGIN_PATH','')
+script = os.path.join(plugin, 'scripts', 'resolve_call_chain.py') if plugin else ''
+ws = os.getcwd()
+if script and os.path.exists(script):
+    import subprocess
+    r = subprocess.run([sys.executable, script, '_tmp/router_inventory.json', ws], capture_output=True, text=True)
+    print(r.stdout[-2000:] if len(r.stdout) > 2000 else r.stdout)
+    if r.returncode != 0:
+        print('[WARN] resolve_call_chain 실패 — 기본 inventory로 진행:', r.stderr[:500])
+        import shutil; shutil.copy('_tmp/router_inventory.json', '_tmp/router_inventory_with_chain.json')
+else:
+    print('resolve_call_chain.py 없음 — 기본 inventory 복사')
+    import shutil; shutil.copy('_tmp/router_inventory.json', '_tmp/router_inventory_with_chain.json')
+"
+```
+
 위 목록을 **파일 3개씩 묶어** `ddd-api-agent`에 동시 호출한다. (배치 크기: 3그룹 동시)
 
 > ⚠️ 토큰 절약 규칙:
-> - `router_inventory.json` 항목을 3개씩 묶어 1개의 에이전트 호출로 처리
+> - `router_inventory_with_chain.json` 항목을 3개씩 묶어 1개의 에이전트 호출로 처리
 > - 동시에 띄우는 에이전트는 3개 이하
 > - 한 배치 완료 후 다음 배치 시작
 
 ```
-router_inventory.json은 이미 3개씩 묶인 배치 그룹 배열이다.
+router_inventory_with_chain.json은 이미 3개씩 묶인 배치 그룹 배열이다.
 동시에 3그룹씩 Agent 도구 호출, 완료 후 다음 3그룹:
 
   각 배치 그룹 → 1개의 Agent 도구 호출:
@@ -431,6 +455,25 @@ router_inventory.json은 이미 3개씩 묶인 배치 그룹 배열이다.
     관련 레이어: {group[0].layer}
     MODE: RECON
     워크스페이스: {현재 작업 디렉토리 절대경로}
+
+    === 사전 계산된 연관 파일 (읽기 의무) ===
+    아래 파일들은 resolve_call_chain이 미리 계산한 Controller→Service→DAO→Query 체인이다.
+    Phase 1에서 반드시 Read 도구로 읽어야 한다. 직접 경로 추론은 불필요하다.
+
+    [파일1 연관]
+    서비스: {group[0].relatedFiles.service}
+    DAO:    {group[0].relatedFiles.dao}
+    쿼리:   {group[0].relatedFiles.query}
+
+    [파일2 연관] (있는 경우)
+    서비스: {group[1].relatedFiles.service}
+    DAO:    {group[1].relatedFiles.dao}
+    쿼리:   {group[1].relatedFiles.query}
+
+    [파일3 연관] (있는 경우)
+    서비스: {group[2].relatedFiles.service}
+    DAO:    {group[2].relatedFiles.dao}
+    쿼리:   {group[2].relatedFiles.query}
 ```
 
 > ⚠️ 배치 완료 확인 후 다음 배치 시작. **모든 배치 완료 전 STEP 5 절대 진행 금지.**

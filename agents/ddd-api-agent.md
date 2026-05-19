@@ -34,50 +34,56 @@ MODE: {RECON | GENESIS}
 
 ---
 
-## Phase 1: 전체 호출 체인 추적 (모든 엔드포인트에 적용)
+## Phase 1: 전체 호출 체인 읽기 (모든 엔드포인트에 적용)
 
-응답 타입이 명확하든 아니든, **모든 엔드포인트**에 대해 아래 4단계를 순서대로 수행한다.  
-타입이 명확해 보여도 실제 nullable 여부·필드 구조는 DAO/쿼리까지 봐야 정확히 알 수 있다.
+호출자(sl-recon)는 프롬프트에 **사전 계산된 연관 파일 목록**을 포함해서 전달한다.  
+이 파일들을 순서대로 Read하여 응답 스키마를 도출한다. **경로 자체 추론 없이 주어진 목록만 사용한다.**
 
-### Step 1 — Controller 읽기
+### Step 1 — 컨트롤러 파일 읽기
 
-컨트롤러 파일을 Read하고 엔드포인트별로 다음을 수집한다:
+파일 목록의 모든 컨트롤러를 Read한다. 엔드포인트별로 다음을 수집한다:
 - HTTP method / path
 - 요청 파라미터 위치·타입·필수 여부 (Query, PathVariable, Body)
-- 호출하는 **서비스 메서드명** (다음 단계 진입점)
+- 호출하는 서비스 메서드명
 
-### Step 2 — Service 읽기
+### Step 2 — 서비스 파일 읽기 (프롬프트의 "서비스:" 목록)
 
-컨트롤러가 호출하는 서비스 파일을 Read하고 다음을 수집한다:
-- 비즈니스 로직 흐름 (분기, 예외 처리)
-- 호출하는 **DAO/Repository 메서드명** (다음 단계 진입점)
-- 응답 조립 방식: 어떤 키로 무엇을 담는지 (`resultMap.put()`, `builder().field()` 등)
-- 서비스가 또 다른 서비스를 호출하면 해당 서비스도 재귀적으로 읽는다
+프롬프트에서 `서비스:` 항목으로 전달된 파일을 모두 Read한다.  
+각 서비스에서 수집:
+- 응답 조립 방식 (`resultMap.put(key, value)`, `builder().field(val)`, `dict[key] = val` 등)  
+  → **`put`/`set`/`append` 호출을 모두 수집하여 실제 응답 키 목록 확정**
+- 비즈니스 분기 (조건별로 다른 필드가 담기는지 확인)
 
-### Step 3 — DAO / Repository 읽기
+`서비스:` 목록이 비어있으면 컨트롤러 파일에서 import된 서비스 클래스명을 찾아 워크스페이스에서 Glob으로 직접 찾는다.
 
-서비스가 호출하는 데이터 접근 계층 파일을 Read하고 다음을 수집한다:
+### Step 3 — DAO/Repository 파일 읽기 (프롬프트의 "DAO:" 목록)
+
+프롬프트에서 `DAO:` 항목으로 전달된 파일을 모두 Read한다. 수집:
 - 반환 타입 (단건 / 목록 / nullable / 페이징)
-- 실제 데이터를 가져오는 쿼리·스키마 파일명 또는 ORM 메서드명 (Step 4 진입점)
+- 참조하는 쿼리 파일명 (Step 4 진입점)
 
-### Step 4 — 쿼리 / 데이터 모델 확인
+`DAO:` 목록이 비어있으면 서비스 파일에서 import된 DAO/Repository/Mapper 클래스를 찾아 워크스페이스에서 Glob으로 직접 찾는다.
 
-DAO/Repository가 실제 데이터를 가져오는 지점을 Read한다. 기술 스택에 따라 아래 중 해당하는 것을 읽는다:
+### Step 4 — 쿼리 / 데이터 모델 파일 읽기 (프롬프트의 "쿼리:" 목록)
+
+프롬프트에서 `쿼리:` 항목으로 전달된 파일을 모두 Read한다. 기술 스택별 수집 내용:
 
 | 패턴 | 읽어야 할 대상 |
 |------|--------------|
-| SQL 파일 (MyBatis XML, `.sql` 등) | SELECT 컬럼 목록, JOIN 구조, nullable 컬럼 |
-| ORM 어노테이션 (JPA, Hibernate) | 엔티티 클래스 필드, 연관관계 (`@OneToMany` 등) |
-| 쿼리 빌더 (TypeORM, Prisma, SQLAlchemy, GORM) | `select()`, `include()`, `fields` 지정 내용 |
-| NoSQL (MongoDB Mongoose, DynamoDB) | 스키마 정의 파일 또는 `find()` projection |
-| 외부 API 호출 (RestTemplate, axios, fetch 등) | 외부 API 응답 DTO 또는 응답 매핑 코드 |
-| Stored Procedure / Function | SP 파라미터 및 결과셋 정의 |
+| SQL/XML (MyBatis, `.sql`) | SELECT 컬럼 목록, JOIN 구조, nullable 컬럼 |
+| ORM 엔티티 (JPA, Hibernate, TypeORM) | 엔티티 필드, 연관관계 |
+| 쿼리 빌더 (Prisma, SQLAlchemy, GORM) | `select()`, `include()`, `fields` 내용 |
+| NoSQL 스키마 (Mongoose, DynamoDB) | 스키마 정의 또는 `find()` projection |
+| 외부 API 응답 DTO | 매핑 코드의 필드명·타입 |
+| Stored Procedure | 결과셋 컬럼 정의 |
+
+`쿼리:` 목록이 비어도 DAO 파일에서 참조된 mapper/xml/sql 파일을 워크스페이스에서 Glob으로 직접 찾는다.
 
 수집 목표:
 - 응답 필드 목록과 타입
-- nullable 여부 (LEFT JOIN 컬럼, CASE WHEN, 집계함수, Optional 등)
-- 단건 vs 목록 vs 페이징 구조
-- 중첩 객체·배열 여부 (조인, 연관관계, include)
+- nullable 여부 (LEFT JOIN, CASE WHEN, Optional, 조건부 set 등)
+- 단건 vs 목록 vs 페이징
+- 중첩 객체·배열 (조인, 연관관계, include)
 
 ---
 
