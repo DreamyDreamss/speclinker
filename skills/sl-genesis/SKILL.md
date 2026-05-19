@@ -91,10 +91,14 @@ print(f'\n총 {len(plan[\"domains\"])}개 도메인')
 
 `docs/05_설계서/_domain_plan.json`의 모든 도메인에 대해 세 그룹을 순서대로 실행한다.
 
-**[그룹 A] ddd-api-agent — 도메인당 1호출 (병렬)**
+**[그룹 A] ddd-api-agent — 도메인당 1호출 (최대 3개씩 배치 병렬)**
+
+> ⚠️ 토큰 절약: 도메인 전체를 한 번에 띄우지 말고 **3개씩 배치**로 나눠 순차 실행한다.
+> 예: 도메인이 9개면 → [1,2,3] 완료 → [4,5,6] 완료 → [7,8,9]
 
 ```
-각 도메인에 대해 Agent 도구 호출 (전부 동시에):
+도메인 목록을 3개씩 묶어 배치 단위로 반복:
+  각 배치 내에서 Agent 도구 호출 (배치 내 동시):
   subagent_type: "speclinker:ddd-api-agent"
   description: "{도메인명} INF 생성 (GENESIS)"
   prompt: |
@@ -109,10 +113,11 @@ print(f'\n총 {len(plan[\"domains\"])}개 도메인')
 
 > GENESIS 모드에서 ddd-api-agent는 소스 파일 파싱 대신 요구사항 문서와 도메인 설명에서 API를 추론하여 INF-NNN.md를 생성한다.
 
-**[그룹 B] ddd-db-agent — 도메인당 1호출 (그룹A 완료 후 병렬)**
+**[그룹 B] ddd-db-agent — 도메인당 1호출 (그룹A 완료 후 3개씩 배치 병렬)**
 
 ```
-각 도메인에 대해 Agent 도구 호출 (전부 동시에):
+도메인 목록을 3개씩 묶어 배치 단위로 반복:
+  각 배치 내에서 Agent 도구 호출 (배치 내 동시):
   subagent_type: "speclinker:ddd-db-agent"
   description: "{도메인명} SCH 생성 (GENESIS)"
   prompt: |
@@ -124,10 +129,11 @@ print(f'\n총 {len(plan[\"domains\"])}개 도메인')
     워크스페이스: {현재 작업 디렉토리 절대경로}
 ```
 
-**[그룹 C] ddd-ui-agent — 도메인당 1호출 (그룹A 완료 후 병렬)**
+**[그룹 C] ddd-ui-agent — 도메인당 1호출 (그룹A 완료 후 3개씩 배치 병렬)**
 
 ```
-각 도메인에 대해 Agent 도구 호출 (전부 동시에):
+도메인 목록을 3개씩 묶어 배치 단위로 반복:
+  각 배치 내에서 Agent 도구 호출 (배치 내 동시):
   subagent_type: "speclinker:ddd-ui-agent"
   description: "{도메인명} UIS 생성 (GENESIS)"
   prompt: |
