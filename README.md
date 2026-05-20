@@ -49,9 +49,17 @@ SI/ITO 개발 전주기 자동화 플러그인 — 요구사항 정의부터 코
 │   ├── req_scan.py              REQ 커버리지 스캔
 │   ├── ua_req_bridge.js         UA 지식 그래프 ↔ REQ-ID 브릿지
 │   ├── run-dashboard.js         대시보드 서버 실행
-│   └── run-scan.js              코드베이스 스캔
+│   ├── merge_index.py           RECON 색인 머징 (Phase-C 대체)
+│   ├── build_funcs_index.py     rd/srs/rtm 공유 인덱스 빌더
+│   ├── resolve_call_chain.py    Controller→Service→DAO→Query 사전 추출
+│   ├── screen_inventory.py      화면 라우트 인벤토리
+│   ├── ia_map_builder.py        IA 맵 빌더
+│   ├── runtime_capture.js       Playwright 실제 화면 캡처
+│   ├── build_capture_plan.py    화면 캡처 시나리오 자동 생성
+│   ├── poc_cleanup.py           POC 반복용 산출물 정리기
+│   └── screenshot.js            HTML 파일 캡처 (BO admin 폴백)
 │
-├── templates/               ← 산출물 문서 템플릿 (12개)
+├── templates/               ← 산출물 문서 템플릿 (10개)
 │   ├── RD_template.md           요구사항 정의서
 │   ├── SRS_template.md          소프트웨어 요구사항 명세
 │   ├── SAD_template.md          아키텍처 설계서
