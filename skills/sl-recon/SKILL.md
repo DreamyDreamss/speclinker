@@ -338,7 +338,26 @@ ROUTER_KW = ('controller','handler','route','api','endpoint','rest','servlet','a
 
 def norm(p): return (p or '').replace(os.sep, '/')
 
-result = []
+# 배치 후보 판별 헬퍼 (최종 확인은 ddd-batch-agent가 소스 읽어 결정)
+BATCH_NAME_KW = ('batch', 'job', 'scheduler', 'task', 'worker', 'consumer', 'processor', 'jobbean')
+BATCH_DIR_KW  = ('batch', 'job', 'jobs', 'scheduler', 'schedule')
+NON_BATCH_KW  = ('controller', 'handler', 'restcontroller', 'restapi')
+
+def is_batch_candidate(fp):
+    fp_norm = fp.replace('\\\\', '/').lower()
+    bn = os.path.splitext(os.path.basename(fp_norm))[0].replace('_','').replace('-','')
+    if any(k in bn for k in NON_BATCH_KW):
+        return False
+    if any(k in bn for k in BATCH_NAME_KW):
+        return True
+    parts = fp_norm.split('/')
+    return any(any(k in p for k in BATCH_DIR_KW) for p in parts[:-1])
+
+result  = []
+bat_all = []       # 배치 후보 전체 (전역)
+bat_id_next = [1]  # BAT-NNN 전역 카운터
+BAT_SLOT = 5       # 파일당 BAT ID 여유 범위
+
 for d in plan['domains']:
     roots = [norm(r).rstrip('/') for r in d['rootPaths']]
     inf_s, inf_e = d['inf']['start'], d['inf']['end']
@@ -361,12 +380,12 @@ for d in plan['domains']:
         continue
 
     total_slots = inf_e - inf_s + 1
-    slot = max(1, math.ceil(total_slots / len(files)))
-    file_items = []
+    slot = max(1, math.ceil(total_slots / max(1, len(files))))
+    all_items = []
     for i, fp in enumerate(files):
         s = inf_s + i * slot
         e = min(s + slot - 1, inf_e)
-        file_items.append({
+        all_items.append({
             'domain': d['name'],
             'domainDescription': d.get('description', ''),
             'layer': d.get('layer', ''),
@@ -375,13 +394,24 @@ for d in plan['domains']:
             'infEnd': e,
         })
 
-    # 3개씩 묶어 배치 그룹 생성
-    BATCH = 3
-    for b in range(0, len(file_items), BATCH):
-        group = file_items[b:b+BATCH]
-        result.append(group)  # result는 배치 그룹 리스트
+    # 배치 후보와 API 파일 분리
+    api_items = [item for item in all_items if not is_batch_candidate(item['filePath'])]
+    bat_items = [item for item in all_items if is_batch_candidate(item['filePath'])]
 
-import os
+    # 배치 후보에 BAT ID 범위 배정
+    for item in bat_items:
+        item['batStart'] = bat_id_next[0]
+        item['batEnd']   = bat_id_next[0] + BAT_SLOT - 1
+        bat_id_next[0]  += BAT_SLOT
+        bat_all.append(item)
+    if bat_items:
+        print(f'  [{d[\"name\"]}] 배치 후보 {len(bat_items)}개 → batch_inventory 분리')
+
+    # API 파일만 3개씩 묶어 배치 그룹 생성
+    BATCH = 3
+    for b in range(0, len(api_items), BATCH):
+        result.append(api_items[b:b+BATCH])
+
 os.makedirs('_tmp', exist_ok=True)
 
 # 재시작 지원: 배치 내 모든 파일이 완료된 그룹은 건너뜀
@@ -397,13 +427,20 @@ def group_already_done(group):
 
 pending = [g for g in result if not group_already_done(g)]
 skipped = len(result) - len(pending)
-total_files = sum(len(g) for g in result)
+total_api = sum(len(g) for g in result)
 pending_files = sum(len(g) for g in pending)
 
 with open('_tmp/router_inventory.json', 'w', encoding='utf-8') as f:
     json.dump(pending, f, ensure_ascii=False, indent=2)
 
-print(f'라우터/컨트롤러 파일 총 {total_files}개 → {len(result)}개 배치 그룹 (처리 대상: {len(pending)}배치/{pending_files}파일, 스킵: {skipped}배치)')
+# 배치 후보 인벤토리 저장 (3개씩 그룹)
+bat_groups = [bat_all[b:b+3] for b in range(0, len(bat_all), 3)]
+with open('_tmp/batch_inventory.json', 'w', encoding='utf-8') as f:
+    json.dump(bat_groups, f, ensure_ascii=False, indent=2)
+
+api_msg = f'API {total_api}파일 → {len(result)}그룹 (처리: {len(pending)}그룹/{pending_files}파일, 스킵: {skipped}그룹)'
+bat_msg = f'배치 후보 {len(bat_all)}파일 → {len(bat_groups)}그룹' if bat_all else '배치 후보 없음'
+print(f'{api_msg} | {bat_msg}')
 "
 ```
 
@@ -518,6 +555,51 @@ for d in plan['domains']:
     print(f'{domain}: INF {len(rows)}건 색인 완료')
 "
 ```
+
+---
+
+### STEP 4-B: BAT 생성 (배치 후보 파일 처리)
+
+`_tmp/batch_inventory.json`에 배치 후보가 있는 경우만 실행한다.  
+**배치 여부 최종 판단은 ddd-batch-agent가 소스를 직접 읽어 수행한다 — "배치 아님" 반환 가능.**
+
+```bash
+!python3 -c "
+import json, os
+path = '_tmp/batch_inventory.json'
+if not os.path.exists(path):
+    print('batch_inventory.json 없음 — STEP 4-B 건너뜀')
+else:
+    groups = json.load(open(path, encoding='utf-8'))
+    total = sum(len(g) for g in groups)
+    if total == 0:
+        print('배치 후보 없음 — STEP 4-B 건너뜀')
+    else:
+        print(f'배치 후보 {total}파일 ({len(groups)}그룹) → ddd-batch-agent 처리:')
+        for g in groups:
+            for item in g:
+                print(f'  {item[\"filePath\"]} → BAT-{item[\"batStart\"]:03d}~BAT-{item[\"batEnd\"]:03d} [{item[\"domain\"]}]')
+"
+```
+
+배치 후보가 있으면 **3파일씩 묶어** `ddd-batch-agent`를 호출한다. (각 그룹 순서대로 실행):
+
+```
+_tmp/batch_inventory.json의 각 그룹에 대해 Agent 도구 호출:
+  subagent_type: "speclinker:ddd-batch-agent"
+  description: "{group[0].domain} BAT 생성 ({group[0].filePath basename}...)"
+  prompt: |
+    파일 목록:
+    - {group[0].filePath} → BAT-{group[0].batStart:03d} ~ BAT-{group[0].batEnd:03d}
+    - {group[1].filePath} → BAT-{group[1].batStart:03d} ~ BAT-{group[1].batEnd:03d}  (있는 경우)
+    - {group[2].filePath} → BAT-{group[2].batStart:03d} ~ BAT-{group[2].batEnd:03d}  (있는 경우)
+    도메인: {group[0].domain}
+    MCP_DB 서버: {_tmp/mcp_status.json의 가용 DB MCP 서버 별칭 — 없으면 "없음"}
+    워크스페이스: {현재 작업 디렉토리 절대경로}
+    MODE: RECON
+```
+
+> "배치 아님"으로 반환된 파일은 INF 후보로 기록하고, 재처리 여부를 사용자에게 확인 후 결정한다.
 
 ---
 
@@ -794,6 +876,7 @@ else:
 - docs/05_설계서/{도메인}/INF/INF-XXX.md × N개  (인터페이스 개별 파일)
 - docs/05_설계서/{도메인}/UI/{화면ID}/spec.md × N개
 - docs/05_설계서/{도메인}/DB_{도메인}.md × N개
+- docs/05_설계서/{도메인}/BAT/BAT-XXX.md × N개  (배치 명세 — 배치 파일 존재 시)
 - docs/05_설계서/API_Design.md / DB_Schema.md / UI_Spec_v1.0.md  (전체 색인)
 
 [기능 명세]

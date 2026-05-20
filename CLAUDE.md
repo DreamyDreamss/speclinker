@@ -40,6 +40,7 @@
 | `agents/ddd-api-agent.md` | API 명세 (INF-XXX) | Sonnet | DSPy-style 구조화 출력 |
 | `agents/ddd-db-agent.md` | DB 스키마 (SCH-XXX) | Sonnet | 3NF 검증 + ERD 생성 |
 | `agents/ddd-ui-agent.md` | 화면 설계 (UIS-F-XXX) | Sonnet | 소스 증거 원칙 + ASCII 와이어 |
+| `agents/ddd-batch-agent.md` | 배치 명세 (BAT-XXX) | Sonnet | 배치 확정 판별 + MCP DB 스케줄 조회 |
 | `agents/rtm-agent.md` | RTM 체인 + 품질 게이트 | Opus | Constitutional AI |
 
 ### 코드·테스트 에이전트
