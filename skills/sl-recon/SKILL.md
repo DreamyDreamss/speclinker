@@ -102,11 +102,15 @@ poc_skip_ua = env.get('POC_SKIP_UA', 'false').lower() == 'true'
 poc_limit   = env.get('POC_FILE_LIMIT', '')
 
 if poc_mode:
+    poc_screens = [s.strip() for s in env.get('POC_SCREENS','').split(',') if s.strip()]
     print('━' * 50)
     print('🧪 POC 모드 활성화 — 부분 실행')
-    print(f'  대상 도메인: {poc_domains if poc_domains else \"plan 전체\"}')
+    print(f'  대상 화면 (SCREENS): {poc_screens if poc_screens else \"비활성\"}')
+    print(f'  대상 도메인 (DOMAINS): {poc_domains if poc_domains else \"plan 전체\"}')
     print(f'  UA 분석 스킵: {poc_skip_ua}')
     print(f'  도메인별 파일 제한: {poc_limit if poc_limit else \"제한 없음\"}')
+    if poc_screens:
+        print('  ※ POC_SCREENS 활성 — 지정 화면이 호출하는 INF/SCH만 자동 슬라이스')
     print('━' * 50)
 else:
     print('일반 모드 — 전체 소스 분석')
@@ -384,6 +388,41 @@ print(f'\n총 {len(plan[\"domains\"])}개 도메인')
 
 ## STEP 4 — Phase B-1: INF 생성 (라우터 파일별 병렬, 배치 10~15개)
 
+### STEP 4-0: POC_SCREENS 사전 슬라이스 (POC_SCREENS 설정 시만)
+
+POC_SCREENS가 비어있지 않으면 화면 인벤토리를 먼저 생성하고 슬라이스를 적용한다.  
+지정 화면이 호출하는 API URL만 router_inventory에 남긴다.
+
+```bash
+!python3 -c "
+import os, sys, subprocess
+env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8') if '=' in l and not l.startswith('#'))
+poc_mode    = env.get('POC_MODE','false').lower() == 'true'
+poc_screens = env.get('POC_SCREENS','').strip()
+if not poc_mode or not poc_screens:
+    print('POC_SCREENS 비활성화 — STEP 4-0 건너뜀')
+else:
+    plugin = env.get('PLUGIN_PATH','')
+    inv_script   = os.path.join(plugin, 'scripts', 'screen_inventory.py') if plugin else ''
+    slice_script = os.path.join(plugin, 'scripts', 'poc_slice.py')        if plugin else ''
+    if not (os.path.exists(inv_script) and os.path.exists(slice_script)):
+        print('[WARN] screen_inventory.py 또는 poc_slice.py 없음 — POC_SCREENS slice 스킵')
+    else:
+        # 1) screen_inventory 먼저 생성 (UA 그래프 자동 감지)
+        subprocess.run([sys.executable, inv_script, '.'], check=False)
+        # 2) POC slice 적용
+        subprocess.run([sys.executable, slice_script, '.'], check=False)
+"
+```
+
+> 결과:
+> - `_tmp/screen_inventory.json`: 지정 화면만 남김 (.full.json 백업)
+> - `_tmp/poc_target_urls.json`: 화면들이 호출하는 API URL 목록
+> 
+> 이후 router_inventory 생성 단계에서 위 URL을 호출하는 컨트롤러만 남는다.
+
+### STEP 4-1: INF 분석 그래프 결정
+
 먼저 INF 분석에 사용할 knowledge-graph를 결정한다.  
 레이블이 `api`, `backend`, `server`, `batch`, `service` 중 하나인 소스 그래프를 우선 사용한다.  
 없으면 병합 그래프(`knowledge-graph.json`)를 사용한다.
@@ -412,7 +451,7 @@ print(f'INF 분석 대상 그래프: {kg_path}')
 
 ```bash
 !python3 -c "
-import json, os, math
+import json, os, math, re
 
 # INF용 그래프 선택
 env = dict(l.strip().split('=',1) for l in open('project.env') if '=' in l and not l.startswith('#'))
@@ -476,8 +515,45 @@ for d in plan['domains']:
     if not files:
         continue
 
-    # POC 모드: 도메인별 파일 수 제한
-    poc_limit = int(env.get('POC_FILE_LIMIT','0') or 0) if env.get('POC_MODE','false').lower() == 'true' else 0
+    # POC 모드 필터 (3종)
+    poc_mode = env.get('POC_MODE','false').lower() == 'true'
+
+    # ── (1) POC_SCREENS 기반 URL 매칭 필터 (최우선) ──
+    # poc_slice.py가 미리 _tmp/poc_target_urls.json 을 생성했으면 그 URL을 호출하는 컨트롤러만 유지
+    poc_url_file = '_tmp/poc_target_urls.json'
+    if poc_mode and os.path.exists(poc_url_file):
+        poc_data = json.load(open(poc_url_file, encoding='utf-8'))
+        target_urls = set(poc_data.get('targetUrls', []))
+        if target_urls:
+            # 각 컨트롤러 파일을 읽어 정의된 URL이 target_urls와 교집합 있는지 확인
+            URL_DEFINE_RE = re.compile(r"""(?:@(?:Get|Post|Put|Delete|Patch|Request)Mapping|@RequestMapping)\s*\(\s*(?:value\s*=\s*)?['"]([^'"]+)['"]""")
+            matched_files = []
+            for fp in files:
+                abs_fp = fp if os.path.isabs(fp) else os.path.join(os.getcwd(), fp)
+                if not os.path.exists(abs_fp):
+                    continue
+                try:
+                    body = open(abs_fp, encoding='utf-8', errors='ignore').read()
+                except Exception:
+                    continue
+                defined_urls = URL_DEFINE_RE.findall(body)
+                # 클래스 레벨 prefix 결합
+                class_prefix_m = re.search(r"@RequestMapping\s*\(\s*['\"](/[^'\"]+)['\"]", body)
+                prefix = class_prefix_m.group(1).rstrip('/') if class_prefix_m else ''
+                full_urls = set()
+                for u in defined_urls:
+                    full = (prefix + '/' + u.strip('/')) if prefix else u
+                    full_urls.add(full if full.startswith('/') else '/'+full)
+                # path-only 매칭 (쿼리스트링 무시는 이미 처리됨)
+                if any(any(t == fu or t.startswith(fu) or fu.startswith(t) for fu in full_urls) for t in target_urls):
+                    matched_files.append(fp)
+            if matched_files:
+                if len(matched_files) < len(files):
+                    print(f'  [{d[\"name\"]}] POC_SCREENS URL 매칭: {len(files)}개 → {len(matched_files)}개 컨트롤러')
+                files = matched_files
+
+    # ── (2) POC_FILE_LIMIT (보조) ──
+    poc_limit = int(env.get('POC_FILE_LIMIT','0') or 0) if poc_mode else 0
     if poc_limit > 0 and len(files) > poc_limit:
         print(f'  [{d[\"name\"]}] POC_FILE_LIMIT={poc_limit} 적용: {len(files)}개 → {poc_limit}개')
         files = files[:poc_limit]

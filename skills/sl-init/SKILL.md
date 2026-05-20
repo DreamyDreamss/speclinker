@@ -135,12 +135,18 @@ SOURCE_2_PATH=<절대경로2>
 ...
 
 # POC 모드 (선택 — RECON 개발 중 빠른 반복용)
-# 전체 소스를 매번 다 분석하지 않고 특정 도메인만 빠르게 처리
+# 전체 소스를 매번 다 분석하지 않고 특정 도메인/화면만 빠르게 처리
 # POC_MODE=true 일 때만 아래 옵션 적용
 # POC_MODE=false
-# POC_DOMAINS=                    # 쉼표 구분 (예: auth,order). 비어있으면 plan 전체
+#
+# ── 슬라이스 옵션 (3종, 우선순위: SCREENS > DOMAINS > LIMIT) ──
+# POC_SCREENS=                     # 쉼표 구분 화면명 (예: Or701Form,LoginPage)
+#                                  # 지정 화면이 호출하는 API URL만 자동 추출 → INF/UIS/SCH 전부 슬라이스
+# POC_DOMAINS=                     # 쉼표 구분 도메인 (예: auth,order). 도메인 단위로 처리
+# POC_FILE_LIMIT=                  # 도메인별 INF 컨트롤러 파일 수 제한 (예: 5) — alphabetical
+#
+# ── UA 재사용 ──
 # POC_SKIP_UA=false                # true면 STEP 1 UA 분석 스킵 (기존 knowledge-graph 재사용)
-# POC_FILE_LIMIT=                  # 도메인별 INF 처리 파일 수 제한 (예: 5)
 
 # 미리보기 캡처 (선택 — RECON UI 스크린샷, Playwright 기반)
 # PREVIEW_BASE_URL 설정 시 실제 dev/staging 서버를 헤드리스 캡처
