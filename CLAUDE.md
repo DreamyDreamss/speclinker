@@ -31,17 +31,20 @@
 
 ### 산출물 생성 파이프라인 (spec-agent 오케스트레이터 → 전문 서브에이전트)
 
-| 에이전트 | 역할 | 모델 | 기법 |
-|--------|------|------|------|
-| `agents/spec-agent.md` | 파이프라인 오케스트레이터 | Opus | 순차/병렬 조율 |
-| `agents/rd-agent.md` | REQ-ID 추출 + RD 생성 | Opus | ReAct + Tree-of-Thoughts |
-| `agents/srs-agent.md` | SRS 상세화 | Opus | Chain-of-Thought + Reflexion |
-| `agents/sad-agent.md` | 아키텍처 설계서 | Opus | 패턴 매칭 + Self-Critique |
-| `agents/ddd-api-agent.md` | API 명세 (INF-XXX) | Sonnet | DSPy-style 구조화 출력 |
-| `agents/ddd-db-agent.md` | DB 스키마 (SCH-XXX) | Sonnet | 3NF 검증 + ERD 생성 |
-| `agents/ddd-ui-agent.md` | 화면 설계 (UIS-F-XXX) | Sonnet | 소스 증거 원칙 + ASCII 와이어 |
-| `agents/ddd-batch-agent.md` | 배치 명세 (BAT-XXX) | Sonnet | 배치 확정 판별 + MCP DB 스케줄 조회 |
-| `agents/rtm-agent.md` | RTM 체인 + 품질 게이트 | Opus | Constitutional AI |
+| 에이전트 | 역할 | 모델 (GENESIS) | 모델 (RECON) | 기법 |
+|--------|------|--------------|-------------|------|
+| `agents/spec-agent.md` | 파이프라인 오케스트레이터 | Opus | **Sonnet** (Phase-A만) | 순차/병렬 조율 |
+| `agents/rd-agent.md` | REQ-ID 추출 + RD/FUNC 생성 | Opus | **Sonnet** | ReAct + Tree-of-Thoughts (GENESIS) / 인덱스 포맷팅 (RECON) |
+| `agents/srs-agent.md` | SRS 상세화 | Opus | **Sonnet** | Chain-of-Thought + Reflexion (GENESIS) / 사실 집계 (RECON) |
+| `agents/sad-agent.md` | 아키텍처 설계서 | Opus | Opus | 패턴 매칭 + Self-Critique |
+| `agents/ddd-api-agent.md` | API 명세 (INF-XXX) | Sonnet | Sonnet | DSPy-style 구조화 출력 |
+| `agents/ddd-db-agent.md` | DB 스키마 (SCH-XXX) | Sonnet | Sonnet | 3NF 검증 + ERD 생성 |
+| `agents/ddd-ui-agent.md` | 화면 설계 (UIS-F-XXX) | Sonnet | Sonnet | 소스 증거 원칙 (preview는 runtime_capture가 처리) |
+| `agents/ddd-batch-agent.md` | 배치 명세 (BAT-XXX) | Sonnet | Sonnet | 배치 확정 판별 + MCP DB 스케줄 조회 |
+| `agents/rtm-agent.md` | RTM 체인 + 품질 게이트 | Opus | Opus | Constitutional AI (양쪽 모두 추론 필요) |
+
+> RECON 모드 model 다운그레이드는 sl-recon SKILL.md에서 Agent 도구 호출 시 `model: "sonnet"` 파라미터로 처리.  
+> agent 파일 frontmatter는 GENESIS 기본값을 유지한다.
 
 ### 코드·테스트 에이전트
 

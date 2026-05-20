@@ -15,26 +15,35 @@ model: claude-opus-4-7
 
 > 출력: `docs/04_아키텍처설계서/SAD_v1.0.md` + `docs/05_설계서/_domain_plan.json`
 
-### A-1. 소스 신호 수집
+### A-1. 소스 신호 수집 (압축 인덱스만 사용)
+
+> ⚠️ **원본 knowledge-graph.json 직접 cat 금지** — sl-recon STEP 2-0에서 `_tmp/kg_summary.json` 으로 압축한 결과를 사용한다.  
+> 압축본은 도메인 분류에 필요한 5개 필드(id/type/filePath/summary[:100]/tags/layer)만 포함하므로 토큰을 크게 절감한다.
 
 ```bash
 !python3 -c "
 import json, collections, os
 try:
-    kg = json.load(open('.understand-anything/knowledge-graph.json'))
+    s = json.load(open('_tmp/kg_summary.json'))
+    print(f'프로젝트: {s[\"project\"].get(\"name\",\"?\")}')
+    print(f'전체 노드: {s[\"nodeCount\"]} (요약 {len(s[\"nodes\"])}건)')
+    print()
     print('=== 레이어 구성 ===')
-    for l in kg.get('layers', []):
-        print(f'  {l[\"name\"]} ({len(l.get(\"nodeIds\",[]))}개): {l[\"description\"]}')
+    # kg_summary의 layers 배열 사용 (description 포함)
+    for l in s.get('layers', []):
+        print(f'  {l.get(\"name\",\"?\")}: {l.get(\"description\",\"\")}')
     print()
     print('=== 상위 디렉터리 분포 (depth 2) ===')
     by = collections.Counter()
-    for n in kg.get('nodes', []):
+    for n in s['nodes']:
         fp = (n.get('filePath') or '').replace(os.sep, '/')
         parts = [p for p in fp.split('/') if p]
         if len(parts) >= 2:
             by[f'{parts[0]}/{parts[1]}'] += 1
     for k, v in by.most_common(25):
         print(f'  {k}: {v}개')
+except FileNotFoundError:
+    print('[ERROR] _tmp/kg_summary.json 없음 — sl-recon STEP 2-0 (knowledge-graph 압축) 먼저 실행 필요')
 except Exception as e:
     print(f'오류: {e}')
 "
@@ -49,8 +58,8 @@ try:
     flows   = [n['id'] for n in dg.get('nodes', []) if n.get('type') == 'flow']
     print('domain-graph 도메인:', domains)
     print('domain-graph 플로우:', flows[:10])
-except:
-    print('domain-graph.json 없음')
+except FileNotFoundError:
+    print('domain-graph.json 없음 (선택 입력 — 없어도 진행 가능)')
 "
 ```
 
@@ -148,23 +157,25 @@ graph TD
 
 ---
 
-## Phase-C: 색인 생성 (+ GENESIS 모드: REQ 역합성·RTM)
+## Phase-C: 색인 생성 + REQ 역합성·RTM (GENESIS 모드 전용)
 
+> **이 Phase-C는 GENESIS 모드 전용이다.**  
+> RECON 모드에서는 `scripts/merge_index.py`가 색인을 자동 생성하므로 spec-agent Phase-C가 호출되지 않는다.  
 > 모든 Phase-B가 완료된 후 호출한다.  
 > 입력: `docs/05_설계서/*/INF/_TOC.md`, `DB_*.md`, `UI/_TOC.md`
 
-### C-0. 모드 확인
+### C-0. 모드 확인 (안전 가드)
 
 ```bash
 !cat project.env | grep MODE
 ```
 
-> **RECON 모드**: C-1(색인)만 실행. C-2·C-3 **절대 실행하지 않는다.**  
-> **GENESIS 모드**: C-1 → C-2 → C-3 순서 모두 실행.
+> `MODE=RECON`이 감지되면 **즉시 종료**하고 호출자에게 "RECON 모드에서는 merge_index.py를 사용하라" 안내한다.  
+> `MODE=GENESIS` (또는 미설정)이면 C-1 → C-2 → C-3 → C-3.5 → C-4 순서 모두 실행.
 
 ---
 
-### C-1. 전체 색인 파일 생성 (RECON · GENESIS 공통)
+### C-1. 전체 색인 파일 생성
 
 모든 도메인 파일을 순서대로 읽어 파싱용 색인 3개를 생성한다.
 
@@ -315,7 +326,7 @@ RTM과 설계서를 기반으로 FUNC_MAP.md를 생성한다.
 
 ---
 
-### C-4. linked-req-cache.json 생성 (RECON · GENESIS 공통)
+### C-4. linked-req-cache.json 생성
 
 ```json
 {
@@ -324,15 +335,9 @@ RTM과 설계서를 기반으로 FUNC_MAP.md를 생성한다.
 }
 ```
 
-RECON 모드에서는 REQ-F 대신 FUNC-ID를 값으로 사용:
-```json
-{
-  "src/auth/router.py": ["FUNC-AUTH-001"],
-  "src/order/ordr/form.jsp": ["FUNC-ORDER-001"]
-}
-```
-
 저장: `.understand-anything/linked-req-cache.json`
+
+> RECON 모드의 linked-req-cache는 rtm-agent가 별도로 생성하므로 여기서 다루지 않는다.
 
 ```bash
 !node "$HOME/.claude/plugins/speclinker/scripts/ua_req_bridge.js" . 2>/dev/null || echo "skip"

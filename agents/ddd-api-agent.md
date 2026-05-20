@@ -66,6 +66,12 @@ MODE: {RECON | GENESIS}
 
 ### Step 4 — 쿼리 / 데이터 모델 파일 읽기 (프롬프트의 "쿼리:" 목록)
 
+> **사전추출 스키마 우선 사용:**  
+> 프롬프트에 `스키마(사전추출):` 항목으로 `querySchemas` 배열이 전달되면, 이 정보를 응답 스키마의 1차 후보로 사용한다.  
+> 각 항목 구조: `{ queryFile, selects:[{ id, columns:[{name, source, nullable}], leftJoinedTables:[...] }], resultMaps:[...] }`  
+> 컬럼명·nullable·LEFT JOIN 정보가 미리 파싱되어 있으므로, LLM은 **검증·보강·문맥 추가**에만 집중한다.  
+> 사전추출 스키마가 비어있거나 동적 SQL이라 누락된 경우에만 쿼리 파일 본문을 정밀 Read.
+
 프롬프트에서 `쿼리:` 항목으로 전달된 파일을 모두 Read한다. 기술 스택별 수집 내용:
 
 | 패턴 | 읽어야 할 대상 |

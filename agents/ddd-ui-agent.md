@@ -100,103 +100,35 @@ Read 도구로 `{entryFile}` 읽기.
 
 ---
 
-## Phase 4: 디렉토리 생성 + preview.html 작성
+## Phase 4: 디렉토리 생성
 
 ```bash
 !mkdir -p "docs/05_설계서/{domain}/UI/{화면ID}"
 ```
 
-파싱 결과를 기반으로 독립 실행 HTML 미리보기를 생성한다.  
-각 컴포넌트에 `WG-XX` / `BL-XX` ID를 오렌지 배지로 표시한다.
-
-- JSP / jwork: BO admin 스타일 (dark header, grid-table 중심)
-- React / Vue / Next.js: 일반 웹앱 스타일 (card, flex layout)
-- 참조 컴포넌트에서 추출한 그리드 컬럼·폼 필드를 실제 데이터로 채운다.  
-  (빈 placeholder 대신 실제 fieldName, headerName 사용)
-
-```html
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-<meta charset="UTF-8">
-<title>{화면ID} — {화면명} 미리보기</title>
-<style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: 'Malgun Gothic', sans-serif; font-size: 12px; background: #eceff1; }
-.bo-header { background: #263238; color: #eceff1; padding: 6px 14px; font-size: 13px;
-  display: flex; justify-content: space-between; align-items: center; }
-.bo-header .screen-id { font-size: 10px; color: #90a4ae; }
-.screen { margin: 6px; background: white; border: 1px solid #b0bec5; }
-.section { border: 1px solid #b0bec5; margin: 6px; }
-.section-bar { background: #e3eaf0; padding: 4px 8px; font-weight: bold; font-size: 11px;
-  color: #37474f; border-bottom: 1px solid #b0bec5; display: flex; justify-content: space-between; align-items: center; }
-.section-content { padding: 6px 8px; }
-.search-row { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; padding: 4px 0; }
-.field-group { display: flex; align-items: center; gap: 4px; }
-.field-label { color: #546e7a; font-size: 11px; min-width: 60px; text-align: right; }
-.field-input { border: 1px solid #90a4ae; padding: 2px 5px; height: 22px; font-size: 11px; min-width: 90px; font-family: inherit; }
-.field-select { border: 1px solid #90a4ae; height: 22px; font-size: 11px; min-width: 80px; font-family: inherit; }
-.btn-area { border-top: 1px solid #e0e0e0; padding: 5px 8px; background: #f5f7f8; text-align: center; display: flex; gap: 4px; justify-content: center; }
-.btn { padding: 2px 12px; height: 22px; border: 1px solid #90a4ae; background: #f5f5f5;
-  cursor: pointer; font-size: 11px; font-family: inherit; }
-.btn-primary  { background: #1565c0; color: white; border-color: #0d47a1; }
-.btn-success  { background: #2e7d32; color: white; border-color: #1b5e20; }
-.btn-danger   { background: #c62828; color: white; border-color: #b71c1c; }
-.btn-warning  { background: #ef6c00; color: white; border-color: #e65100; }
-.btn-search   { background: #455a64; color: white; border-color: #37474f; }
-.btn-excel    { background: #388e3c; color: white; border-color: #2e7d32; }
-.btn-default  { background: #eeeeee; color: #333; }
-.grid-table { width: 100%; border-collapse: collapse; font-size: 11px; }
-.grid-table th { background: #cfd8dc; border: 1px solid #90a4ae; padding: 3px 6px;
-  text-align: center; white-space: nowrap; font-weight: bold; color: #263238; }
-.grid-table td { border: 1px solid #cfd8dc; padding: 3px 6px; text-align: center; }
-.grid-table tr.sample td { background: #f9fbe7; }
-.grid-table tr.sample2 td { background: #fff8e1; }
-.tab-bar { display: flex; border-bottom: 2px solid #1565c0; }
-.tab-item { padding: 4px 14px; border: 1px solid #b0bec5; border-bottom: none; cursor: pointer;
-  font-size: 11px; background: #eceff1; margin-right: 2px; }
-.tab-item.active { background: #1565c0; color: white; border-color: #1565c0; }
-.badge { display: inline-block; background: #e64a19; color: white; font-size: 9px;
-  padding: 1px 3px; border-radius: 2px; margin-left: 3px; vertical-align: middle; font-weight: bold; }
-.badge-bl { background: #1565c0; }
-.split { display: flex; gap: 6px; }
-.split > * { flex: 1; }
-.split > .w60 { flex: 1.5; }
-.split > .w40 { flex: 1; }
-</style>
-</head>
-<body>
-<div class="bo-header">
-  <span>{화면ID}: {화면명} <span class="badge-bl badge">BL-01</span></span>
-  <span class="screen-id">근거: {소스파일명}</span>
-</div>
-<div class="screen">
-  {파싱된 HTML 구조 — 조회조건/그리드/탭/버튼 섹션 재현}
-</div>
-</body>
-</html>
-```
-
-저장: `docs/05_설계서/{domain}/UI/{화면ID}/preview.html`
+> **preview.html 생성 책임은 이 에이전트에서 제거되었다.**  
+> preview.png는 sl-recon STEP 5-C에서 `runtime_capture.js`(실제 dev 서버 헤드리스 캡처) 또는  
+> 사용자 수동 제출로 채워진다. 본 에이전트는 spec.md만 작성한다.
 
 ---
 
-## Phase 5: 스크린샷
+## Phase 5: 미리보기 자산 안내 (캡처는 sl-recon이 일괄 처리)
 
-```bash
-!node "$HOME/.claude/plugins/speclinker/scripts/screenshot.js" \
-  "$(pwd)/docs/05_설계서/{domain}/UI/{화면ID}/preview.html" \
-  "$(pwd)/docs/05_설계서/{domain}/UI/{화면ID}/preview.png"
-```
+`docs/05_설계서/{domain}/UI/{화면ID}/preview.png` 파일은 아래 4단계 폴백 순서로 채워진다.  
+**ddd-ui-agent는 캡처를 시도하지 않는다 — spec.md의 `![[preview.png]]` 라인만 유지하면 된다.**
 
-Windows:
-```bash
-!node "%USERPROFILE%\.claude\plugins\speclinker\scripts\screenshot.js" \
-  "{절대경로}\docs\05_설계서\{domain}\UI\{화면ID}\preview.html" \
-  "{절대경로}\docs\05_설계서\{domain}\UI\{화면ID}\preview.png"
-```
+| 우선 | 경로 | 처리 |
+|-----|------|------|
+| 1 | `PREVIEW_BASE_URL` + storageState 존재 + capture_plan.json | Playwright headless로 실제 페이지 캡처. **단독 라우트(standalone)** 자동, **동적 라우트(`/orders/:id`)**는 목록 진입 + 첫 행 클릭 자동 시도 |
+| 2 | 사용자 수동 제출 | `search-result` / 모달 / 권한별 / 복잡 플로우는 직접 캡처해서 `docs/.../UI/{화면ID}/preview.png` 떨궈놓기. capture_plan.json의 항목에 `manualOverride: true` 추가 후 사용자 정의 preActions 작성도 가능 |
+| 3 | 자산 없음 | spec.md의 `![[preview.png]]`는 빈 링크로 남음 (Obsidian에서 누락 표시) |
+| 4 (선택) | `PREVIEW_FALLBACK_BO=true` | sl-recon이 BO admin 폴백 HTML 생성 후 캡처 (jwork 전용) |
 
-실패 시 진행하고 spec.md의 `![[preview.png]]` 라인을 주석 처리.
+> 자동화 범위:
+> - **standalone**: 메뉴 메인 페이지, 대시보드 등 — 자동
+> - **dynamic-route**: 동적 ID 라우트 — 목록 페이지 진입 후 첫 행 자동 클릭으로 캡처 시도
+> - **search-result / modal-only**: capture_plan.json에 manualOverride 표시 후 사용자가 preActions 직접 작성
+> - **인증**: bootstrap 1회 통과 후 storageState 유효 기간 동안 자동화 (만료 3건 감지 시 자동 중단)
 
 ---
 
@@ -304,7 +236,7 @@ UIS-ID: UIS-F-{uisId:03d}
 [ ] §4 그리드 컬럼이 컴포넌트 파일에서 추출한 실제 field/headerName인가?
 [ ] §5 이벤트 표의 API 링크가 {infDir}INF-XXX.md 형식인가?
 [ ] §5 API 엔드포인트가 진입파일+컴포넌트 파일 전체에서 수집됐는가?
-[ ] preview.html이 생성됐는가?
+[ ] spec.md만 생성했는가? (preview.html / preview.png 직접 생성 시도 금지 — sl-recon STEP 5-C 책임)
 [ ] RECON 모드: REQ-F 값이 [TBD]인가? (REQ-F-NNN 형식 금지)
 [ ] UIS-F 번호가 전달받은 uisId와 일치하는가?
 [ ] spec.md frontmatter에 라우트 경로가 있는가?
@@ -319,6 +251,7 @@ UIS-ID: UIS-F-{uisId:03d}
 진입 파일: {entryFile}
 읽은 컴포넌트: {읽은 파일 수}개 / 참조 {componentFiles 수}개
 생성 화면: UIS-F-{uisId:03d} ({화면명})
-생성 파일: spec.md, preview.html, preview.png ({성공|실패})
+생성 파일: spec.md
+미리보기: sl-recon STEP 5-C (runtime_capture)에서 일괄 처리
 추출 API: {엔드포인트 목록}
 ```

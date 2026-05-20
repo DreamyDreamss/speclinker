@@ -31,66 +31,27 @@ model: claude-opus-4-7
 > **목적:** 소스 코드에서 관측된 기능을 사실 그대로 기록한다.  
 > 요구사항 추상화 없음. REQ-F ID 없음. 구현 사실 중심.
 
-### R-1. 스펙 파일 스캔
+### R-1. 통합 인덱스 로드 (sl-recon STEP 6-0에서 생성됨)
+
+`_tmp/funcs_index.json` 을 1차 입력으로 사용한다.  
+**spec.md / INF/*.md 를 다시 cat 하지 않는다 — 동일 입력이 srs-agent·rtm-agent 컨텍스트에도 들어가 토큰 3중 적재가 된다.**
 
 ```bash
 !python3 -c "
-import os, re, json
-
-docs = 'docs/05_설계서'
-funcs = []
-fid = 1
-
-for domain in sorted(os.listdir(docs)):
-    ui_path = os.path.join(docs, domain, 'UI')
-    inf_path = os.path.join(docs, domain, 'INF')
-    if not os.path.isdir(ui_path):
-        continue
-    for screen_id in sorted(os.listdir(ui_path)):
-        spec = os.path.join(ui_path, screen_id, 'spec.md')
-        if not os.path.isfile(spec):
-            continue
-        c = open(spec, encoding='utf-8').read()
-
-        url     = re.search(r'URL[:\s]+(\S+)', c)
-        jsp     = re.search(r'JSP[:\s]+(\S+)', c)
-        rules   = re.findall(r'(?:비즈니스 규칙|Business Rule)[^\n]*\n((?:[-*].+\n?)+)', c)
-        inf_ids = re.findall(r'\.\./\.\./INF/(INF-\d+)\.md', c)
-        srs_ids = re.findall(r'SRS-F-[\w-]+', c)
-        db_tbl  = re.findall(r'\bTB_\w+', c)
-
-        # INF 파일에서 method + path 읽기
-        inf_list = []
-        for inf_id in inf_ids:
-            inf_file = os.path.join(inf_path, f'{inf_id}.md')
-            if os.path.exists(inf_file):
-                ic = open(inf_file, encoding='utf-8').read()
-                method = re.search(r'^method:\s*(\S+)', ic, re.M)
-                path_  = re.search(r'^path:\s*(\S+)', ic, re.M)
-                inf_list.append(f'{method.group(1) if method else \"?\"} {path_.group(1) if path_ else \"?\"}  [{inf_id}]')
-            else:
-                inf_list.append(f'[{inf_id}] (파일 미생성)')
-
-        funcs.append({
-            'id': f'FUNC-{domain}-{fid:03d}',
-            'domain': domain,
-            'screen': screen_id,
-            'spec_path': f'docs/05_설계서/{domain}/UI/{screen_id}/spec.md',
-            'url': url.group(1) if url else (jsp.group(1) if jsp else '?'),
-            'inf': inf_list,
-            'db': sorted(set(db_tbl)),
-            'srs': sorted(set(srs_ids)),
-            'rules': [l.strip('- *') for l in (rules[0].strip().split('\n') if rules else [])],
-        })
-        fid += 1
-
-with open('/tmp/_func_scan.json', 'w', encoding='utf-8') as f:
-    json.dump(funcs, f, ensure_ascii=False, indent=2)
-print(f'스캔 완료: {len(funcs)}개 기능')
-for fn in funcs[:5]:
-    print(f'  {fn[\"id\"]}: {fn[\"screen\"]} ({len(fn[\"inf\"])} INF, {len(fn[\"db\"])} TB)')
-" 2>&1
+import json, os
+path = '_tmp/funcs_index.json'
+if not os.path.exists(path):
+    print('[ERROR] _tmp/funcs_index.json 없음 — sl-recon STEP 6-0 (build_funcs_index.py) 먼저 실행 필요')
+else:
+    idx = json.load(open(path, encoding='utf-8'))
+    print(f'기능 {len(idx[\"funcs\"])}개 / 도메인 {len(idx[\"domains\"])}개')
+    for f in idx['funcs'][:5]:
+        print(f'  {f[\"id\"]}: {f[\"screen\"]} (INF {len(f[\"inf\"])}건, DB {len(f[\"dbTables\"])}건)')
+"
 ```
+
+> 인덱스 항목 구조: `{ id, domain, screen, screenName, specPath, uisId, route, inf:[...], srs:[...], dbTables:[...], rules:[...], reqF }`  
+> 본 에이전트는 이 인덱스만 보고 FUNC_v1.0.md를 작성한다. 추가 보강이 필요한 항목만 해당 spec.md를 선별적으로 Read.
 
 ### R-2. FUNC_v1.0.md 작성
 

@@ -133,6 +133,32 @@ SOURCE_1_PATH=<절대경로1>
 SOURCE_2_LABEL=<레이블2>
 SOURCE_2_PATH=<절대경로2>
 ...
+
+# POC 모드 (선택 — RECON 개발 중 빠른 반복용)
+# 전체 소스를 매번 다 분석하지 않고 특정 도메인만 빠르게 처리
+# POC_MODE=true 일 때만 아래 옵션 적용
+# POC_MODE=false
+# POC_DOMAINS=                    # 쉼표 구분 (예: auth,order). 비어있으면 plan 전체
+# POC_SKIP_UA=false                # true면 STEP 1 UA 분석 스킵 (기존 knowledge-graph 재사용)
+# POC_FILE_LIMIT=                  # 도메인별 INF 처리 파일 수 제한 (예: 5)
+
+# 미리보기 캡처 (선택 — RECON UI 스크린샷, Playwright 기반)
+# PREVIEW_BASE_URL 설정 시 실제 dev/staging 서버를 헤드리스 캡처
+# 미설정 시 사용자 수동 PNG 제출 또는 미리보기 생략으로 폴백
+#
+# 사용 절차:
+#   1. npm install --save-dev playwright   (1회)
+#   2. node scripts/runtime_capture.js --bootstrap .   (Chrome GUI로 1회 수동 로그인)
+#   3. sl-recon STEP 5-C에서 자동 캡처 (storageState 재사용)
+#
+# PREVIEW_BASE_URL=http://localhost:3333
+# PREVIEW_STORAGE_STATE=./.preview-storage.json          # storageState 저장 위치 (쿠키+localStorage)
+# PREVIEW_VIEWPORT=1440x900
+# PREVIEW_WAIT_UNTIL=networkidle                          # load|domcontentloaded|networkidle
+# PREVIEW_TIMEOUT_MS=30000
+# PREVIEW_LOGIN_URL_PATTERN=/login,/auth/signin           # 만료 감지용 로그인 URL 패턴
+# PREVIEW_CHROME_PATH=                                    # 시스템 Chrome 재사용 (playwright-core 사용 시)
+# PREVIEW_FALLBACK_BO=false                               # jwork 전용 BO admin 폴백 활성화
 ```
 
 소스가 1개이고 현재 작업 디렉토리인 경우:

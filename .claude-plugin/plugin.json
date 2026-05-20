@@ -1,7 +1,7 @@
 {
   "name": "speclinker",
   "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 REQ-ID 체이닝, UA 대시보드 통합",
-  "version": "2.12.1",
+  "version": "2.13.0",
   "author": {
     "name": "DreamyDreamss"
   },

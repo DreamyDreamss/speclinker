@@ -172,6 +172,132 @@ def find_query_files(dao_file, workspace_root):
 
 
 # ──────────────────────────────────────────────
+# SQL/XML 스키마 추출 (응답 컬럼·nullable 사전 파싱)
+# ──────────────────────────────────────────────
+
+SELECT_PATTERN = re.compile(
+    r'SELECT\s+(.+?)\s+FROM\s+', re.I | re.S
+)
+LEFT_JOIN_PATTERN = re.compile(r'LEFT\s+(?:OUTER\s+)?JOIN\s+(\w+)', re.I)
+MYBATIS_SELECT_PATTERN = re.compile(
+    r'<select\s+[^>]*id\s*=\s*"([^"]+)"[^>]*>(.+?)</select>', re.I | re.S
+)
+RESULTMAP_PATTERN = re.compile(
+    r'<resultMap\s+[^>]*id\s*=\s*"([^"]+)"[^>]*>(.+?)</resultMap>', re.I | re.S
+)
+RESULT_COL_PATTERN = re.compile(
+    r'<(?:result|id)\s+([^/]+?)/?>', re.I
+)
+ATTR_PATTERN = re.compile(r'(\w+)\s*=\s*"([^"]*)"')
+
+
+def parse_select_columns(select_body):
+    """SELECT 절 컬럼 텍스트를 파싱해서 컬럼 리스트 반환"""
+    # 'a.col1 AS alias1, b.col2, NVL(x,0) AS y' 같은 패턴
+    # MyBatis 동적 SQL <if> 등은 단순 제거
+    body = re.sub(r'<if[^>]*>.*?</if>', '', select_body, flags=re.S | re.I)
+    body = re.sub(r'<\w+[^>]*>', '', body)
+    body = re.sub(r'</\w+>', '', body)
+    body = re.sub(r'/\*.*?\*/', '', body, flags=re.S)
+    body = re.sub(r'--[^\n]*', '', body)
+
+    cols = []
+    depth = 0
+    cur = ''
+    for ch in body:
+        if ch == '(':
+            depth += 1
+            cur += ch
+        elif ch == ')':
+            depth -= 1
+            cur += ch
+        elif ch == ',' and depth == 0:
+            if cur.strip():
+                cols.append(cur.strip())
+            cur = ''
+        else:
+            cur += ch
+    if cur.strip():
+        cols.append(cur.strip())
+
+    parsed = []
+    for c in cols:
+        # ' a.col1 AS alias1' → name=alias1, source=a.col1
+        m = re.search(r'^(.+?)\s+(?:AS\s+)?(\w+)\s*$', c, re.I)
+        if m:
+            name = m.group(2)
+            source = m.group(1).strip()
+        else:
+            name = c.split('.')[-1].strip()
+            source = c
+        # nullable 휴리스틱: CASE WHEN ... ELSE NULL, NVL, COALESCE, LEFT JOIN
+        nullable = bool(
+            re.search(r'ELSE\s+NULL', source, re.I)
+            or re.search(r'\b(NVL|COALESCE|IFNULL)\s*\(', source, re.I)
+        )
+        parsed.append({'name': name, 'source': source, 'nullable': nullable})
+    return parsed
+
+
+def extract_query_schema(query_file):
+    """SQL/XML 파일에서 SELECT 컬럼·nullable·LEFT JOIN 정보 추출"""
+    if not os.path.exists(query_file):
+        return None
+    try:
+        body = open(query_file, encoding='utf-8', errors='ignore').read()
+    except Exception:
+        return None
+
+    ext = os.path.splitext(query_file)[1].lower()
+    schema = {'queryFile': norm(query_file), 'selects': []}
+
+    if ext == '.xml':
+        # MyBatis: <select id="..."> ... </select>
+        for m in MYBATIS_SELECT_PATTERN.finditer(body):
+            stmt_id = m.group(1)
+            stmt_body = m.group(2)
+            sel_m = SELECT_PATTERN.search(stmt_body)
+            if not sel_m:
+                continue
+            cols = parse_select_columns(sel_m.group(1))
+            left_joins = LEFT_JOIN_PATTERN.findall(stmt_body)
+            schema['selects'].append({
+                'id': stmt_id,
+                'columns': cols,
+                'leftJoinedTables': sorted(set(t.lower() for t in left_joins)),
+            })
+        # resultMap도 보강
+        result_maps = []
+        for m in RESULTMAP_PATTERN.finditer(body):
+            map_id = m.group(1)
+            cols = []
+            for col_m in RESULT_COL_PATTERN.finditer(m.group(2)):
+                attrs = dict(ATTR_PATTERN.findall(col_m.group(1)))
+                if 'property' in attrs:
+                    cols.append({
+                        'name':     attrs.get('property'),
+                        'column':   attrs.get('column', ''),
+                        'jdbcType': attrs.get('jdbcType', ''),
+                    })
+            result_maps.append({'id': map_id, 'columns': cols})
+        if result_maps:
+            schema['resultMaps'] = result_maps
+    elif ext == '.sql':
+        # 일반 SQL: 첫 SELECT 구문만 파싱
+        sel_m = SELECT_PATTERN.search(body)
+        if sel_m:
+            cols = parse_select_columns(sel_m.group(1))
+            left_joins = LEFT_JOIN_PATTERN.findall(body)
+            schema['selects'].append({
+                'id': os.path.basename(query_file),
+                'columns': cols,
+                'leftJoinedTables': sorted(set(t.lower() for t in left_joins)),
+            })
+
+    return schema if schema['selects'] or schema.get('resultMaps') else None
+
+
+# ──────────────────────────────────────────────
 # call chain 해결 (Controller → Service → DAO → Query)
 # ──────────────────────────────────────────────
 
@@ -210,10 +336,22 @@ def resolve_chain(controller_path, workspace_root, max_depth=2):
 
     traverse(controller_path, max_depth)
 
+    services = list(dict.fromkeys(service_files))
+    daos = list(dict.fromkeys(dao_files))
+    queries = list(dict.fromkeys(query_files))
+
+    # 쿼리 파일별 스키마 사전 추출 (응답 컬럼·nullable·LEFT JOIN)
+    query_schemas = []
+    for qf in queries:
+        sch = extract_query_schema(qf)
+        if sch:
+            query_schemas.append(sch)
+
     return {
-        'service': list(dict.fromkeys(service_files)),
-        'dao':     list(dict.fromkeys(dao_files)),
-        'query':   list(dict.fromkeys(query_files)),
+        'service':       services,
+        'dao':           daos,
+        'query':         queries,
+        'querySchemas':  query_schemas,
     }
 
 
@@ -223,7 +361,8 @@ def resolve_chain(controller_path, workspace_root, max_depth=2):
 
 def main():
     if len(sys.argv) < 3:
-        print('사용법: python3 resolve_call_chain.py <router_inventory.json> <workspace_root>')
+        print('사용법: python3 resolve_call_chain.py <inventory.json> <workspace_root>')
+        print('  inventory.json: router_inventory.json 또는 batch_inventory.json')
         sys.exit(1)
 
     inventory_path = sys.argv[1]
@@ -233,6 +372,7 @@ def main():
     # inventory는 배치 그룹 배열 (list of list)
 
     total_files = 0
+    total_schemas = 0
     enriched = []
     for group in inventory:
         new_group = []
@@ -244,16 +384,21 @@ def main():
             item['relatedFiles'] = chain
 
             n = len(chain['service']) + len(chain['dao']) + len(chain['query'])
+            ns = len(chain.get('querySchemas', []))
             total_files += n
+            total_schemas += ns
             if n:
-                print(f"  {os.path.basename(fp)}: svc={len(chain['service'])} dao={len(chain['dao'])} query={len(chain['query'])}")
+                print(f"  {os.path.basename(fp)}: svc={len(chain['service'])} dao={len(chain['dao'])} query={len(chain['query'])} schema={ns}")
 
             new_group.append(item)
         enriched.append(new_group)
 
-    out_path = os.path.join(os.path.dirname(inventory_path), 'router_inventory_with_chain.json')
+    # 출력 파일명: 입력 파일명 기반 자동 결정
+    base_name = os.path.splitext(os.path.basename(inventory_path))[0]
+    out_filename = f'{base_name}_with_chain.json'
+    out_path = os.path.join(os.path.dirname(inventory_path), out_filename)
     json.dump(enriched, open(out_path, 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
-    print(f'\nrouter_inventory_with_chain.json 저장 완료 (연관 파일 {total_files}개 추가)')
+    print(f'\n{out_filename} 저장 완료 (연관 파일 {total_files}개, 스키마 사전 추출 {total_schemas}개)')
 
 
 if __name__ == '__main__':

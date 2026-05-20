@@ -25,32 +25,31 @@ model: claude-opus-4-7
 
 ---
 
-## Phase 0-R: RECON 입력 로드
+## Phase 0-R: RECON 입력 로드 (통합 인덱스 1차 사용)
+
+`_tmp/funcs_index.json` 을 1차 입력으로 사용한다.  
+**spec.md / INF/*.md 를 다시 cat 하지 않는다.**
 
 ```bash
 !python3 -c "
-import os, re
-docs = 'docs/05_설계서'
-screens = []
-for domain in sorted(os.listdir(docs)):
-    ui_path = os.path.join(docs, domain, 'UI')
-    if not os.path.isdir(ui_path):
-        continue
-    for sid in sorted(os.listdir(ui_path)):
-        spec = os.path.join(ui_path, sid, 'spec.md')
-        if os.path.isfile(spec):
-            c = open(spec, encoding='utf-8').read()
-            inf_ids = re.findall(r'\.\./\.\./INF/(INF-\d+)\.md', c)
-            screens.append({'domain': domain, 'id': sid, 'inf': inf_ids})
-print(f'화면 {len(screens)}개 발견')
-for s in screens[:5]:
-    print(f'  {s[\"domain\"]}/{s[\"id\"]}: INF {s[\"inf\"]}')
-" 2>&1
+import json, os
+path = '_tmp/funcs_index.json'
+if not os.path.exists(path):
+    print('[ERROR] _tmp/funcs_index.json 없음 — sl-recon STEP 6-0 (build_funcs_index.py) 먼저 실행 필요')
+else:
+    idx = json.load(open(path, encoding='utf-8'))
+    print(f'기능 {len(idx[\"funcs\"])}개 / 도메인 {len(idx[\"domains\"])}개')
+    for f in idx['funcs'][:5]:
+        print(f'  {f[\"id\"]}: {f[\"screen\"]} (INF {len(f[\"inf\"])}건, DB {len(f[\"dbTables\"])}건, rules {len(f[\"rules\"])}건)')
+"
 ```
 
-FUNC_v1.0.md도 읽어 기능 맥락 파악:
+> 인덱스의 각 func에는 `screen`, `screenName`, `route`, `inf[].method/path/summary`, `dbTables`, `rules`, `srs` 가 이미 추출되어 있다.  
+> SRS 집약에 필요한 화면 시퀀스·API 체인·비즈니스 규칙 신호가 인덱스에 모두 포함됨.  
+> FUNC_v1.0.md 색인 표 정도만 보조로 cat (전체 본문 cat 금지).
+
 ```bash
-!cat docs/00_FUNC/FUNC_v1.0.md 2>/dev/null || echo "FUNC 없음 — rd-agent(RECON) 먼저 실행 필요"
+!grep -E '^\| FUNC-' docs/00_FUNC/FUNC_v1.0.md 2>/dev/null || echo "FUNC 색인 없음 — rd-agent(RECON) 먼저 실행 필요"
 ```
 
 이후 **Phase 1-R**로 진행.
@@ -59,14 +58,26 @@ FUNC_v1.0.md도 읽어 기능 맥락 파악:
 
 ## Phase 0-G: GENESIS 입력 로드
 
+> 🚫 **MODE=RECON이면 이 Phase 전체를 실행하지 않는다.** 아래 cat은 모드 가드로 감싸져 RECON에서는 no-op.
+
 ```bash
-!cat docs/01_요구사항정의서/RD_v1.0.md
-!ls docs/01_요구사항정의서/domains/ 2>/dev/null || echo "도메인 파일 없음"
+!python3 -c "
+import sys, os
+env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8') if '=' in l and not l.startswith('#'))
+if env.get('MODE','GENESIS') != 'GENESIS':
+    print('GENESIS 모드 아님 — Phase 0-G 스킵 (Phase 0-R로 이동)')
+    sys.exit(0)
+" && cat docs/01_요구사항정의서/RD_v1.0.md \
+  && (ls docs/01_요구사항정의서/domains/ 2>/dev/null || echo "도메인 파일 없음")
 ```
 
-모든 도메인 파일도 순차 읽기:
+모든 도메인 파일도 순차 읽기 (GENESIS 모드 전용):
 ```bash
-!for f in docs/01_요구사항정의서/domains/*.md; do echo "=== $f ==="; cat "$f"; done
+!python3 -c "
+import sys
+env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8') if '=' in l and not l.startswith('#'))
+sys.exit(0 if env.get('MODE','GENESIS') == 'GENESIS' else 1)
+" && for f in docs/01_요구사항정의서/domains/*.md; do echo "=== $f ==="; cat "$f"; done
 ```
 
 이후 **Phase 1**로 진행.

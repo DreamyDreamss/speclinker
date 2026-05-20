@@ -20,16 +20,24 @@ model: claude-opus-4-7
 ```
 
 > **⚡ RECON 모드 분기:**  
-> `MODE=RECON`이면 Phase 0-R로 즉시 이동 — Phase 1~3은 실행하지 않는다.  
-> `MODE=GENESIS` (또는 미설정)이면 아래 로드 계속 후 Phase 1로 진행.
+> `MODE=RECON`이면 Phase 0-R로 즉시 이동 — Phase 1~7은 실행하지 않는다.  
+> `MODE=GENESIS` (또는 미설정)이면 아래 GENESIS 입력 로드 후 Phase 1로 진행.
+
+> 🚫 **MODE=RECON이면 아래 GENESIS 입력 로드는 전체 스킵.** cat 명령들이 모드 가드로 감싸져 RECON에서는 no-op.
 
 ```bash
-!cat docs/01_요구사항정의서/RD_v1.0.md
-!cat docs/03_기능명세서/SRS_v1.0.md
-!cat docs/05_설계서/API_Design.md 2>/dev/null || echo "API 설계 없음"
-!cat docs/05_설계서/DB_Schema.md 2>/dev/null || echo "DB 스키마 없음"
-!cat docs/05_설계서/UI_Spec_v1.0.md 2>/dev/null || echo "UI 명세 없음"
-!cat docs/02_추적표/RTM_v1.0.md
+!python3 -c "
+import sys
+env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8') if '=' in l and not l.startswith('#'))
+if env.get('MODE','GENESIS') != 'GENESIS':
+    print('GENESIS 모드 아님 — Phase 0 GENESIS 입력 로드 스킵 (Phase 0-R로 이동)')
+    sys.exit(0)
+" && cat docs/01_요구사항정의서/RD_v1.0.md \
+  && cat docs/03_기능명세서/SRS_v1.0.md \
+  && (cat docs/05_설계서/API_Design.md 2>/dev/null || echo "API 설계 없음") \
+  && (cat docs/05_설계서/DB_Schema.md 2>/dev/null || echo "DB 스키마 없음") \
+  && (cat docs/05_설계서/UI_Spec_v1.0.md 2>/dev/null || echo "UI 명세 없음") \
+  && cat docs/02_추적표/RTM_v1.0.md
 ```
 
 ---
@@ -40,11 +48,30 @@ model: claude-opus-4-7
 > 화면 → SRS-F → INF → DB 테이블 직결 매핑표를 작성한다.  
 > REQ-F 없음. FUNC-ID 기준 매핑.
 
-### R-1. 소스 로드
+### R-1. 통합 인덱스 로드 (1차 입력)
+
+`_tmp/funcs_index.json` 을 1차 입력으로 사용한다.  
+**spec.md / INF/*.md / screen-map.json / FUNC_v1.0.md 본문 전체를 cat 하지 않는다.**
 
 ```bash
-!cat .understand-anything/screen-map.json 2>/dev/null || echo "screen-map.json 없음 — rtm-agent Phase 3-B 먼저 실행 필요"
-!cat docs/00_FUNC/FUNC_v1.0.md 2>/dev/null || echo "FUNC_v1.0.md 없음 — rd-agent(RECON) 먼저 실행 필요"
+!python3 -c "
+import json, os
+path = '_tmp/funcs_index.json'
+if not os.path.exists(path):
+    print('[ERROR] _tmp/funcs_index.json 없음 — sl-recon STEP 6-0 (build_funcs_index.py) 먼저 실행 필요')
+else:
+    idx = json.load(open(path, encoding='utf-8'))
+    print(f'기능 {len(idx[\"funcs\"])}개 / 도메인 {len(idx[\"domains\"])}개')
+"
+```
+
+> 인덱스에는 화면·INF·DB 테이블·SRS·route·domain이 이미 매핑돼 있다.  
+> FUNC_MAP.md 작성에 필요한 행 단위 데이터를 인덱스에서 직접 구성한다.
+
+보조 색인은 grep으로 짧게만 확인 (전체 cat 금지):
+```bash
+!grep -E '^\| FUNC-' docs/00_FUNC/FUNC_v1.0.md 2>/dev/null | head -20
+!test -f .understand-anything/screen-map.json && echo "screen-map.json 존재 (Phase 3-B 입력 가능)" || echo "screen-map.json 없음 (Phase 3-B에서 생성)"
 ```
 
 ### R-2. FUNC_MAP.md 작성
