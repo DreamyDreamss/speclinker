@@ -1,6 +1,5 @@
 #!/usr/bin/env node
-// screenshot.js — preview.html → preview.png
-// 우선순위: puppeteer-core → Chrome CLI headless
+// screenshot.js — preview.html → preview.png (Chrome headless, 추가 설치 불필요)
 
 'use strict';
 
@@ -22,7 +21,6 @@ if (!fs.existsSync(absHtml)) {
   process.exit(1);
 }
 
-// ── Chrome 실행 파일 탐색 ──────────────────────────────────────
 function findChrome() {
   const candidates = [
     // Windows
@@ -47,76 +45,34 @@ function findChrome() {
   return null;
 }
 
-// ── 방법 1: puppeteer-core (설치된 경우) ──────────────────────
-async function tryPuppeteer() {
-  let puppeteer;
-  try { puppeteer = require('puppeteer-core'); } catch (_) { return false; }
-
-  const chrome = findChrome();
-  if (!chrome) return false;
-
-  const browser = await puppeteer.launch({
-    executablePath: chrome,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-  });
-  try {
-    const page = await browser.newPage();
-    await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 });
-    const fileUrl = 'file:///' + absHtml.replace(/\\/g, '/');
-    await page.goto(fileUrl, { waitUntil: 'networkidle0', timeout: 10000 });
-    await page.screenshot({ path: absPng, fullPage: true });
-    return true;
-  } finally {
-    await browser.close();
-  }
+const chrome = findChrome();
+if (!chrome) {
+  console.error('Chrome을 찾을 수 없습니다. Google Chrome을 설치해주세요.');
+  process.exit(1);
 }
 
-// ── 방법 2: Chrome CLI --screenshot ───────────────────────────
-function tryChromeCliScreenshot() {
-  const chrome = findChrome();
-  if (!chrome) throw new Error('Chrome 실행 파일을 찾을 수 없습니다.');
+const fileUrl = 'file:///' + absHtml.replace(/\\/g, '/');
 
-  const fileUrl = 'file:///' + absHtml.replace(/\\/g, '/');
+const result = spawnSync(
+  chrome,
+  [
+    '--headless',
+    '--disable-gpu',
+    '--no-sandbox',
+    '--hide-scrollbars',
+    '--disable-extensions',
+    `--screenshot=${absPng}`,
+    '--window-size=1440,900',
+    fileUrl,
+  ],
+  { timeout: 15000, encoding: 'utf8' }
+);
 
-  const result = spawnSync(
-    chrome,
-    [
-      '--headless',
-      '--disable-gpu',
-      '--no-sandbox',
-      '--hide-scrollbars',
-      '--disable-extensions',
-      `--screenshot=${absPng}`,
-      '--window-size=1440,900',
-      fileUrl,
-    ],
-    { timeout: 15000, encoding: 'utf8' }
-  );
-
-  if (!fs.existsSync(absPng)) {
-    const errMsg = result.stderr ? result.stderr.slice(0, 300) : '알 수 없는 오류';
-    throw new Error(`Chrome CLI 실패: ${errMsg}`);
-  }
+if (fs.existsSync(absPng)) {
+  console.log(`스크린샷 저장: ${absPng}`);
+  process.exit(0);
+} else {
+  const errMsg = result.stderr ? result.stderr.slice(0, 300) : '알 수 없는 오류';
+  console.error(`스크린샷 실패: ${errMsg}`);
+  process.exit(1);
 }
-
-// ── 실행 ─────────────────────────────────────────────────────
-(async () => {
-  try {
-    const ok = await tryPuppeteer();
-    if (ok) {
-      console.log(`스크린샷 저장 (puppeteer-core): ${absPng}`);
-      process.exit(0);
-    }
-  } catch (e) {
-    // puppeteer 실패 → CLI fallback
-  }
-
-  try {
-    tryChromeCliScreenshot();
-    console.log(`스크린샷 저장 (Chrome CLI): ${absPng}`);
-    process.exit(0);
-  } catch (e) {
-    console.error(`스크린샷 실패: ${e.message}`);
-    process.exit(1);
-  }
-})();
