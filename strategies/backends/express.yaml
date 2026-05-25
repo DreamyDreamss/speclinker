@@ -1,0 +1,40 @@
+name: express
+kind: backend
+description: "Express.js 백엔드 패턴 (함수형 라우터)"
+version: 1
+priority: 100
+
+matches_profile:
+  backend.language: [typescript, javascript, node]
+  backend.framework: [express, koa, hono, fastify]   # 함수형 라우터 공유 패턴 묶음
+
+call_chain:
+  follow_layers: [service, services, repository, repositories, dao]
+  skip_layers:   [util, common, config, middleware]
+  follow_paths_glob: []
+  skip_paths_glob:   ["**/middleware/**", "**/config/**"]
+  max_depth: 3
+
+endpoint_extraction:
+  annotations: []
+  function_calls:
+    - regex: "(?:router|app)\\.(get|post|put|delete|patch)\\(\\s*['\"`]([^'\"`]+)['\"`]"
+      method_group: 1
+      path_group:   2
+  embedded_calls: []
+
+query_extraction:
+  types: []
+  dynamic_sql_patterns: []
+
+artifact_mapping:
+  INF:
+    source_glob:
+      - "**/routes/**/*.{ts,js}"
+      - "**/routers/**/*.{ts,js}"
+      - "**/handlers/**/*.{ts,js}"
+      - "**/controllers/**/*.{ts,js}"
+    note: "router.METHOD() 호출이 있는 파일"
+
+_meta:
+  author: "speclinker built-in"

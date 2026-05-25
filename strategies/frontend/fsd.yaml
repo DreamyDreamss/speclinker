@@ -1,0 +1,44 @@
+name: fsd
+kind: frontend
+description: "Feature-Sliced Design — app/pages/widgets/features/entities/shared 슬라이스 규칙"
+version: 1
+priority: 250
+
+# fsd는 framework 무관 (react·vue 위에 얹는 아키텍처) — architecture 차원으로 매칭
+matches_profile:
+  frontend.architecture.pattern: [fsd]
+
+call_chain:
+  follow_layers: [features, entities, widgets, shared, app, pages]
+  skip_layers:   [assets, styles, theme]
+  follow_paths_glob:
+    - "**/features/**"
+    - "**/entities/**"
+    - "**/widgets/**"
+    - "**/shared/api/**"
+    - "**/shared/lib/**"
+  skip_paths_glob: ["**/shared/ui/**"]
+  max_depth: 3
+
+spec_extraction:
+  page_entry_signals:
+    - '/pages/[^/]+/(index|ui)\.(tsx|jsx|vue|ts|js)'
+  slice_boundary_rule: |
+    FSD 슬라이스 의존성: app → pages → widgets → features → entities → shared
+    (위 → 아래만 허용. 역방향 import는 위반)
+
+artifact_mapping:
+  UIS:
+    source_glob:
+      - "**/pages/**/index.tsx"
+      - "**/pages/**/index.jsx"
+      - "**/pages/**/index.vue"
+      - "**/pages/**/ui/**"
+    note: "FSD pages 슬라이스 = UIS 진입점"
+  Feature:                      # FSD 전용 산출물 (옵션)
+    source_glob:
+      - "**/features/**/index.*"
+    note: "사용자 시나리오 단위 (특히 FSD에서 의미 있음)"
+
+_meta:
+  author: "speclinker built-in"

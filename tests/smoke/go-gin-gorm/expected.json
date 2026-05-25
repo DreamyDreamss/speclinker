@@ -1,0 +1,15 @@
+{
+  "fixture": "go-gin-gorm",
+  "description": "Go + Gin (REST 라우터) + GORM (ORM). N-Tier (handler→service→repository).",
+  "probe_expectations": {
+    "likely_backend_lang": "go",
+    "likely_backend_framework": "gin",
+    "likely_persistence_contains": "gorm"
+  },
+  "future_phase6_expectations": {
+    "rationale": "resolve_call_chain.py는 현재 Java/Python/TS/JS만 import 추출 지원. Go는 같은 package 안에서 직접 참조하므로 별도 traverse 전략 필요(예: AST 기반 또는 callgraph 분석). Phase 6에서 multi-language support 도입 시 활성화.",
+    "controller": "internal/order/handler.go",
+    "service_must_resolve_to": "internal/order/service.go",
+    "dao_must_resolve_to":     "internal/order/repository.go"
+  }
+}

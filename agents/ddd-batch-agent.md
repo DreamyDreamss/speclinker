@@ -25,7 +25,21 @@ model: claude-sonnet-4-6
 MCP_DB 서버: {db_alias 또는 "없음"}
 워크스페이스: {절대경로}
 MODE: RECON
+프로젝트 Profile: .speclinker/profile.yaml (선택)
 ```
+
+### Profile 활용 (Phase 1 신규)
+
+`.speclinker/profile.yaml`이 있고 `batch.runner`가 채워져 있으면:
+- `spring-batch` → `@Job`, `@Step`, `ItemReader/Processor/Writer` 어노테이션 우선
+- `quartz` → `Job` interface, `@DisallowConcurrentExecution`
+- `celery` → `@app.task`, `celery.beat_schedule`
+- `airflow` → `DAG()`, `PythonOperator/BashOperator`
+- `sidekiq` → `include Sidekiq::Job` (Ruby)
+- `k8s-cronjob` → `kind: CronJob` (yaml/manifest)
+- `lambda-eventbridge` → `serverless.yml` 또는 SAM template의 `Schedule` 이벤트
+
+Profile에 batch가 `present: false`면 이 호출은 사실상 불필요 — 사용자에게 경고하고 종료.
 
 ---
 

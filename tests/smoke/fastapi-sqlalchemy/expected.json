@@ -1,0 +1,14 @@
+{
+  "fixture": "fastapi-sqlalchemy",
+  "description": "FastAPI + SQLAlchemy 표준 layered (routers → services → repositories → models)",
+  "probe_expectations": {
+    "likely_backend_lang": "python",
+    "likely_backend_framework": "fastapi",
+    "likely_persistence_contains": "sqlalchemy"
+  },
+  "call_chain_expectations": {
+    "controller": "app/routers/orders.py",
+    "service_must_resolve_to": "app/services/order_service.py",
+    "dao_must_resolve_to":     "app/repositories/order_repository.py"
+  }
+}

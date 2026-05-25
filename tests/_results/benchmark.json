@@ -1,0 +1,316 @@
+{
+  "aggregate": {
+    "fixtures": 7,
+    "probe_mean": 1.0,
+    "probe_perfect": 7,
+    "call_chain_mean": 1.0,
+    "call_chain_perfect": 6,
+    "call_chain_skipped": 1
+  },
+  "results": [
+    {
+      "fixture": "django-drf",
+      "description": "Django + DRF (ViewSet 기반) + django-orm. N-Tier 풍 (views→services→repositories→models).",
+      "probe": {
+        "duration_s": 0.0,
+        "checks": {
+          "backend_lang": true,
+          "backend_framework": true,
+          "persistence": true
+        },
+        "passed": 3,
+        "total": 3,
+        "accuracy": 1.0,
+        "manifests_seen": 1,
+        "extensions": 3
+      },
+      "call_chain": {
+        "duration_s": 0.079,
+        "total_resolved": 2,
+        "service_n": 1,
+        "dao_n": 1,
+        "query_n": 0,
+        "targets": {
+          "service": true,
+          "dao": true
+        },
+        "passed": 2,
+        "total": 2,
+        "accuracy": 1.0
+      },
+      "strategy": {
+        "follow_total": 12,
+        "skip_total": 21,
+        "max_depth": 3,
+        "follow_added": [
+          "managers",
+          "repositories",
+          "selectors",
+          "services",
+          "views"
+        ],
+        "skip_added": [
+          "domain",
+          "entity",
+          "migrations",
+          "model",
+          "serializers"
+        ],
+        "skip_removed": [],
+        "strategy_effective": true
+      }
+    },
+    {
+      "fixture": "fastapi-sqlalchemy",
+      "description": "FastAPI + SQLAlchemy 표준 layered (routers → services → repositories → models)",
+      "probe": {
+        "duration_s": 0.0,
+        "checks": {
+          "backend_lang": true,
+          "backend_framework": true,
+          "persistence": true
+        },
+        "passed": 3,
+        "total": 3,
+        "accuracy": 1.0,
+        "manifests_seen": 1,
+        "extensions": 3
+      },
+      "call_chain": {
+        "duration_s": 0.0,
+        "total_resolved": 2,
+        "service_n": 1,
+        "dao_n": 1,
+        "query_n": 0,
+        "targets": {
+          "service": true,
+          "dao": true
+        },
+        "passed": 2,
+        "total": 2,
+        "accuracy": 1.0
+      },
+      "strategy": {
+        "skipped": true,
+        "reason": "no profile.yaml"
+      }
+    },
+    {
+      "fixture": "go-gin-gorm",
+      "description": "Go + Gin (REST 라우터) + GORM (ORM). N-Tier (handler→service→repository).",
+      "probe": {
+        "duration_s": 0.0,
+        "checks": {
+          "backend_lang": true,
+          "backend_framework": true,
+          "persistence": true
+        },
+        "passed": 3,
+        "total": 3,
+        "accuracy": 1.0,
+        "manifests_seen": 1,
+        "extensions": 3
+      },
+      "call_chain": {
+        "skipped": true,
+        "reason": "no call_chain_expectations"
+      },
+      "strategy": {
+        "follow_total": 11,
+        "skip_total": 20,
+        "max_depth": 3,
+        "follow_added": [
+          "handler",
+          "handlers",
+          "repositories",
+          "services"
+        ],
+        "skip_added": [
+          "domain",
+          "entity",
+          "middleware",
+          "model"
+        ],
+        "skip_removed": [],
+        "strategy_effective": true
+      }
+    },
+    {
+      "fixture": "nestjs-prisma",
+      "description": "NestJS + Prisma 단일 도메인 폴더 (Controller·Service·Repository 동일 디렉토리)",
+      "probe": {
+        "duration_s": 0.0,
+        "checks": {
+          "backend_lang": true,
+          "backend_framework": true,
+          "persistence": true
+        },
+        "passed": 3,
+        "total": 3,
+        "accuracy": 1.0,
+        "manifests_seen": 1,
+        "extensions": 3
+      },
+      "call_chain": {
+        "duration_s": 0.016,
+        "total_resolved": 2,
+        "service_n": 1,
+        "dao_n": 1,
+        "query_n": 0,
+        "targets": {
+          "service": true,
+          "dao": true
+        },
+        "passed": 2,
+        "total": 2,
+        "accuracy": 1.0
+      },
+      "strategy": {
+        "skipped": true,
+        "reason": "no profile.yaml"
+      }
+    },
+    {
+      "fixture": "spring-jpa-hexagonal",
+      "description": "Hexagonal Architecture (adapter/in.web → application/service → domain + adapter/out.persistence)",
+      "probe": {
+        "duration_s": 0.0,
+        "checks": {
+          "backend_lang": true,
+          "backend_framework": true,
+          "persistence": true,
+          "architecture_hint": true
+        },
+        "passed": 4,
+        "total": 4,
+        "accuracy": 1.0,
+        "manifests_seen": 1,
+        "extensions": 3
+      },
+      "call_chain": {
+        "duration_s": 0.063,
+        "total_resolved": 3,
+        "service_n": 1,
+        "dao_n": 2,
+        "query_n": 0,
+        "targets": {
+          "service": true,
+          "dao": true,
+          "domain": true
+        },
+        "passed": 3,
+        "total": 3,
+        "accuracy": 1.0
+      },
+      "strategy": {
+        "follow_total": 12,
+        "skip_total": 16,
+        "max_depth": 4,
+        "follow_added": [
+          "application",
+          "domain",
+          "interactor",
+          "repositories",
+          "usecase"
+        ],
+        "skip_added": [],
+        "skip_removed": [],
+        "strategy_effective": true
+      }
+    },
+    {
+      "fixture": "spring-mybatis-ntier",
+      "description": "전통적 N-Tier (Controller→Service→DAO→MyBatis XML)",
+      "probe": {
+        "duration_s": 0.0,
+        "checks": {
+          "backend_lang": true,
+          "backend_framework": true,
+          "persistence": true,
+          "frontend_framework": true,
+          "architecture_hint": true
+        },
+        "passed": 5,
+        "total": 5,
+        "accuracy": 1.0,
+        "manifests_seen": 1,
+        "extensions": 3
+      },
+      "call_chain": {
+        "duration_s": 0.016,
+        "total_resolved": 3,
+        "service_n": 1,
+        "dao_n": 1,
+        "query_n": 1,
+        "targets": {
+          "service": true,
+          "dao": true,
+          "query": true
+        },
+        "passed": 3,
+        "total": 3,
+        "accuracy": 1.0
+      },
+      "strategy": {
+        "skipped": true,
+        "reason": "no profile.yaml"
+      }
+    },
+    {
+      "fixture": "vue-fsd",
+      "description": "Vue 3 + Vue Router + Pinia + FSD 슬라이스 (pages/features/entities/shared)",
+      "probe": {
+        "duration_s": 0.0,
+        "checks": {
+          "backend_lang": true,
+          "frontend_framework": true,
+          "architecture_hint": true
+        },
+        "passed": 3,
+        "total": 3,
+        "accuracy": 1.0,
+        "manifests_seen": 1,
+        "extensions": 3
+      },
+      "call_chain": {
+        "duration_s": 0.063,
+        "total_resolved": 3,
+        "service_n": 2,
+        "dao_n": 2,
+        "query_n": 0,
+        "targets": {
+          "service": true,
+          "dao": true
+        },
+        "passed": 2,
+        "total": 2,
+        "accuracy": 1.0
+      },
+      "strategy": {
+        "follow_total": 18,
+        "skip_total": 19,
+        "max_depth": 3,
+        "follow_added": [
+          "api",
+          "app",
+          "composable",
+          "composables",
+          "entities",
+          "features",
+          "pages",
+          "services",
+          "shared",
+          "stores",
+          "widgets"
+        ],
+        "skip_added": [
+          "assets",
+          "styles",
+          "theme"
+        ],
+        "skip_removed": [],
+        "strategy_effective": true
+      }
+    }
+  ]
+}

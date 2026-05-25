@@ -1,0 +1,160 @@
+# Strategy schema v1 — Speclinker 추출 전략 정의 형식
+#
+# Strategy yaml은 "어떤 코드를 어떻게 INF/SCH/UIS/BAT으로 추출할지"의 명시적 contract.
+# 3차원(스택·퍼시스턴스·아키텍처)으로 분리하여 카탈로그 폭발 방지.
+#
+# 디렉토리 구조:
+#   strategies/
+#     backends/      spring.yaml, express.yaml, fastapi.yaml, nestjs.yaml, gin.yaml, ...
+#     persistence/   mybatis.yaml, jpa.yaml, sqlalchemy.yaml, prisma.yaml, gorm.yaml, ...
+#     arch/          ntier.yaml, hexagonal.yaml, clean.yaml, modular-monolith.yaml, ...
+#     frontend/      react.yaml, vue.yaml, fsd.yaml, ...
+#     batch/         spring-batch.yaml, airflow.yaml, celery.yaml, ...
+#
+# 호출자(resolve_call_chain·ddd-* 에이전트)는 profile.yaml을 보고
+# 매칭되는 strategy yaml 들을 **합성(머지)** 하여 effective_strategy 생성.
+
+# ─────────────────────────────────────────────────────────────
+# 메타데이터
+# ─────────────────────────────────────────────────────────────
+name: example-strategy                # 고유 식별자, 디렉토리 파일명과 일치
+kind: backend                         # backend / persistence / arch / frontend / batch
+description: "이 strategy 가 다루는 범위 1~2 문장"
+version: 1
+priority: 100                         # 합성 시 우선순위. 높을수록 나중에 머지(=덮어쓰기)
+                                      # 일반적으로: arch=300, persistence=200, backend=100, default=0
+
+# ─────────────────────────────────────────────────────────────
+# 매칭 조건 — profile.yaml의 어떤 값일 때 이 strategy가 활성화되는가
+# ─────────────────────────────────────────────────────────────
+matches_profile:
+  # 모든 조건이 AND. profile 경로를 점 표기로.
+  # 값이 list면 OR (그 list 중 하나라도 매칭).
+  # null이면 그 필드는 검사 안 함 (즉 항상 통과).
+  backend.language: [java]            # 예: java만 매칭
+  backend.framework: [spring-boot]    # 예: spring-boot만
+  backend.architecture.pattern: null  # 예: 아키텍처 무관
+  backend.persistence.technologies: null
+  frontend.framework: null
+  batch.runner: null
+
+# ─────────────────────────────────────────────────────────────
+# call_chain — 컨트롤러→서비스→DAO traverse 규칙 (backend strategy 필수)
+# ─────────────────────────────────────────────────────────────
+call_chain:
+  # FOLLOW_LAYERS 확장 — has_layer_signal 기반
+  follow_layers:
+    - service
+    - dao
+    - repository
+    - mapper
+  # SKIP_LAYERS 확장
+  skip_layers:
+    - util
+    - common
+    - config
+    - exception
+  # glob 패턴 기반 추가 매칭 (layer 키워드만으론 부족할 때)
+  follow_paths_glob: []               # 예: ["**/application/**", "**/usecase/**"]
+  skip_paths_glob: []
+  # 최대 hop (controller → service → dao → ?)
+  max_depth: 3
+
+# ─────────────────────────────────────────────────────────────
+# endpoint_extraction — INF 생성을 위한 엔드포인트 추출 (backend strategy 필수)
+# ─────────────────────────────────────────────────────────────
+endpoint_extraction:
+  # 어노테이션 기반 (Spring·NestJS·FastAPI 등)
+  annotations:
+    - regex: '@(Get|Post|Put|Delete|Patch)Mapping\("([^"]+)"\)'
+      method_group: 1
+      path_group:   2
+      base_path_annotation: '@RequestMapping\("([^"]+)"\)'  # 클래스 레벨 base path
+    - regex: '@RequestMapping\([^)]*method\s*=\s*RequestMethod\.(GET|POST|PUT|DELETE|PATCH)[^)]*\)'
+      method_group: 1
+      path_group:   null              # path는 별도 추출
+  # 함수형 라우팅 (Gin·Echo·Express·Hono 등)
+  function_calls: []
+    # 예: { regex: 'router\.(GET|POST)\(\"([^\"]+)\"', method_group: 1, path_group: 2 }
+  # JSP/jwork 같은 화면 임베디드 호출 (RECON 전용)
+  embedded_calls: []
+
+# ─────────────────────────────────────────────────────────────
+# query_extraction — SCH 생성을 위한 쿼리/스키마 추출 (persistence strategy 필수)
+# ─────────────────────────────────────────────────────────────
+query_extraction:
+  # 쿼리 위치 종류
+  types:
+    - type: mybatis_xml
+      locations: ["**/resources/mapper/**/*.xml", "**/mapper/**/*.xml"]
+      kind: sql
+    - type: jpa_query_annotation
+      regex: '@Query\("(SELECT|UPDATE|INSERT|DELETE)[^"]+"\)'
+      kind: sql
+    - type: orm_entity_class
+      file_patterns: ["**/*Entity.java", "**/entity/**/*.java"]
+      kind: orm
+    - type: prisma_schema
+      locations: ["**/prisma/schema.prisma"]
+      kind: orm-dsl
+    - type: sqlalchemy_models
+      regex: 'class\s+\w+\(.*DeclarativeBase|Base\):'
+      kind: orm
+    - type: raw_sql_string
+      regex: '(?i)(SELECT|INSERT|UPDATE|DELETE)\s+'
+      kind: sql
+  # 동적 SQL 탐지 (sch_draft에서 누락될 수 있는 케이스 플래그)
+  dynamic_sql_patterns:
+    - '\$\{[^}]+\}'                   # ${var}
+    - '#\{[^}]+\}'                    # #{var}
+
+# ─────────────────────────────────────────────────────────────
+# artifact_mapping — 어떤 코드를 어떤 산출물에 매핑할지 (arch strategy 우선)
+# ─────────────────────────────────────────────────────────────
+artifact_mapping:
+  INF:
+    source_glob:
+      - "**/controller/**/*.java"
+      - "**/adapter/in/**/*.java"
+      - "**/routers/**/*.py"
+      - "**/handler/**/*.go"
+    note: "엔드포인트가 정의된 파일 위치"
+  SCH:
+    source_glob:
+      - "**/*Entity.java"
+      - "**/entity/**/*.java"
+      - "**/models/**/*.py"
+      - "**/prisma/schema.prisma"
+      - "**/resources/mapper/**/*.xml"
+    enrich_from: query_extraction
+    note: "DB 스키마 추출의 1차 신호 위치"
+  UIS:
+    source_glob:
+      - "**/pages/**/*.tsx"
+      - "**/views/**/*.vue"
+      - "**/components/pages/**"
+    note: "화면 진입점 (라우트 단위)"
+  BAT:
+    source_glob: []
+    note: "배치 strategy에서 채움"
+  BusinessRules:                      # Hexagonal/DDD 전용 산출물 (옵션)
+    source_glob: []
+    note: "도메인 로직(Aggregate·DomainEvent)이 있을 때만"
+
+# ─────────────────────────────────────────────────────────────
+# overrides — 사람이 conventions.yaml로 보정한 값과 합성될 자리
+# ─────────────────────────────────────────────────────────────
+overrides:
+  follow_layers_extra: []
+  skip_layers_extra: []
+  endpoint_patterns_extra: []
+  notes: ""
+
+# ─────────────────────────────────────────────────────────────
+# _meta
+# ─────────────────────────────────────────────────────────────
+_meta:
+  author: "speclinker built-in"
+  references: []                      # 참고 문서·표준 (선택)
+  tested_against:                     # 검증된 sample repo (있으면 명시)
+    - "tests/smoke/spring-mybatis-ntier"

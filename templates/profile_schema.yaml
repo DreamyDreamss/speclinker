@@ -1,0 +1,149 @@
+# project.profile.yaml — Speclinker 프로젝트 Profile 스키마 v1
+#
+# 이 파일은 ".speclinker/profile.yaml"의 권위 있는 형식 정의다.
+# Phase 1의 profile-agent가 probe.json + UA + 코드 샘플을 보고 초안을 생성하고,
+# 사용자 confirm 후 영구 저장되어 모든 ddd-* 에이전트의 1차 입력이 된다.
+#
+# 설계 원칙:
+#   - 영구 저장: 자동 갱신 금지. 변경은 명시적 `/sl-init --reprofile` 또는 사람 수정만 허용.
+#   - 사람이 읽고 1분 안에 검수 가능한 길이.
+#   - 모르는 값은 null/[]로 두고 evidence 비워둔다. 추측 금지.
+#   - 매니페스트·디렉토리에서 명확한 evidence가 있을 때만 채운다.
+#
+# 스코프(2026-05-22 결정): 웹 백엔드 + 웹 프론트엔드 + 배치 시스템.
+# ML/게임/CLI/임베디드/모바일은 제외.
+
+version: 1
+generated_at: "2026-05-22T10:00:00+09:00"
+confirmed_by: "user@example.com"   # 빈 문자열이면 아직 사람 confirm 전
+confirmed_at: ""                   # ISO8601, confirm 시 갱신
+
+# ─────────────────────────────────────────────────────────────
+# 1. backend — 웹 백엔드 정보
+# ─────────────────────────────────────────────────────────────
+backend:
+  present: true                    # 백엔드 코드가 있는가
+  language: java                   # java / kotlin / python / typescript / javascript / go / rust / csharp / ruby / php / elixir / unknown
+  language_evidence:               # 어디서 이 신호를 얻었는지 (사람이 검수할 때 참고)
+    - "pom.xml 발견"
+    - "src/main/java/ 디렉토리"
+  framework: spring-boot           # spring-boot / quarkus / micronaut / ktor / fastapi / django / flask / express / nestjs / fastify / koa / hono / gin / echo / fiber / chi / axum / actix / aspnetcore / rails / sinatra / phoenix / laravel / symfony / unknown / null
+  framework_version: "3.2"         # 옵션 (모르면 빈 문자열)
+  framework_evidence:
+    - "pom.xml: org.springframework.boot:spring-boot-starter-web"
+
+  # 아키텍처: Phase 0 분류기 hint를 기반으로 사람이 최종 확정
+  architecture:
+    pattern: hexagonal             # ntier / hexagonal / clean / onion / ddd-tactical / modular-monolith / msa-single / unknown
+    evidence:
+      - "디렉토리: domain + application + adapter 동시 존재"
+      - "adapter/in.web + adapter/out.persistence 분리"
+    # 도메인 로직 위치 — strategy yaml의 follow_layers 매칭에 사용
+    business_logic_locations:
+      - "src/main/java/**/domain/**"
+      - "src/main/java/**/application/**"
+    # 명시적으로 추적해야 할 패키지 글로브 (FOLLOW_LAYERS의 동적 확장)
+    follow_paths_glob:
+      - "**/application/**"
+      - "**/adapter/**"
+      - "**/domain/**"
+    # 명시적으로 무시할 경로
+    skip_paths_glob:
+      - "**/config/**"
+      - "**/infrastructure/security/**"
+
+  persistence:
+    # 동시에 여러 기술 사용 가능 (예: JPA + 일부 raw SQL)
+    technologies:                  # mybatis / jpa / hibernate / jdbc-template / sqlalchemy / django-orm /
+                                   # prisma / typeorm / sequelize / mongoose / gorm / sqlx / diesel /
+                                   # ef-core / activerecord / ecto / eloquent / doctrine / raw-sql
+      - jpa
+    primary_type: sql-orm          # sql-orm / sql-raw / nosql / event-sourced / hybrid / none
+    evidence:
+      - "build.gradle: spring-boot-starter-data-jpa"
+
+  communication:
+    inbound:                       # rest / graphql / grpc / websocket / sse / kafka-consumer / sqs-consumer
+      - rest
+    outbound:                      # rest / graphql / grpc / kafka-producer / rabbitmq / sqs / s3 / 외부 api 호출
+      - rest
+
+# ─────────────────────────────────────────────────────────────
+# 2. frontend — 웹 프론트엔드 정보 (없으면 present: false)
+# ─────────────────────────────────────────────────────────────
+frontend:
+  present: false
+  framework: null                  # react / vue / angular / svelte / solid / qwik / next / nuxt / remix / astro / sveltekit / null
+  framework_evidence: []
+  build_tool: null                 # vite / webpack / parcel / esbuild / next / nuxt / null
+  router: null                     # react-router / vue-router / angular-router / svelte-routing / next-app-router / next-pages-router / nuxt / remix / sveltekit / tanstack-router / null
+
+  architecture:
+    pattern: null                  # fsd / feature-based / atomic / layered / domain-driven / null
+    evidence: []
+    # 화면 단위 인식에 사용하는 슬라이스 경로
+    screen_slice_roots:            # 라우트가 발견되는 디렉토리
+      - "src/pages/**"             # Next pages router, FSD pages 슬라이스 등
+    component_slice_roots:         # 재사용 컴포넌트
+      - "src/widgets/**"
+      - "src/features/**"
+      - "src/entities/**"
+
+  state_management: null           # redux / zustand / mobx / context-only / pinia / vuex / signals / null
+
+# ─────────────────────────────────────────────────────────────
+# 3. batch — 배치/잡 시스템 (없으면 present: false)
+# ─────────────────────────────────────────────────────────────
+batch:
+  present: false
+  runner: null                     # spring-batch / quartz / airflow / celery / sidekiq / bullmq /
+                                   # k8s-cronjob / lambda-eventbridge / temporal / step-functions / custom / null
+  runner_evidence: []
+  scheduler: null                  # spring-scheduler / quartz / cron / eventbridge / airflow / null
+  job_locations_glob: []           # 배치 코드 위치
+  trigger_types:                   # cron / event / manual / webhook
+    - cron
+
+# ─────────────────────────────────────────────────────────────
+# 4. cross-cutting concerns — 공통 관심사 (있으면 표기)
+# ─────────────────────────────────────────────────────────────
+concerns:
+  auth:                            # jwt / oauth2 / saml / session / api-key / mtls / none / unknown
+    technology: jwt
+    evidence:
+      - "spring-security 의존성"
+  observability:                   # 로깅·메트릭·트레이싱
+    technologies: []
+  cache:                           # redis / memcached / caffeine / none
+    technology: none
+  messaging:                       # kafka / rabbitmq / sqs / nats / redis-pubsub / none
+    technology: none
+
+# ─────────────────────────────────────────────────────────────
+# 5. project_layout — 모노레포 / multi-source 구조 신호
+# ─────────────────────────────────────────────────────────────
+project_layout:
+  # SOURCE_COUNT(project.env) 와 별개로, 도메인 분할 단위가 무엇인지
+  type: single-module              # single-module / modular-monolith / multi-source / monorepo
+  source_roots:                    # _domain_plan.json 의 도메인이 어디서 시작하는지
+    - root: "."
+      label: "main"
+
+# ─────────────────────────────────────────────────────────────
+# 6. overrides — 사람이 수동 보정한 값 (자동 분석이 틀렸을 때)
+# ─────────────────────────────────────────────────────────────
+# 이 섹션이 비어있지 않으면 strategy 매칭 시 우선 적용.
+overrides:
+  follow_layers_extra: []          # FOLLOW_LAYERS 키워드 추가
+  skip_layers_extra: []            # SKIP_LAYERS 키워드 추가
+  endpoint_patterns_extra: []      # 사용자 정의 엔드포인트 정규식
+  notes: ""                        # 자유 메모
+
+# ─────────────────────────────────────────────────────────────
+# 7. _meta — Profile 자체에 대한 메타데이터
+# ─────────────────────────────────────────────────────────────
+_meta:
+  generated_by: "profile-agent v1"
+  probe_snapshot: "_tmp/probe.json"
+  # Profile 갱신 정책 — Phase 1 결정: 자동 갱신 금지. 명시적 명령으로만.
+  auto_update: false

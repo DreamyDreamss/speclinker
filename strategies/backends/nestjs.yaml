@@ -1,0 +1,46 @@
+name: nestjs
+kind: backend
+description: "NestJS 백엔드 패턴 (Controller/Service/Module 데코레이터 기반)"
+version: 1
+priority: 100
+
+matches_profile:
+  backend.language: [typescript, javascript, node]
+  backend.framework: [nestjs]
+
+call_chain:
+  follow_layers: [service, services, repository, repositories]
+  skip_layers:   [util, common, config, decorators, dto, guards, interceptors]
+  follow_paths_glob: []
+  skip_paths_glob:   ["**/config/**", "**/guards/**", "**/interceptors/**"]
+  max_depth: 3
+
+endpoint_extraction:
+  annotations:
+    - regex: "@(Get|Post|Put|Delete|Patch)\\(\\s*['\"`]([^'\"`]+)['\"`]\\s*\\)"
+      method_group: 1
+      path_group:   2
+      base_path_annotation: "@Controller\\(\\s*['\"`]([^'\"`]+)['\"`]\\s*\\)"
+    - regex: "@(Get|Post|Put|Delete|Patch)\\(\\s*\\)"
+      method_group: 1
+      path_group:   null
+      base_path_annotation: "@Controller\\(\\s*['\"`]([^'\"`]+)['\"`]\\s*\\)"
+  function_calls: []
+  embedded_calls: []
+
+query_extraction:
+  types: []                         # persistence strategy (typeorm/prisma) 가 채움
+  dynamic_sql_patterns: []
+
+artifact_mapping:
+  INF:
+    source_glob:
+      - "**/*.controller.ts"
+      - "**/*.controller.js"
+      - "**/controllers/**/*.ts"
+    note: "NestJS @Controller 데코레이터 파일"
+
+_meta:
+  author: "speclinker built-in"
+  tested_against:
+    - "tests/smoke/nestjs-prisma"

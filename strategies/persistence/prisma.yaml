@@ -1,0 +1,41 @@
+name: prisma
+kind: persistence
+description: "Prisma ORM (TypeScript/JavaScript)"
+version: 1
+priority: 200
+
+matches_profile:
+  backend.persistence.technologies: [prisma]
+
+call_chain:
+  follow_layers: [repository, repositories]
+  skip_layers: []
+  follow_paths_glob: []
+  skip_paths_glob: []
+  max_depth: 2
+
+query_extraction:
+  types:
+    - type: prisma_schema
+      locations:
+        - "**/prisma/schema.prisma"
+        - "**/prisma/**/*.prisma"
+      kind: orm-dsl
+      notes: "model 블록이 테이블 정의의 1차 진실"
+    - type: prisma_client_calls
+      regex: "prisma\\.(\\w+)\\.(findMany|findUnique|findFirst|create|update|delete|upsert)"
+      kind: query-builder
+      notes: "prisma.{model}.{method} 호출 패턴"
+  dynamic_sql_patterns: []
+
+artifact_mapping:
+  SCH:
+    source_glob:
+      - "**/prisma/schema.prisma"
+    enrich_from: query_extraction
+    note: "schema.prisma의 model 블록 = SCH 진실. 1대1 매핑"
+
+_meta:
+  author: "speclinker built-in"
+  tested_against:
+    - "tests/smoke/nestjs-prisma"

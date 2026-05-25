@@ -1,0 +1,53 @@
+version: 1
+generated_at: "2026-05-26T00:00:00+09:00"
+confirmed_by: "smoke-test-fixture"
+confirmed_at: "2026-05-26T00:00:00+09:00"
+
+backend:
+  present: false
+
+frontend:
+  present: true
+  framework: vue
+  framework_evidence:
+    - "package.json: vue, vue-router, pinia"
+  build_tool: vite
+  router: vue-router
+
+  architecture:
+    pattern: fsd
+    evidence:
+      - "pages/features/entities/shared 슬라이스 발견"
+    screen_slice_roots:
+      - "src/pages/**"
+    component_slice_roots:
+      - "src/features/**"
+      - "src/entities/**"
+
+  state_management: pinia
+
+batch:
+  present: false
+
+concerns:
+  auth: { technology: unknown, evidence: [] }
+  observability: { technologies: [] }
+  cache: { technology: none }
+  messaging: { technology: none }
+
+project_layout:
+  type: single-module
+  source_roots:
+    - root: "."
+      label: "main"
+
+overrides:
+  follow_layers_extra: []
+  skip_layers_extra: []
+  endpoint_patterns_extra: []
+  notes: ""
+
+_meta:
+  generated_by: "manual (smoke fixture)"
+  probe_snapshot: ""
+  auto_update: false

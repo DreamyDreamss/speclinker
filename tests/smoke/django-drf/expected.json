@@ -1,0 +1,15 @@
+{
+  "fixture": "django-drf",
+  "description": "Django + DRF (ViewSet 기반) + django-orm. N-Tier 풍 (views→services→repositories→models).",
+  "probe_expectations": {
+    "likely_backend_lang": "python",
+    "likely_backend_framework": "django",
+    "likely_persistence_contains": "django-orm"
+  },
+  "call_chain_expectations": {
+    "controller": "orders/views/order_view.py",
+    "service_must_resolve_to": "orders/services/order_service.py",
+    "dao_must_resolve_to":     "orders/repositories/order_repository.py",
+    "note": "Phase 2 검증: profile.framework=django + strategies/backends/django.yaml의 views/services/repositories 키워드로 traverse."
+  }
+}

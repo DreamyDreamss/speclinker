@@ -1,0 +1,48 @@
+name: django
+kind: backend
+description: "Django (urls.py 기반 라우팅 + views/viewsets)"
+version: 1
+priority: 100
+
+matches_profile:
+  backend.language: [python]
+  backend.framework: [django, django-rest-framework, drf]
+
+call_chain:
+  follow_layers: [views, services, repositories, selectors, managers]
+  skip_layers:   [util, common, serializers, migrations]
+  follow_paths_glob:
+    - "**/views/**"
+    - "**/services/**"
+  skip_paths_glob:
+    - "**/migrations/**"
+    - "**/admin.py"
+  max_depth: 3
+
+endpoint_extraction:
+  annotations:
+    # DRF @api_view
+    - regex: '@api_view\(\s*\[([^\]]+)\]\s*\)'
+      method_group: 1
+      path_group:   null
+  function_calls:
+    # urls.py path() / re_path()
+    - regex: "(?:path|re_path)\\(\\s*['\"`]([^'\"`]+)['\"`]"
+      method_group: null
+      path_group:   1
+  embedded_calls: []
+
+# Django 클래스 기반 뷰 / ViewSet — Profile에서 framework=django 인 경우 추가 시그널
+class_view_signals:
+  - 'class\s+\w+\((?:View|APIView|ViewSet|ModelViewSet|GenericAPIView)\)'
+
+artifact_mapping:
+  INF:
+    source_glob:
+      - "**/views/**/*.py"
+      - "**/views.py"
+      - "**/urls.py"
+    note: "urls.py + views — endpoint 추출 시 두 파일 함께 봐야 path/method 매핑 완성"
+
+_meta:
+  author: "speclinker built-in"

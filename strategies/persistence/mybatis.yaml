@@ -1,0 +1,48 @@
+name: mybatis
+kind: persistence
+description: "MyBatis (XML mapper + @Mapper interface)"
+version: 1
+priority: 200
+
+matches_profile:
+  backend.persistence.technologies: [mybatis]
+
+call_chain:
+  follow_layers: [mapper]
+  skip_layers: []
+  follow_paths_glob: []
+  skip_paths_glob: []
+  max_depth: 2
+
+query_extraction:
+  types:
+    - type: mybatis_xml
+      locations:
+        - "**/resources/mapper/**/*.xml"
+        - "**/resources/sqlmap/**/*.xml"
+        - "**/mappers/**/*.xml"
+        - "**/mapper/**/*.xml"
+      kind: sql
+      notes: "<select>/<insert>/<update>/<delete> 태그 + <resultMap>"
+    - type: mybatis_mapper_interface
+      file_patterns:
+        - "**/*Mapper.java"
+        - "**/*Mapper.kt"
+      kind: interface
+      notes: "@Mapper, @Select/@Insert/@Update/@Delete 어노테이션"
+  dynamic_sql_patterns:
+    - '\$\{[^}]+\}'                 # MyBatis ${var} — SQL injection 가능 자리
+    - '#\{[^}]+\}'                  # MyBatis #{var} — prepared statement
+
+artifact_mapping:
+  SCH:
+    source_glob:
+      - "**/resources/mapper/**/*.xml"
+      - "**/*Mapper.xml"
+    enrich_from: query_extraction
+    note: "SCH 1차 신호 — sch_draft가 이 파일들의 SELECT 컬럼을 사전 추출"
+
+_meta:
+  author: "speclinker built-in"
+  tested_against:
+    - "tests/smoke/spring-mybatis-ntier"

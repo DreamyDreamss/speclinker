@@ -1,0 +1,68 @@
+# spring-jpa-hexagonal fixture용 Profile
+# Phase 2 검증: 이 파일이 있으면 strategy 합성으로 domain/Order.java까지 추적됨.
+version: 1
+generated_at: "2026-05-22T00:00:00+09:00"
+confirmed_by: "smoke-test-fixture"
+confirmed_at: "2026-05-22T00:00:00+09:00"
+
+backend:
+  present: true
+  language: java
+  language_evidence:
+    - "build.gradle 발견"
+    - "src/main/java/ 구조"
+  framework: spring-boot
+  framework_version: "3.2"
+  framework_evidence:
+    - "build.gradle: spring-boot-starter-web"
+  architecture:
+    pattern: hexagonal
+    evidence:
+      - "adapter/in/web + adapter/out/persistence 분리"
+      - "domain + application + adapter 동시 존재"
+    business_logic_locations:
+      - "src/main/java/**/domain/**"
+      - "src/main/java/**/application/**"
+    follow_paths_glob:
+      - "**/application/**"
+      - "**/adapter/**"
+      - "**/domain/**"
+    skip_paths_glob:
+      - "**/config/**"
+  persistence:
+    technologies: [jpa]
+    primary_type: sql-orm
+    evidence:
+      - "build.gradle: spring-boot-starter-data-jpa"
+  communication:
+    inbound: [rest]
+    outbound: []
+
+frontend:
+  present: false
+
+batch:
+  present: false
+
+concerns:
+  auth: { technology: unknown, evidence: [] }
+  observability: { technologies: [] }
+  cache: { technology: none }
+  messaging: { technology: none }
+
+project_layout:
+  type: single-module
+  source_roots:
+    - root: "."
+      label: "main"
+
+overrides:
+  follow_layers_extra: []
+  skip_layers_extra: []
+  endpoint_patterns_extra: []
+  notes: ""
+
+_meta:
+  generated_by: "manual (smoke fixture)"
+  probe_snapshot: ""
+  auto_update: false

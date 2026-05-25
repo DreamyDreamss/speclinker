@@ -1,0 +1,49 @@
+name: clean
+kind: arch
+description: "Clean Architecture (Onion) — entities/usecases/interface-adapters/frameworks 4계층"
+version: 1
+priority: 300
+
+matches_profile:
+  backend.architecture.pattern: [clean, onion]
+
+call_chain:
+  # Clean에서 핵심은 entities + usecases. interface-adapters는 controller/presenter.
+  follow_layers: [usecase, usecases, interactor, interactors, entity, entities, domain]
+  skip_layers: []
+  follow_paths_glob:
+    - "**/usecases/**"
+    - "**/interactors/**"
+    - "**/entities/**"
+    - "**/domain/**"
+    - "**/interface_adapters/**"
+    - "**/interfaces/**"
+    - "**/gateways/**"
+  skip_paths_glob:
+    - "**/frameworks/**"            # 외곽 — 보통 인프라
+    - "**/drivers/**"
+  max_depth: 4
+
+artifact_mapping:
+  INF:
+    source_glob:
+      - "**/interface_adapters/**/*Controller*"
+      - "**/interfaces/**/*Controller*"
+      - "**/controllers/**"
+    note: "Clean의 interface-adapters 안의 controller/presenter"
+  SCH:
+    source_glob:
+      - "**/frameworks/**/db/**"
+      - "**/infrastructure/persistence/**"
+      - "**/gateways/**/database/**"
+    enrich_from: query_extraction
+    note: "Clean: SCH는 외곽 framework/infrastructure에 위치"
+  BusinessRules:
+    source_glob:
+      - "**/entities/**"
+      - "**/usecases/**"
+    extract: [entity_invariants, usecase_workflows]
+    note: "Clean: 비즈니스 규칙은 entities + usecases 두 레이어로 분리"
+
+_meta:
+  author: "speclinker built-in"

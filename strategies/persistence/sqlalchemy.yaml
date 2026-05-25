@@ -1,0 +1,43 @@
+name: sqlalchemy
+kind: persistence
+description: "SQLAlchemy (ORM mode, 1.4+ Mapped[] / 2.0 스타일)"
+version: 1
+priority: 200
+
+matches_profile:
+  backend.persistence.technologies: [sqlalchemy]
+
+call_chain:
+  follow_layers: [repository, repositories, dao]
+  skip_layers: []
+  follow_paths_glob: []
+  skip_paths_glob: []
+  max_depth: 2
+
+query_extraction:
+  types:
+    - type: sqlalchemy_declarative
+      regex: "class\\s+\\w+\\((?:Base|DeclarativeBase)\\):"
+      kind: orm
+      notes: "Mapped[] / mapped_column / __tablename__"
+    - type: sqlalchemy_table
+      regex: "Table\\s*\\(\\s*['\"]([^'\"]+)['\"]"
+      kind: orm-imperative
+    - type: sqlalchemy_query_builder
+      regex: "(?:session|db)\\.(?:query|execute|scalar|scalars)\\("
+      kind: query-builder
+  dynamic_sql_patterns: []
+
+artifact_mapping:
+  SCH:
+    source_glob:
+      - "**/models/**/*.py"
+      - "**/entities/**/*.py"
+      - "**/db/models.py"
+    enrich_from: query_extraction
+    note: "Declarative 모델 파일이 SCH의 1차 진실"
+
+_meta:
+  author: "speclinker built-in"
+  tested_against:
+    - "tests/smoke/fastapi-sqlalchemy"

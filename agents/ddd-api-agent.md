@@ -28,7 +28,20 @@ model: claude-sonnet-4-6
 관련 레이어: {layer}
 MODE: {RECON | GENESIS}
 프로젝트 루트: {절대경로}
+프로젝트 Profile: .speclinker/profile.yaml (선택)
 ```
+
+### Profile 활용 (Phase 1 신규)
+
+`.speclinker/profile.yaml`이 있으면 다음 정보를 1차 신호로 사용한다:
+
+- `backend.framework` → 엔드포인트 패턴 선택 (Spring·FastAPI·Express·NestJS·Gin 등)
+- `backend.architecture.pattern` → Controller 위치 가정 (N-Tier `controller/*` vs Hexagonal `adapter/in/*`)
+- `backend.architecture.follow_paths_glob` → 따라가야 할 경로 우선순위
+- `backend.persistence.technologies` → 쿼리 추출 전략 (MyBatis XML vs JPA `@Query` vs Prisma builder)
+- `overrides.endpoint_patterns_extra` → 사용자 정의 정규식 (자체 컨벤션)
+
+Profile이 없거나 `framework: unknown`이면 기존 fallback 패턴(아래 Phase 2-A의 어노테이션 카탈로그) 사용.
 
 각 파일을 **순서대로 처리**한다. INF 번호는 파일별 배정 범위를 독립적으로 사용한다.
 
@@ -100,13 +113,30 @@ MODE: {RECON | GENESIS}
 
 ### 2-A: 엔드포인트 목록 확정 (중복 제거 포함)
 
-파일 타입별 패턴으로 엔드포인트를 추출한다:
+엔드포인트 추출은 **Profile + Strategy yaml의 `endpoint_extraction`** 을 1차 신호로 사용한다.
 
-- **FastAPI**: `@router.METHOD("/path")` + `async def fn(body: Schema)` + `response_model=`
-- **Spring**: `@GetMapping` / `@PostMapping` + `@RequestBody DTO` + `ResponseEntity<T>`
-- **NestJS**: `@Controller` + `@Get/@Post` + `@Body() dto: DTO`
-- **Express/Hono**: `router.METHOD('/path', handler)` + `req.body`
-- **JSP/jwork**: `J.ajax({url:'/path'})` + `$.ajax` — URL, 파라미터 추출
+#### 추출 우선순위
+
+1. **Strategy yaml 적용** (가장 정확):  
+   `.speclinker/profile.yaml`의 `backend.framework`에 매칭되는 strategy를 로드.  
+   해당 yaml의 `endpoint_extraction.annotations` 와 `endpoint_extraction.function_calls` 정규식을 그대로 적용.  
+   예시 strategy 위치: `<플러그인>/strategies/backends/{spring,fastapi,nestjs,express,...}.yaml`
+   - `annotations`: `@GetMapping("/path")` 같은 어노테이션-경로 매칭 — Spring/NestJS/FastAPI
+   - `function_calls`: `router.get("/path", h)` 같은 함수형 라우팅 — Express/Koa/Hono/Gin
+   - `base_path_annotation`: 클래스/모듈 레벨 base path 추출 (예: `@RequestMapping("/api/v1")`)
+
+2. **Fallback 패턴** (Profile 없거나 framework=unknown일 때만):  
+   다음 5종을 순차 시도. **새 framework는 strategy yaml로 추가하라 — 본문 카탈로그 더 늘리지 말 것.**
+   - Spring: `@(Get|Post|Put|Delete|Patch)Mapping`
+   - FastAPI: `@(?:router|app)\.(get|post|...)\(`
+   - NestJS: `@(Get|Post|...)\(` + `@Controller(...)`
+   - Express/Hono: `(?:router|app)\.(get|post|...)\(`
+   - JSP/jwork (RECON 한정): `J.ajax({url: '/path'})`, `$.ajax`
+
+3. **`overrides.endpoint_patterns_extra`** (profile에 있으면):  
+   사용자 정의 정규식을 추가 적용 (회사·팀별 자체 컨벤션).
+
+#### 중복 제거·채번
 
 추출 직후 `{METHOD} {path}` 기준으로 **중복 경로를 제거**한다. 동일 경로가 여러 컨트롤러에 있으면 더 상세한 쪽 1개만 유지한다.
 

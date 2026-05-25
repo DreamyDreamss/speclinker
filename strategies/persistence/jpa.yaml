@@ -1,0 +1,50 @@
+name: jpa
+kind: persistence
+description: "JPA / Hibernate (Spring Data JPA 포함)"
+version: 1
+priority: 200
+
+matches_profile:
+  backend.persistence.technologies: [jpa, hibernate]
+
+call_chain:
+  follow_layers: [repository, repositories]
+  skip_layers: []
+  follow_paths_glob: []
+  skip_paths_glob: []
+  max_depth: 2
+
+query_extraction:
+  types:
+    - type: jpa_entity
+      file_patterns:
+        - "**/*Entity.java"
+        - "**/*Entity.kt"
+        - "**/entity/**/*.java"
+        - "**/entity/**/*.kt"
+        - "**/domain/**/*.java"     # Hexagonal에서 domain 패키지가 entity일 수도
+      kind: orm
+      notes: "@Entity, @Table, @Column, @Id 어노테이션"
+    - type: jpa_query_annotation
+      regex: '@(?:Query|NamedQuery)\(\s*"([^"]+)"'
+      kind: jpql-or-sql
+    - type: jpa_method_naming
+      regex: 'List<\w+>\s+(find|search|count|delete|exists)By\w+\('
+      kind: derived-query
+      notes: "Spring Data JPA derived query (findByXxx)"
+  dynamic_sql_patterns: []
+
+artifact_mapping:
+  SCH:
+    source_glob:
+      - "**/*Entity.java"
+      - "**/*Entity.kt"
+      - "**/entity/**"
+      - "**/domain/**/*.java"
+    enrich_from: query_extraction
+    note: "JPA Entity가 SCH 1차 진실. @Column·@ManyToOne 등으로 컬럼/FK 추출"
+
+_meta:
+  author: "speclinker built-in"
+  tested_against:
+    - "tests/smoke/spring-jpa-hexagonal"

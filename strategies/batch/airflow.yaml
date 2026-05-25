@@ -1,0 +1,46 @@
+name: airflow
+kind: batch
+description: "Apache Airflow DAG (Python)"
+version: 1
+priority: 100
+
+matches_profile:
+  batch.runner: [airflow]
+
+call_chain:
+  follow_layers: [tasks, task, operators, dag, dags, hooks]
+  skip_layers:   [util, common, helpers]
+  follow_paths_glob:
+    - "**/dags/**"
+    - "**/airflow/**"
+    - "**/plugins/operators/**"
+  skip_paths_glob: []
+  max_depth: 3
+
+batch_signals:
+  dag_definitions:
+    - "DAG\\s*\\("
+    - "@dag\\("
+    - "with\\s+DAG\\("
+  operator_patterns:
+    - "PythonOperator\\("
+    - "BashOperator\\("
+    - "KubernetesPodOperator\\("
+    - "BranchPythonOperator\\("
+  task_patterns:
+    - "@task\\("
+    - "@task_group\\("
+  schedule_signals:
+    - "schedule_interval\\s*="
+    - "schedule\\s*="
+    - "start_date\\s*="
+
+artifact_mapping:
+  BAT:
+    source_glob:
+      - "**/dags/**/*.py"
+      - "**/airflow/dags/**/*.py"
+    note: "Airflow DAG 정의 파일"
+
+_meta:
+  author: "speclinker built-in"

@@ -1,0 +1,50 @@
+name: vue
+kind: frontend
+description: "Vue 3 / Nuxt / Vue SPA"
+version: 1
+priority: 100
+
+matches_profile:
+  frontend.framework: [vue, nuxt, vue-router]
+
+call_chain:
+  follow_layers: [composables, composable, store, stores, api, services]
+  skip_layers:   [styles, theme, assets]
+  follow_paths_glob:
+    - "**/composables/**"
+    - "**/stores/**"
+    - "**/api/**"
+  skip_paths_glob: ["**/__tests__/**"]
+  max_depth: 3
+
+spec_extraction:
+  page_entry_signals:
+    - '<script\s+setup'
+    - 'defineComponent\('
+  data_call_signals:
+    - 'useFetch\('
+    - 'useAsyncData\('
+    - '\$fetch\('
+    - 'axios\.(get|post|put|delete|patch)\('
+  form_signals:
+    - 'v-model='
+    - "ref\\(\\s*['\"]"
+    - 'reactive\('
+  routing_signals:
+    - 'useRouter\('
+    - 'navigateTo\('
+    - '<NuxtLink\s+to='
+    - '<RouterLink\s+to='
+  auth_signals:
+    - "v-if=[\"']\\s*can\\("
+    - 'definePageMeta\(\s*\{\s*middleware'
+
+artifact_mapping:
+  UIS:
+    source_glob:
+      - "**/pages/**/*.vue"
+      - "**/views/**/*.vue"
+    note: "Vue 페이지 컴포넌트 (file-based router)"
+
+_meta:
+  author: "speclinker built-in"

@@ -1,0 +1,61 @@
+# go-gin-gorm fixture용 Profile
+version: 1
+generated_at: "2026-05-26T00:00:00+09:00"
+confirmed_by: "smoke-test-fixture"
+confirmed_at: "2026-05-26T00:00:00+09:00"
+
+backend:
+  present: true
+  language: go
+  language_evidence:
+    - "go.mod 발견"
+    - "*.go 파일"
+  framework: gin
+  framework_evidence:
+    - "go.mod: github.com/gin-gonic/gin"
+  architecture:
+    pattern: ntier
+    evidence:
+      - "handler / service / repository 분리"
+    business_logic_locations:
+      - "internal/**"
+    follow_paths_glob:
+      - "**/internal/**"
+    skip_paths_glob: []
+  persistence:
+    technologies: [gorm]
+    primary_type: sql-orm
+    evidence:
+      - "go.mod: gorm.io/gorm"
+  communication:
+    inbound: [rest]
+    outbound: []
+
+frontend:
+  present: false
+
+batch:
+  present: false
+
+concerns:
+  auth: { technology: unknown, evidence: [] }
+  observability: { technologies: [] }
+  cache: { technology: none }
+  messaging: { technology: none }
+
+project_layout:
+  type: single-module
+  source_roots:
+    - root: "."
+      label: "main"
+
+overrides:
+  follow_layers_extra: []
+  skip_layers_extra: []
+  endpoint_patterns_extra: []
+  notes: ""
+
+_meta:
+  generated_by: "manual (smoke fixture)"
+  probe_snapshot: ""
+  auto_update: false

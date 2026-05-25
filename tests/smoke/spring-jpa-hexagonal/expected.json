@@ -1,0 +1,17 @@
+{
+  "fixture": "spring-jpa-hexagonal",
+  "description": "Hexagonal Architecture (adapter/in.web → application/service → domain + adapter/out.persistence)",
+  "probe_expectations": {
+    "likely_backend_lang": "java",
+    "likely_backend_framework": "spring-boot",
+    "likely_persistence_contains": "jpa",
+    "architecture_hint_contains": "hexagonal"
+  },
+  "call_chain_expectations": {
+    "controller": "src/main/java/com/example/order/adapter/in/web/OrderController.java",
+    "service_must_resolve_to": "src/main/java/com/example/order/application/service/PlaceOrderService.java",
+    "dao_must_resolve_to":     "src/main/java/com/example/order/adapter/out/persistence/OrderRepository.java",
+    "domain_must_resolve_to":  "src/main/java/com/example/order/domain/Order.java",
+    "note": "Phase 2 (2026-05-22): .speclinker/profile.yaml + strategies/arch/hexagonal.yaml 합성으로 domain 패키지까지 자동 추적됨."
+  }
+}

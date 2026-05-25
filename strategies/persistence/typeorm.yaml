@@ -1,0 +1,45 @@
+name: typeorm
+kind: persistence
+description: "TypeORM (TypeScript/JavaScript)"
+version: 1
+priority: 200
+
+matches_profile:
+  backend.persistence.technologies: [typeorm]
+
+call_chain:
+  follow_layers: [repository, repositories]
+  skip_layers: []
+  follow_paths_glob: []
+  skip_paths_glob: []
+  max_depth: 2
+
+query_extraction:
+  types:
+    - type: typeorm_entity
+      file_patterns:
+        - "**/*.entity.ts"
+        - "**/*.entity.js"
+        - "**/entities/**/*.ts"
+      regex: '@Entity\([^)]*\)'
+      kind: orm
+      notes: '@Entity, @Column, @PrimaryGeneratedColumn, @ManyToOne'
+    - type: typeorm_query_builder
+      regex: "\\.createQueryBuilder\\(\\s*[\"'`]?\\w*"
+      kind: query-builder
+    - type: typeorm_repository_methods
+      regex: "repository\\.(find|findOne|save|update|delete|remove)\\("
+      kind: query-builder
+  dynamic_sql_patterns: []
+
+artifact_mapping:
+  SCH:
+    source_glob:
+      - "**/*.entity.ts"
+      - "**/*.entity.js"
+      - "**/entities/**/*.ts"
+    enrich_from: query_extraction
+    note: "TypeORM @Entity 클래스가 SCH 1차 진실"
+
+_meta:
+  author: "speclinker built-in"

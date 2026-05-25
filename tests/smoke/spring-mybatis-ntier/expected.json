@@ -1,0 +1,20 @@
+{
+  "fixture": "spring-mybatis-ntier",
+  "description": "전통적 N-Tier (Controller→Service→DAO→MyBatis XML)",
+  "probe_expectations": {
+    "likely_backend_lang": "java",
+    "likely_backend_framework": "spring-boot",
+    "likely_persistence_contains": "mybatis",
+    "likely_frontend_framework": null,
+    "architecture_hint_contains": "n-tier"
+  },
+  "call_chain_expectations": {
+    "controller": "src/main/java/com/example/order/controller/OrderController.java",
+    "service_must_resolve_to": "src/main/java/com/example/order/service/OrderService.java",
+    "dao_must_resolve_to":     "src/main/java/com/example/order/dao/OrderDao.java",
+    "query_must_resolve_to":   "src/main/resources/mapper/OrderDao.xml"
+  },
+  "sch_draft_expectations": {
+    "expected_tables_min": ["orders", "users"]
+  }
+}

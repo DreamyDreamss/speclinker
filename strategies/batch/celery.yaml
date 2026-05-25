@@ -1,0 +1,38 @@
+name: celery
+kind: batch
+description: "Celery (Python 분산 작업 큐) + celery-beat 스케줄"
+version: 1
+priority: 100
+
+matches_profile:
+  batch.runner: [celery]
+
+call_chain:
+  follow_layers: [tasks, services, repositories]
+  skip_layers:   [util, common]
+  follow_paths_glob:
+    - "**/tasks/**"
+    - "**/celery_app/**"
+  skip_paths_glob: []
+  max_depth: 3
+
+batch_signals:
+  task_definitions:
+    - '@app\.task'
+    - '@celery\.task'
+    - '@shared_task'
+  schedule_signals:
+    - 'beat_schedule\s*='
+    - 'CELERY_BEAT_SCHEDULE'
+    - 'celery\.schedules\.crontab'
+
+artifact_mapping:
+  BAT:
+    source_glob:
+      - "**/tasks/**/*.py"
+      - "**/celery_app/**/*.py"
+      - "**/celery.py"
+    note: "Celery 태스크 정의 파일"
+
+_meta:
+  author: "speclinker built-in"

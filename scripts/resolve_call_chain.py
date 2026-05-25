@@ -16,11 +16,16 @@ import re
 import json
 
 # 따라갈 레이어 키워드 (패키지/디렉토리 이름 기준)
-FOLLOW_LAYERS = ('service', 'dao', 'repository', 'mapper', 'store', 'repo', 'persistence')
-# 건너뛸 레이어 (인프라·공통 코드)
-SKIP_LAYERS   = ('util', 'common', 'constant', 'exception', 'annotation', 'config',
-                 'enum', 'dto', 'vo', 'msg', 'helper', 'interceptor', 'filter',
-                 'security', 'auth', 'jwt', 'swagger', 'model', 'entity', 'domain')
+# Phase 2 (2026-05-22): 기본값은 그대로 두고, Profile + Strategy yaml이 있으면
+# load_effective_layers()가 동적으로 오버레이한다.
+DEFAULT_FOLLOW_LAYERS = ('service', 'dao', 'repository', 'mapper', 'store', 'repo', 'persistence')
+DEFAULT_SKIP_LAYERS   = ('util', 'common', 'constant', 'exception', 'annotation', 'config',
+                         'enum', 'dto', 'vo', 'msg', 'helper', 'interceptor', 'filter',
+                         'security', 'jwt', 'swagger')
+
+# Backward-compat 별칭 — 기존 호출자/테스트 안전
+FOLLOW_LAYERS = DEFAULT_FOLLOW_LAYERS
+SKIP_LAYERS   = DEFAULT_SKIP_LAYERS
 
 # 쿼리 파일 확장자 (데이터 접근 계층 파일)
 QUERY_EXTS = ('.xml', '.sql', '.graphql', '.prisma')
@@ -31,26 +36,195 @@ def norm(p):
     return p.replace('\\', '/') if p else ''
 
 
+_EXT_TOKENS  = frozenset(('py', 'java', 'ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs',
+                          'go', 'rs', 'kt', 'kts', 'cs', 'rb', 'php', 'ex', 'exs',
+                          'scala', 'groovy', 'swift'))
+_INIT_TOKENS = frozenset(('__init__', 'index', 'mod'))
+
+
+# ──────────────────────────────────────────────
+# Strategy 로더 (Phase 2 신규)
+# ──────────────────────────────────────────────
+# Profile + Strategy yaml들을 합성해 effective_layers를 만든다.
+# 호출자가 명시적으로 load_effective_layers()를 부르지 않으면 DEFAULT 값이 그대로 쓰임.
+# 기존 동작은 100% 보존.
+
+def load_yaml(path):
+    """pyyaml 있으면 사용, 없으면 None (조용한 fallback)."""
+    try:
+        import yaml
+        return yaml.safe_load(open(path, encoding='utf-8'))
+    except ImportError:
+        return None
+    except Exception:
+        return None
+
+
+def _profile_matches_strategy(profile: dict, strategy: dict) -> bool:
+    """Strategy의 matches_profile 조건이 모두 충족되는지 확인."""
+    cond = (strategy or {}).get('matches_profile') or {}
+    for path, allowed in cond.items():
+        if allowed is None:
+            continue
+        # path = 'backend.framework' → profile['backend']['framework'] 조회
+        node = profile
+        for seg in path.split('.'):
+            if isinstance(node, dict):
+                node = node.get(seg)
+            else:
+                node = None
+                break
+        if node is None:
+            return False
+        # allowed 가 list 면 OR 매칭. node 가 list 면 교집합 있으면 매칭.
+        if isinstance(allowed, list):
+            if isinstance(node, list):
+                if not (set(allowed) & set(node)):
+                    return False
+            else:
+                if node not in allowed:
+                    return False
+        else:
+            if node != allowed:
+                return False
+    return True
+
+
+def load_effective_layers(workspace_root: str = '.'):
+    """
+    Profile + 빌트인 strategies/{backends,persistence,arch}/ 를 합성해
+    (follow_layers, skip_layers, max_depth) 튜플 반환.
+
+    Profile 없거나 yaml 미지원이면 DEFAULT 값 그대로.
+    """
+    profile_path = os.path.join(workspace_root, '.speclinker', 'profile.yaml')
+    profile = load_yaml(profile_path) if os.path.exists(profile_path) else None
+    if not profile:
+        return (set(DEFAULT_FOLLOW_LAYERS), set(DEFAULT_SKIP_LAYERS), 2)
+
+    # 빌트인 strategies 디렉토리: 플러그인 위치 추정 (이 파일의 상위)
+    plugin_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    strategies_dir = os.path.join(plugin_root, 'strategies')
+    if not os.path.isdir(strategies_dir):
+        return (set(DEFAULT_FOLLOW_LAYERS), set(DEFAULT_SKIP_LAYERS), 2)
+
+    follow = set(DEFAULT_FOLLOW_LAYERS)
+    skip   = set(DEFAULT_SKIP_LAYERS)
+    max_depth = 2
+
+    # 우선순위 낮은 → 높은 순으로 합성 (high priority 가 덮어쓰기)
+    # 5종 차원 모두 로드 — frontend/batch는 spec_extraction·batch_signals 필드도 가지지만
+    # 여기선 call_chain 필드만 합성에 사용한다.
+    # community/ — meta-extractor가 만든 검수 대기 strategy도 동일 매칭 메커니즘.
+    matched = []
+    kind_dirs = ['backends', 'persistence', 'arch', 'frontend', 'batch', 'community']
+    for kind_dir in kind_dirs:
+        d = os.path.join(strategies_dir, kind_dir)
+        if not os.path.isdir(d):
+            continue
+        for fname in sorted(os.listdir(d)):
+            if not fname.endswith('.yaml'):
+                continue
+            strat = load_yaml(os.path.join(d, fname))
+            if not strat:
+                continue
+            if _profile_matches_strategy(profile, strat):
+                matched.append(strat)
+    matched.sort(key=lambda s: int(s.get('priority', 0)))
+
+    for strat in matched:
+        cc = strat.get('call_chain') or {}
+        for layer in (cc.get('follow_layers') or []):
+            follow.add(str(layer).lower())
+        for layer in (cc.get('skip_layers') or []):
+            skip.add(str(layer).lower())
+        md = cc.get('max_depth')
+        if isinstance(md, int) and md > max_depth:
+            max_depth = md
+
+    # Phase 3: profile.overrides 합성 (사람이 직접 보정한 값 — 가장 마지막에 적용)
+    # 회사·팀별 자체 컨벤션이나 자동 분석이 틀렸을 때 사용자가 채우는 영역.
+    overrides = profile.get('overrides') or {}
+    for layer in (overrides.get('follow_layers_extra') or []):
+        follow.add(str(layer).lower())
+    for layer in (overrides.get('skip_layers_extra') or []):
+        skip.add(str(layer).lower())
+
+    return (follow, skip, max_depth)
+
+
+def has_layer_signal(fqn_or_path: str, layers: tuple) -> bool:
+    """
+    경로/FQN에서 layer 키워드가 컨텍스트 인식 방식으로 매칭되는지 검사.
+
+    매칭 규칙:
+    - 모든 separator(`.`, `/`, `\\`)를 통일 후 세그먼트 분리
+    - 확장자/__init__/index/mod 같은 형식적 토큰은 제거 (실제 의미 있는 마지막 세그먼트 보존)
+    - 폴더 세그먼트(마지막 제외): 정확 일치 또는 단순 복수형(+s/+es) 매칭
+      → 'utils'는 'util' 매칭, 'utility_belt'는 매칭 안 됨
+    - 마지막 세그먼트(클래스/모듈명): 부분문자열 매칭
+      → 'OrderService' → 'service' 매칭됨
+
+    Examples:
+        has_layer_signal('com.example.order.service.OrderServiceImpl', ('service',)) → True
+        has_layer_signal('com.example.order.domain.OrderService',     ('service',))  → True
+        has_layer_signal('com.example.order.domain.event.OrderPlaced',('service',))  → False
+        has_layer_signal('com.example.utility_belt.OrderProcessor',   ('util',))     → False
+        has_layer_signal('com.example.utils.SomeHelper',              ('util',))     → True (복수형)
+        has_layer_signal('app/orders/domain/order_service.py',        ('service',))  → True
+        has_layer_signal('app/utils/__init__.py',                     ('util',))     → True
+    """
+    if not fqn_or_path:
+        return False
+    norm_path = fqn_or_path.replace('\\', '/').replace('.', '/').lower()
+    segments = [s for s in norm_path.split('/') if s]
+    # 형식적 토큰(확장자, __init__, index, mod)을 뒤에서부터 제거
+    while len(segments) > 1 and (segments[-1] in _EXT_TOKENS or segments[-1] in _INIT_TOKENS):
+        segments.pop()
+    if not segments:
+        return False
+    # 폴더 세그먼트(마지막 제외): 정확 일치 OR 단순 복수형 매칭
+    for seg in segments[:-1]:
+        if seg in layers:
+            return True
+        for layer in layers:
+            if seg == layer + 's' or seg == layer + 'es':
+                return True
+    # 마지막 세그먼트(클래스명/모듈명): 부분문자열 매칭 — 'OrderService'에서 'service' 잡힘
+    last = segments[-1]
+    for layer in layers:
+        if layer in last:
+            return True
+    return False
+
+
 # ──────────────────────────────────────────────
 # 언어별 import 파싱
 # ──────────────────────────────────────────────
 
-def extract_java_imports(content, source_root):
-    """Java import 문에서 연관 파일 경로 목록 반환"""
+def extract_java_imports(content, source_root, follow_layers=None, skip_layers=None):
+    """
+    Java import 문에서 연관 파일 경로 목록 반환.
+
+    follow_layers / skip_layers: 호출자가 Profile 합성 결과를 전달할 수 있다.
+    None이면 DEFAULT 사용 (기존 동작).
+    """
     files = []
+    fl = tuple(follow_layers) if follow_layers else DEFAULT_FOLLOW_LAYERS
+    sl = tuple(skip_layers)   if skip_layers   else DEFAULT_SKIP_LAYERS
+
     for m in re.finditer(r'^import\s+([\w.]+);', content, re.M):
         fqn = m.group(1)
         parts = fqn.split('.')
         # 외부 라이브러리 제외 (org.*, java.*, lombok.* 등)
         # 프로젝트 내부 패키지 판별: source_root 하위에 파일이 실제 존재하는지 확인
         class_name = parts[-1]
-        pkg_path   = os.path.join(*parts[:-1]) if len(parts) > 1 else ''
 
-        # 레이어 필터: FOLLOW_LAYERS에 속하고 SKIP_LAYERS에 없으면 따라감
-        pkg_lower = pkg_path.lower().replace('\\', '/')
-        if not any(k in pkg_lower for k in FOLLOW_LAYERS):
+        # 레이어 필터: 세그먼트 단위로 FOLLOW에 속하고 SKIP에 없어야 따라감
+        # fqn 전체를 보므로 패키지(domain/service)뿐 아니라 클래스명(OrderService)도 신호로 인식
+        if not has_layer_signal(fqn, fl):
             continue
-        if any(k in pkg_lower for k in SKIP_LAYERS):
+        if has_layer_signal(fqn, sl):
             continue
 
         # source_root 하위 전체에서 {ClassName}.java 검색
@@ -64,10 +238,15 @@ def extract_java_imports(content, source_root):
     return files
 
 
-def extract_python_imports(content, file_path, workspace_root):
-    """Python import/from 문에서 연관 파일 경로 반환"""
+def extract_python_imports(content, file_path, workspace_root, follow_layers=None, skip_layers=None):
+    """Python import/from 문에서 연관 파일 경로 반환.
+
+    follow_layers / skip_layers: 호출자가 Profile 합성 결과 전달 가능. None이면 DEFAULT.
+    """
     files = []
     base_dir = os.path.dirname(file_path)
+    fl = tuple(follow_layers) if follow_layers else DEFAULT_FOLLOW_LAYERS
+    sl = tuple(skip_layers)   if skip_layers   else DEFAULT_SKIP_LAYERS
 
     # from .xxx import / from ..xxx.yyy import 형태
     for m in re.finditer(r'^(?:from|import)\s+(\.+[\w.]*|[\w.]+)\s*(?:import\s+\w+)?', content, re.M):
@@ -85,24 +264,24 @@ def extract_python_imports(content, file_path, workspace_root):
                 for suffix in ('', '__init__'):
                     p = os.path.join(candidate_dir, suffix + ext) if suffix else candidate_dir + ext
                     if os.path.exists(p):
-                        mod_lower = norm(p).lower()
-                        if any(k in mod_lower for k in FOLLOW_LAYERS):
+                        if has_layer_signal(p, fl) and not has_layer_signal(p, sl):
                             files.append(norm(p))
         else:
             # 절대 경로 — workspace_root 하위에서 검색
             rel_path = module.replace('.', os.sep) + '.py'
             candidate = os.path.join(workspace_root, rel_path)
             if os.path.exists(candidate):
-                mod_lower = norm(candidate).lower()
-                if any(k in mod_lower for k in FOLLOW_LAYERS):
+                if has_layer_signal(candidate, fl) and not has_layer_signal(candidate, sl):
                     files.append(norm(candidate))
     return files
 
 
-def extract_ts_imports(content, file_path, workspace_root):
-    """TypeScript/JavaScript import 문에서 연관 파일 경로 반환"""
+def extract_ts_imports(content, file_path, workspace_root, follow_layers=None, skip_layers=None):
+    """TypeScript/JavaScript import 문에서 연관 파일 경로 반환."""
     files = []
     base_dir = os.path.dirname(file_path)
+    fl = tuple(follow_layers) if follow_layers else DEFAULT_FOLLOW_LAYERS
+    sl = tuple(skip_layers)   if skip_layers   else DEFAULT_SKIP_LAYERS
 
     for m in re.finditer(r'''(?:import|require)\s*(?:\{[^}]*\}|[\w*]+)?\s*(?:from\s*)?['"]([^'"]+)['"]''', content):
         module = m.group(1)
@@ -113,28 +292,36 @@ def extract_ts_imports(content, file_path, workspace_root):
         for ext in ('.ts', '.tsx', '.js', '.jsx', ''):
             p = candidate_base + ext if ext else candidate_base
             if os.path.isfile(p):
-                mod_lower = norm(p).lower()
-                if any(k in mod_lower for k in FOLLOW_LAYERS) and not any(k in mod_lower for k in SKIP_LAYERS):
+                if has_layer_signal(p, fl) and not has_layer_signal(p, sl):
                     files.append(norm(p))
                 break
             # index 파일
             idx = os.path.join(candidate_base, 'index' + ext) if ext else None
             if idx and os.path.isfile(idx):
-                mod_lower = norm(idx).lower()
-                if any(k in mod_lower for k in FOLLOW_LAYERS) and not any(k in mod_lower for k in SKIP_LAYERS):
+                if has_layer_signal(idx, fl) and not has_layer_signal(idx, sl):
                     files.append(norm(idx))
                 break
     return files
 
 
 def detect_language(file_path):
+    """파일 확장자로 언어 감지.
+
+    .vue / .svelte 는 <script> 블록 안에 TS/JS import가 들어가 있어
+    extract_ts_imports의 정규식이 그대로 동작한다 (전체 텍스트에서 import 매칭).
+    """
     ext = os.path.splitext(file_path)[1].lower()
     return {'.java': 'java', '.py': 'python',
-            '.ts': 'ts', '.tsx': 'ts', '.js': 'js', '.jsx': 'js'}.get(ext, 'unknown')
+            '.ts': 'ts', '.tsx': 'ts', '.js': 'js', '.jsx': 'js',
+            '.mjs': 'js', '.cjs': 'js',
+            '.vue': 'ts', '.svelte': 'ts'}.get(ext, 'unknown')
 
 
-def extract_imports(file_path, workspace_root):
-    """파일에서 연관 서비스/DAO 파일 목록 반환 (언어 자동 감지)"""
+def extract_imports(file_path, workspace_root, follow_layers=None, skip_layers=None):
+    """파일에서 연관 서비스/DAO 파일 목록 반환 (언어 자동 감지).
+
+    follow_layers / skip_layers: 호출자(resolve_chain)가 Profile 합성 결과 전달 가능.
+    """
     if not os.path.exists(file_path):
         return []
     try:
@@ -144,12 +331,11 @@ def extract_imports(file_path, workspace_root):
 
     lang = detect_language(file_path)
     if lang == 'java':
-        # source_root = 프로젝트 루트 (workspace_root 또는 상위 디렉토리)
-        return extract_java_imports(content, workspace_root)
+        return extract_java_imports(content, workspace_root, follow_layers, skip_layers)
     elif lang == 'python':
-        return extract_python_imports(content, file_path, workspace_root)
+        return extract_python_imports(content, file_path, workspace_root, follow_layers, skip_layers)
     elif lang in ('ts', 'js'):
-        return extract_ts_imports(content, file_path, workspace_root)
+        return extract_ts_imports(content, file_path, workspace_root, follow_layers, skip_layers)
     return []
 
 
@@ -179,6 +365,38 @@ SELECT_PATTERN = re.compile(
     r'SELECT\s+(.+?)\s+FROM\s+', re.I | re.S
 )
 LEFT_JOIN_PATTERN = re.compile(r'LEFT\s+(?:OUTER\s+)?JOIN\s+(\w+)', re.I)
+
+# 테이블 참조 패턴 (FROM/JOIN/INSERT/UPDATE/DELETE — sch_draft 생성용)
+FROM_TBL_PATTERN   = re.compile(r'\bFROM\s+([`"\[\]\w.]+)', re.I)
+JOIN_TBL_PATTERN   = re.compile(r'(?:INNER|LEFT|RIGHT|FULL|CROSS)?\s*(?:OUTER\s+)?JOIN\s+([`"\[\]\w.]+)', re.I)
+INSERT_TBL_PATTERN = re.compile(r'\bINSERT\s+INTO\s+([`"\[\]\w.]+)', re.I)
+UPDATE_TBL_PATTERN = re.compile(r'\bUPDATE\s+([`"\[\]\w.]+)\s+SET', re.I)
+DELETE_TBL_PATTERN = re.compile(r'\bDELETE\s+FROM\s+([`"\[\]\w.]+)', re.I)
+
+
+def clean_table_name(raw):
+    """`schema.tbl`, "tbl", [tbl] → tbl (소문자, MyBatis/JdbcTemplate placeholder 제외)"""
+    if not raw:
+        return ''
+    t = raw.strip().strip('`"[]')
+    # MyBatis ${var} / #{var} / Spring :var 같은 동적 SQL placeholder 제외
+    if t.startswith(('#', '$', ':', '?')) or '${' in t or '#{' in t:
+        return ''
+    # schema.table → table만 남김
+    t = t.split('.')[-1].strip('`"[]')
+    return t.lower() if re.match(r'^\w+$', t) else ''
+
+
+def extract_tables_from_sql_text(sql_text):
+    """SQL 텍스트에서 참조된 모든 테이블명을 union으로 추출 (DDL/DML)"""
+    tables = set()
+    for pat in (FROM_TBL_PATTERN, JOIN_TBL_PATTERN,
+                INSERT_TBL_PATTERN, UPDATE_TBL_PATTERN, DELETE_TBL_PATTERN):
+        for m in pat.finditer(sql_text):
+            t = clean_table_name(m.group(1))
+            if t:
+                tables.add(t)
+    return sorted(tables)
 MYBATIS_SELECT_PATTERN = re.compile(
     r'<select\s+[^>]*id\s*=\s*"([^"]+)"[^>]*>(.+?)</select>', re.I | re.S
 )
@@ -265,6 +483,7 @@ def extract_query_schema(query_file):
                 'id': stmt_id,
                 'columns': cols,
                 'leftJoinedTables': sorted(set(t.lower() for t in left_joins)),
+                'tables': extract_tables_from_sql_text(stmt_body),
             })
         # resultMap도 보강
         result_maps = []
@@ -282,8 +501,19 @@ def extract_query_schema(query_file):
             result_maps.append({'id': map_id, 'columns': cols})
         if result_maps:
             schema['resultMaps'] = result_maps
+        # INSERT/UPDATE/DELETE 구문 — 컬럼 추론이 어려워 테이블만 기록 (sch_draft 보강용)
+        writes = []
+        for tag in ('insert', 'update', 'delete'):
+            for m in re.finditer(rf'<{tag}\s+[^>]*id\s*=\s*"([^"]+)"[^>]*>(.+?)</{tag}>', body, re.I | re.S):
+                stmt_id = m.group(1)
+                stmt_body = m.group(2)
+                tbls = extract_tables_from_sql_text(stmt_body)
+                if tbls:
+                    writes.append({'id': stmt_id, 'op': tag, 'tables': tbls})
+        if writes:
+            schema['writes'] = writes
     elif ext == '.sql':
-        # 일반 SQL: 첫 SELECT 구문만 파싱
+        # 일반 SQL: 첫 SELECT 구문만 파싱, 그 외 DML은 테이블만 기록
         sel_m = SELECT_PATTERN.search(body)
         if sel_m:
             cols = parse_select_columns(sel_m.group(1))
@@ -292,9 +522,21 @@ def extract_query_schema(query_file):
                 'id': os.path.basename(query_file),
                 'columns': cols,
                 'leftJoinedTables': sorted(set(t.lower() for t in left_joins)),
+                'tables': extract_tables_from_sql_text(body),
             })
+        # 파일 전체에서 테이블 union (INSERT/UPDATE/DELETE 포함)
+        all_tbls = extract_tables_from_sql_text(body)
+        if all_tbls:
+            schema['allTables'] = all_tbls
 
-    return schema if schema['selects'] or schema.get('resultMaps') else None
+    # 컬럼이 없어도 테이블 정보가 있으면 schema를 반환 (sch_draft 신호)
+    has_any_signal = (
+        schema['selects']
+        or schema.get('resultMaps')
+        or schema.get('writes')
+        or schema.get('allTables')
+    )
+    return schema if has_any_signal else None
 
 
 # ──────────────────────────────────────────────
@@ -305,7 +547,16 @@ def resolve_chain(controller_path, workspace_root, max_depth=2):
     """
     컨트롤러 → 서비스 → DAO (최대 2홉) + 쿼리 파일까지 반환
     반환: { "service": [...], "dao": [...], "query": [...] }
+
+    Profile yaml이 있으면 strategy 합성으로 follow/skip layers를 동적 결정.
+    없으면 DEFAULT 값 사용 (회귀 0).
     """
+    # Profile + strategy 합성 (1회만 호출)
+    fl, sl, strategy_max_depth = load_effective_layers(workspace_root)
+    # strategy의 max_depth가 더 크면 그것 사용 (Hexagonal은 4까지 필요)
+    if strategy_max_depth > max_depth:
+        max_depth = strategy_max_depth
+
     visited = set()
     service_files = []
     dao_files = []
@@ -316,7 +567,7 @@ def resolve_chain(controller_path, workspace_root, max_depth=2):
             return
         visited.add(norm(file_path))
 
-        related = extract_imports(file_path, workspace_root)
+        related = extract_imports(file_path, workspace_root, fl, sl)
         for rf in related:
             if norm(rf) in visited:
                 continue
@@ -347,12 +598,165 @@ def resolve_chain(controller_path, workspace_root, max_depth=2):
         if sch:
             query_schemas.append(sch)
 
+    # 라우터가 사용하는 테이블 → 컬럼 union 집계 (sch_draft 빌드용)
+    used_tables = {}   # tablename → { columns:set, queries:set, joinHints:list }
+    for sch in query_schemas:
+        qfile = sch.get('queryFile', '')
+        # SELECT 컬럼은 어느 테이블 소속인지 정적으로 단정하기 어려움 → "원본 source"의 alias prefix로 휴리스틱 매핑
+        for sel in sch.get('selects', []):
+            tbls = sel.get('tables', []) or []
+            if not tbls:
+                continue
+            primary = tbls[0]  # 첫 테이블을 기본 소속으로 가정 (FROM 첫 항목)
+            # 모든 참여 테이블을 초기화
+            for t in tbls:
+                used_tables.setdefault(t, {'columns': set(), 'queries': set(), 'joinHints': []})
+                used_tables[t]['queries'].add(qfile)
+            for col in sel.get('columns', []):
+                src = (col.get('source') or '').strip()
+                # 'u.name' → u (alias), 매칭되는 테이블이 있으면 그쪽에, 없으면 primary에
+                alias_m = re.match(r'^(\w+)\.(\w+)', src)
+                if alias_m:
+                    alias = alias_m.group(1).lower()
+                    target = next((t for t in tbls if t == alias or t.startswith(alias)), primary)
+                else:
+                    target = primary
+                used_tables[target]['columns'].add(col.get('name', ''))
+            # LEFT JOIN 힌트 기록
+            for joined in sel.get('leftJoinedTables', []) or []:
+                jt = clean_table_name(joined)
+                if jt and jt != primary:
+                    used_tables.setdefault(primary, {'columns': set(), 'queries': set(), 'joinHints': []})
+                    used_tables[primary]['joinHints'].append({'with': jt, 'type': 'LEFT JOIN'})
+        # INSERT/UPDATE/DELETE — 테이블만 기록 (컬럼은 비움)
+        for w in sch.get('writes', []) or []:
+            for t in w.get('tables', []) or []:
+                used_tables.setdefault(t, {'columns': set(), 'queries': set(), 'joinHints': []})
+                used_tables[t]['queries'].add(qfile)
+        # resultMap → 컬럼명 보강 (어느 테이블인지 모를 땐 첫 select의 primary 테이블에)
+        if sch.get('resultMaps') and query_schemas:
+            primary_tbl = None
+            for sel in sch.get('selects', []):
+                if sel.get('tables'):
+                    primary_tbl = sel['tables'][0]
+                    break
+            if primary_tbl:
+                for rm in sch['resultMaps']:
+                    for col in rm.get('columns', []):
+                        cn = col.get('column') or col.get('name')
+                        if cn:
+                            used_tables.setdefault(primary_tbl, {'columns': set(), 'queries': set(), 'joinHints': []})
+                            used_tables[primary_tbl]['columns'].add(cn)
+        # .sql 파일 allTables — 컬럼 매핑은 못 하지만 테이블 등록
+        for t in sch.get('allTables', []) or []:
+            used_tables.setdefault(t, {'columns': set(), 'queries': set(), 'joinHints': []})
+            used_tables[t]['queries'].add(qfile)
+
+    # set → list
+    used_tables_out = {}
+    for t, info in used_tables.items():
+        used_tables_out[t] = {
+            'columns':   sorted(c for c in info['columns'] if c),
+            'queries':   sorted(info['queries']),
+            'joinHints': info['joinHints'],
+        }
+
     return {
         'service':       services,
         'dao':           daos,
         'query':         queries,
         'querySchemas':  query_schemas,
+        'usedTables':    used_tables_out,
     }
+
+
+# ──────────────────────────────────────────────
+# sch_draft 도메인 단위 dump (append-only)
+# ──────────────────────────────────────────────
+
+def dump_sch_drafts(enriched, workspace_root):
+    """
+    라우터별 usedTables를 도메인 단위로 집계해
+    _tmp/sch_draft/{도메인}/{테이블}.json 에 union으로 dump한다.
+
+    구조:
+      { table, domain, columns:{name:{seen}}, evidence:[qfile], joinHints:[],
+        referencedByRouter:[fp], referencedByInfRange:[INF-A~B] }
+
+    같은 테이블이 여러 라우터에서 발견되면 append-only로 누적 (정보 손실 없음).
+    """
+    sch_draft_dir = os.path.join(workspace_root, '_tmp', 'sch_draft')
+    os.makedirs(sch_draft_dir, exist_ok=True)
+
+    # 도메인 → 테이블 → 누적 slot
+    acc = {}
+    for group in enriched:
+        for item in group:
+            domain      = item.get('domain') or 'unknown'
+            router_fp   = item.get('filePath', '')
+            inf_start   = item.get('infStart', 0)
+            inf_end     = item.get('infEnd', 0)
+            inf_range   = f'INF-{inf_start:03d}~INF-{inf_end:03d}' if inf_start else ''
+            chain       = item.get('relatedFiles') or {}
+            used_tables = chain.get('usedTables') or {}
+
+            for table, info in used_tables.items():
+                slot = acc.setdefault(domain, {}).setdefault(table, {
+                    'table': table,
+                    'domain': domain,
+                    'columns': {},
+                    'evidence': set(),
+                    'joinHints': [],
+                    'referencedByRouter': set(),
+                    'referencedByInfRange': set(),
+                })
+                for col in info.get('columns', []) or []:
+                    if not col:
+                        continue
+                    slot['columns'].setdefault(col, {'seen': 0})
+                    slot['columns'][col]['seen'] += 1
+                for q in info.get('queries', []) or []:
+                    slot['evidence'].add(q)
+                for h in info.get('joinHints', []) or []:
+                    if h not in slot['joinHints']:
+                        slot['joinHints'].append(h)
+                if router_fp:
+                    slot['referencedByRouter'].add(router_fp)
+                if inf_range:
+                    slot['referencedByInfRange'].add(inf_range)
+
+    total_tables = 0
+    for domain, tables in acc.items():
+        ddir = os.path.join(sch_draft_dir, domain)
+        os.makedirs(ddir, exist_ok=True)
+        for table, slot in tables.items():
+            slot['evidence']             = sorted(slot['evidence'])
+            slot['referencedByRouter']   = sorted(slot['referencedByRouter'])
+            slot['referencedByInfRange'] = sorted(slot['referencedByInfRange'])
+            out_path = os.path.join(ddir, f'{table}.json')
+            # 기존 파일이 있으면 union (append-only — 다른 라우터 그룹의 정보 보존)
+            if os.path.exists(out_path):
+                try:
+                    prev = json.load(open(out_path, encoding='utf-8'))
+                    for cn, cv in (prev.get('columns') or {}).items():
+                        if cn in slot['columns']:
+                            slot['columns'][cn]['seen'] += cv.get('seen', 0)
+                        else:
+                            slot['columns'][cn] = cv
+                    slot['evidence'] = sorted(set(slot['evidence']) | set(prev.get('evidence') or []))
+                    slot['referencedByRouter'] = sorted(
+                        set(slot['referencedByRouter']) | set(prev.get('referencedByRouter') or []))
+                    slot['referencedByInfRange'] = sorted(
+                        set(slot['referencedByInfRange']) | set(prev.get('referencedByInfRange') or []))
+                    for h in (prev.get('joinHints') or []):
+                        if h not in slot['joinHints']:
+                            slot['joinHints'].append(h)
+                except Exception:
+                    pass
+            with open(out_path, 'w', encoding='utf-8') as f:
+                json.dump(slot, f, ensure_ascii=False, indent=2)
+            total_tables += 1
+    return len(acc), total_tables
 
 
 # ──────────────────────────────────────────────
@@ -399,6 +803,15 @@ def main():
     out_path = os.path.join(os.path.dirname(inventory_path), out_filename)
     json.dump(enriched, open(out_path, 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
     print(f'\n{out_filename} 저장 완료 (연관 파일 {total_files}개, 스키마 사전 추출 {total_schemas}개)')
+
+    # router_inventory 처리 시 sch_draft 도메인별 dump
+    # (batch_inventory도 같은 SQL을 보지만 1차 구현은 router만, 향후 확장 가능)
+    if 'router' in base_name.lower():
+        try:
+            n_domain, n_table = dump_sch_drafts(enriched, workspace_root)
+            print(f'_tmp/sch_draft/ 생성: 도메인 {n_domain}개, 테이블 {n_table}개 (ddd-db-agent 1차 입력)')
+        except Exception as e:
+            print(f'[WARN] sch_draft dump 실패, 무시하고 계속: {e}')
 
 
 if __name__ == '__main__':

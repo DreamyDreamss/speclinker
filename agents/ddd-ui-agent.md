@@ -26,6 +26,15 @@ model: claude-sonnet-4-6
 - 라우터 타입: `{routerType}`
 - MODE: `{RECON | GENESIS}`
 - 프로젝트 루트: `{절대경로}`
+- 프로젝트 Profile: `.speclinker/profile.yaml` (선택)
+
+### Profile 활용 (Phase 1 신규)
+
+`.speclinker/profile.yaml`이 있으면:
+- `frontend.framework` (react/vue/svelte/...) → 컴포넌트 구문 파싱 우선순위
+- `frontend.architecture.pattern` 이 `fsd`이면 `pages/widgets/features/entities/shared` 슬라이스 의존성 규칙으로 컴포넌트 분류
+- `frontend.architecture.pattern` 이 `feature-based`이면 `features/{name}/` 단위로 묶음
+- `frontend.state_management` → 상태 흐름 표기에 사용 (redux/zustand/pinia 등)
 
 ---
 
@@ -68,6 +77,12 @@ Read 도구로 `{entryFile}` 읽기.
 | 상태 | 주요 상태변수 + 전이 조건 |
 
 ### 라우터 타입별 파싱 패턴
+
+> **Profile 우선 적용**:  
+> `.speclinker/profile.yaml`의 `frontend.framework` 값이 있으면 그에 해당하는 [블록]만 적용한다.  
+> 예: `framework: react` + `router: react-router` → `[react-router / spa-fallback / react]` 블록만 사용.  
+> Profile 없거나 `framework: unknown`이면 아래 4종을 순차 시도 (fallback).  
+> **새 framework는 `strategies/frontend/<name>.yaml`로 추가하라 — 본문 카탈로그 더 늘리지 말 것.**
 
 **[nextjs-app / nextjs-pages / remix]**
 - 진입: `export default function Page()` / `generateMetadata` → 페이지명

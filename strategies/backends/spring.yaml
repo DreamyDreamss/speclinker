@@ -1,0 +1,54 @@
+name: spring
+kind: backend
+description: "Spring Boot / Spring MVC / Spring WebFlux 공통 백엔드 패턴"
+version: 1
+priority: 100
+
+matches_profile:
+  backend.language: [java, kotlin]
+  backend.framework: [spring-boot, spring-mvc, spring-webflux]
+
+call_chain:
+  follow_layers: [service, dao, repository, mapper, store, persistence]
+  skip_layers:   [util, common, config, exception, dto, vo, security, jwt]
+  follow_paths_glob: []
+  skip_paths_glob:   ["**/config/**", "**/security/**/Jwt*.java"]
+  max_depth: 3
+
+endpoint_extraction:
+  annotations:
+    - regex: '@(Get|Post|Put|Delete|Patch)Mapping\(\s*"([^"]+)"\s*\)'
+      method_group: 1
+      path_group:   2
+      base_path_annotation: '@RequestMapping\(\s*"([^"]+)"\s*\)'
+    - regex: '@(Get|Post|Put|Delete|Patch)Mapping\(\s*\)'   # path 없는 어노테이션
+      method_group: 1
+      path_group:   null
+      base_path_annotation: '@RequestMapping\(\s*"([^"]+)"\s*\)'
+    - regex: '@RequestMapping\([^)]*method\s*=\s*RequestMethod\.(GET|POST|PUT|DELETE|PATCH)[^)]*value\s*=\s*"([^"]+)"'
+      method_group: 1
+      path_group:   2
+  function_calls: []
+  embedded_calls: []
+
+query_extraction:
+  types: []                         # 빈 값. persistence strategy(mybatis/jpa)가 채움
+  dynamic_sql_patterns:
+    - '\$\{[^}]+\}'
+    - '#\{[^}]+\}'
+
+artifact_mapping:
+  INF:
+    source_glob:
+      - "**/controller/**/*.java"
+      - "**/controller/**/*.kt"
+      - "**/web/**/*Controller.java"
+      - "**/web/**/*Controller.kt"
+      - "**/api/**/*Controller.java"
+    note: "Spring의 @RestController/@Controller 정의 파일"
+
+_meta:
+  author: "speclinker built-in"
+  tested_against:
+    - "tests/smoke/spring-mybatis-ntier"
+    - "tests/smoke/spring-jpa-hexagonal"

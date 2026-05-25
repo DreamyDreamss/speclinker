@@ -1,0 +1,42 @@
+name: ntier
+kind: arch
+description: "전통적 N-Tier (Controller → Service → DAO/Repository)"
+version: 1
+priority: 300
+
+matches_profile:
+  backend.architecture.pattern: [ntier]
+
+call_chain:
+  # N-Tier에선 도메인이 곧 service/dao 키워드로 인식되므로
+  # FOLLOW에 domain/entity 추가 불필요.
+  follow_layers: []                 # backend strategy에서 결정
+  skip_layers:   [domain, entity, model]
+  # 단, 'domain/util' 같은 하위 인프라성 폴더 skip
+  follow_paths_glob: []
+  skip_paths_glob:
+    - "**/domain/util/**"
+    - "**/entity/util/**"
+  max_depth: 3
+
+artifact_mapping:
+  INF:
+    source_glob:
+      - "**/controller/**"
+      - "**/controllers/**"
+      - "**/web/**/*Controller*"
+    note: "Controller 디렉토리 = INF의 1차 위치"
+  SCH:
+    source_glob:                    # persistence strategy가 보완
+      - "**/entity/**"
+      - "**/model/**"
+      - "**/domain/**"
+    note: "N-Tier에선 domain/entity 모두 단순 데이터 클래스로 가정"
+  BusinessRules:
+    source_glob: []                 # N-Tier에선 별도 산출물 없음 — service에 흩어짐
+    note: "N-Tier는 비즈니스 규칙이 service 코드에 임베드. 별도 산출물 생성 안 함."
+
+_meta:
+  author: "speclinker built-in"
+  tested_against:
+    - "tests/smoke/spring-mybatis-ntier"

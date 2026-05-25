@@ -1,0 +1,40 @@
+name: gin
+kind: backend
+description: "Go + Gin (또는 Echo/Fiber/Chi — 유사 함수형 라우터)"
+version: 1
+priority: 100
+
+matches_profile:
+  backend.language: [go]
+  backend.framework: [gin, echo, fiber, chi]
+
+call_chain:
+  follow_layers: [service, services, repository, repositories, store, handler, handlers]
+  skip_layers:   [middleware, config, util, common]
+  follow_paths_glob:
+    - "**/internal/**"
+    - "**/pkg/**"
+  skip_paths_glob:
+    - "**/middleware/**"
+    - "**/config/**"
+  max_depth: 3
+
+endpoint_extraction:
+  annotations: []
+  function_calls:
+    - regex: "(?:router|r|app|engine|group|rg)\\.(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\\(\\s*[\"`]([^\"`]+)[\"`]"
+      method_group: 1
+      path_group:   2
+  embedded_calls: []
+
+artifact_mapping:
+  INF:
+    source_glob:
+      - "**/handler/**/*.go"
+      - "**/handlers/**/*.go"
+      - "**/api/**/*.go"
+      - "**/internal/**/router*.go"
+    note: "Go의 router.METHOD() 호출이 있는 파일"
+
+_meta:
+  author: "speclinker built-in"

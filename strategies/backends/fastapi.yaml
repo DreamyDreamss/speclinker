@@ -1,0 +1,43 @@
+name: fastapi
+kind: backend
+description: "FastAPI 백엔드 패턴 (router·service·repository 일반 구조)"
+version: 1
+priority: 100
+
+matches_profile:
+  backend.language: [python]
+  backend.framework: [fastapi]
+
+call_chain:
+  follow_layers: [service, services, repository, repositories, dao, store, persistence]
+  skip_layers:   [util, common, config, exception, schemas, deps]
+  follow_paths_glob: []
+  skip_paths_glob:   ["**/config/**", "**/deps/**"]
+  max_depth: 3
+
+endpoint_extraction:
+  annotations:
+    - regex: '@(?:router|app)\.(get|post|put|delete|patch)\(\s*"([^"]+)"'
+      method_group: 1
+      path_group:   2
+      base_path_annotation: 'APIRouter\([^)]*prefix\s*=\s*"([^"]+)"'
+  function_calls: []
+  embedded_calls: []
+
+query_extraction:
+  types: []                         # persistence strategy가 채움
+  dynamic_sql_patterns: []
+
+artifact_mapping:
+  INF:
+    source_glob:
+      - "**/routers/**/*.py"
+      - "**/api/**/*.py"
+      - "**/endpoints/**/*.py"
+      - "**/routes/**/*.py"
+    note: "FastAPI의 APIRouter / app 데코레이터 사용 파일"
+
+_meta:
+  author: "speclinker built-in"
+  tested_against:
+    - "tests/smoke/fastapi-sqlalchemy"

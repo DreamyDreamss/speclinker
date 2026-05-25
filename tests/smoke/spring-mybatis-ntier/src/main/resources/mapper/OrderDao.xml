@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.order.dao.OrderDao">
+    <select id="findById" resultType="map">
+        SELECT o.id, o.user_id, o.amount, o.status, u.email AS user_email
+        FROM orders o
+        LEFT JOIN users u ON o.user_id = u.id
+        WHERE o.id = #{id}
+    </select>
+    <insert id="insert">
+        INSERT INTO orders (user_id, amount, status, created_at)
+        VALUES (#{userId}, #{amount}, #{status}, NOW())
+    </insert>
+</mapper>

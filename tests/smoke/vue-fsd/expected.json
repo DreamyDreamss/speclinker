@@ -1,0 +1,15 @@
+{
+  "fixture": "vue-fsd",
+  "description": "Vue 3 + Vue Router + Pinia + FSD 슬라이스 (pages/features/entities/shared)",
+  "probe_expectations": {
+    "likely_backend_lang": "node",
+    "likely_frontend_framework": "vue",
+    "architecture_hint_contains": "fsd"
+  },
+  "call_chain_expectations": {
+    "controller": "src/pages/order/index.vue",
+    "service_must_resolve_to": "src/features/place-order/index.ts",
+    "dao_must_resolve_to":     "src/entities/order/index.ts",
+    "note": "Phase 2 검증: profile.frontend.architecture.pattern=fsd + strategies/frontend/fsd.yaml의 follow=[features,entities,widgets,shared,...] 로 traverse."
+  }
+}

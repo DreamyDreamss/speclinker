@@ -1,0 +1,42 @@
+name: gorm
+kind: persistence
+description: "GORM (Go ORM)"
+version: 1
+priority: 200
+
+matches_profile:
+  backend.persistence.technologies: [gorm]
+
+call_chain:
+  follow_layers: [repository, repositories, store, dao]
+  skip_layers: []
+  follow_paths_glob: []
+  skip_paths_glob: []
+  max_depth: 2
+
+query_extraction:
+  types:
+    - type: gorm_model
+      regex: 'type\s+\w+\s+struct\s*\{[^}]*gorm:"'
+      kind: orm
+      notes: 'gorm:"primaryKey" / gorm:"column:..." 태그'
+    - type: gorm_table_method
+      regex: 'func\s+\(\w+\s+\w+\)\s+TableName\(\)\s+string\s+\{\s+return\s+"([^"]+)"'
+      kind: orm
+      notes: "TableName() 메서드로 테이블명 명시"
+    - type: gorm_query_builder
+      regex: '(?:db|tx)\.(?:Where|First|Find|Create|Update|Delete|Model)\('
+      kind: query-builder
+  dynamic_sql_patterns: []
+
+artifact_mapping:
+  SCH:
+    source_glob:
+      - "**/models/**/*.go"
+      - "**/model/**/*.go"
+      - "**/entities/**/*.go"
+    enrich_from: query_extraction
+    note: "GORM struct (gorm tag 포함)이 SCH 1차 진실"
+
+_meta:
+  author: "speclinker built-in"

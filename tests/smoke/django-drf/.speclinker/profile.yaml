@@ -1,0 +1,56 @@
+version: 1
+generated_at: "2026-05-26T00:00:00+09:00"
+confirmed_by: "smoke-test-fixture"
+confirmed_at: "2026-05-26T00:00:00+09:00"
+
+backend:
+  present: true
+  language: python
+  language_evidence:
+    - "requirements.txt: django"
+    - "*.py 파일"
+  framework: django
+  framework_evidence:
+    - "requirements.txt: django, djangorestframework"
+  architecture:
+    pattern: ntier
+    evidence:
+      - "views / services / repositories / models 분리"
+    business_logic_locations: []
+    follow_paths_glob: []
+    skip_paths_glob: []
+  persistence:
+    technologies: [django-orm]
+    primary_type: sql-orm
+  communication:
+    inbound: [rest]
+    outbound: []
+
+frontend:
+  present: false
+
+batch:
+  present: false
+
+concerns:
+  auth: { technology: unknown, evidence: [] }
+  observability: { technologies: [] }
+  cache: { technology: none }
+  messaging: { technology: none }
+
+project_layout:
+  type: single-module
+  source_roots:
+    - root: "."
+      label: "main"
+
+overrides:
+  follow_layers_extra: []
+  skip_layers_extra: []
+  endpoint_patterns_extra: []
+  notes: ""
+
+_meta:
+  generated_by: "manual (smoke fixture)"
+  probe_snapshot: ""
+  auto_update: false

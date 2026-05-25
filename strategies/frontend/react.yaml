@@ -1,0 +1,53 @@
+name: react
+kind: frontend
+description: "React SPA (CRA, Vite, react-router 또는 next-router 외 일반 react-router)"
+version: 1
+priority: 100
+
+matches_profile:
+  frontend.framework: [react, react-router]
+
+call_chain:
+  follow_layers: [hooks, hook, service, services, api]
+  skip_layers:   [styles, theme, assets, types]
+  follow_paths_glob:
+    - "**/hooks/**"
+    - "**/api/**"
+    - "**/services/**"
+  skip_paths_glob:
+    - "**/__tests__/**"
+    - "**/styles/**"
+  max_depth: 3
+
+# 화면 spec 추출 시그널 (ddd-ui-agent가 사용)
+spec_extraction:
+  page_entry_signals:
+    - 'export\s+default\s+function\s+\w+'
+    - 'export\s+const\s+\w+\s*:\s*React\.FC'
+  data_call_signals:
+    - 'useQuery\('
+    - 'useMutation\('
+    - 'axios\.(get|post|put|delete|patch)\('
+    - 'fetch\('
+  form_signals:
+    - "register\\(\\s*[\"'`]\\w+"
+    - "Controller\\s+name="
+    - "useState\\("
+  routing_signals:
+    - 'useNavigate\('
+    - '<Navigate\s+to='
+    - 'navigate\('
+  auth_signals:
+    - 'hasPermission\('
+    - "user\\.role\\s*===\\s*['\"]"
+
+artifact_mapping:
+  UIS:
+    source_glob:
+      - "**/pages/**/*.tsx"
+      - "**/pages/**/*.jsx"
+      - "**/views/**/*.tsx"
+    note: "React 페이지 컴포넌트 진입점"
+
+_meta:
+  author: "speclinker built-in"

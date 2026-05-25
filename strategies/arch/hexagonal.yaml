@@ -1,0 +1,54 @@
+name: hexagonal
+kind: arch
+description: "Hexagonal Architecture (Ports & Adapters / Clean / Onion)"
+version: 1
+priority: 300
+
+matches_profile:
+  backend.architecture.pattern: [hexagonal, clean, onion]
+
+call_chain:
+  # Hexagonal에선 domain·application·adapter 가 핵심 추적 위치
+  follow_layers: [application, usecase, interactor, domain]
+  skip_layers:   []                 # 'domain'을 SKIP에서 명시적으로 빼는 게 의미.
+  follow_paths_glob:
+    - "**/application/**"
+    - "**/usecase/**"
+    - "**/adapter/in/**"
+    - "**/adapter/out/**"
+    - "**/domain/**"
+    - "**/ports/**"
+  # domain 안에서도 명백한 인프라성 하위는 skip
+  skip_paths_glob:
+    - "**/domain/util/**"
+    - "**/domain/exception/**"
+    - "**/infrastructure/security/**"
+  max_depth: 4                      # adapter → service → domain → repository 까지 4 hops
+
+artifact_mapping:
+  INF:
+    source_glob:
+      - "**/adapter/in/web/**"
+      - "**/adapter/in/rest/**"
+      - "**/adapter/in/**/*Controller*"
+    note: "Hexagonal의 inbound adapter (REST controller)"
+  SCH:
+    source_glob:
+      - "**/adapter/out/persistence/**"
+      - "**/adapter/out/**/*Entity*"
+      - "**/infrastructure/persistence/**"
+    enrich_from: query_extraction
+    note: "Hexagonal: ORM Entity는 adapter/out, 도메인 Order 와 구분"
+  BusinessRules:
+    source_glob:
+      - "**/domain/**/*.java"
+      - "**/domain/**/*.kt"
+      - "**/domain/**/*.py"
+      - "**/domain/**/*.ts"
+    extract: [aggregate_invariants, domain_events, value_object_constraints]
+    note: "도메인 로직 — Aggregate root, DomainEvent, ValueObject. 별도 산출물로 분리."
+
+_meta:
+  author: "speclinker built-in"
+  tested_against:
+    - "tests/smoke/spring-jpa-hexagonal"

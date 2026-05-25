@@ -1,0 +1,48 @@
+name: spring-batch
+kind: batch
+description: "Spring Batch (Job/Step/ItemReader-Processor-Writer 모델)"
+version: 1
+priority: 100
+
+matches_profile:
+  batch.runner: [spring-batch]
+
+call_chain:
+  follow_layers: [service, services, dao, repository, repositories]
+  skip_layers:   [util, config, common]
+  follow_paths_glob:
+    - "**/batch/**"
+    - "**/job/**"
+    - "**/jobs/**"
+    - "**/step/**"
+  skip_paths_glob: []
+  max_depth: 4
+
+# 배치 시그널
+batch_signals:
+  job_annotations:
+    - '@Bean\s+public\s+Job\s+\w+'
+    - '@EnableBatchProcessing'
+    - 'JobBuilderFactory'
+    - 'StepBuilderFactory'
+  reader_writer_patterns:
+    - 'ItemReader<'
+    - 'ItemProcessor<'
+    - 'ItemWriter<'
+  scheduler_signals:
+    - '@Scheduled\(cron'
+    - '@Scheduled\(fixedRate'
+    - 'CronTrigger'
+
+artifact_mapping:
+  BAT:
+    source_glob:
+      - "**/batch/**/*.java"
+      - "**/batch/**/*.kt"
+      - "**/job/**/*Job.java"
+      - "**/jobs/**/*Job.java"
+      - "**/*JobConfig.java"
+    note: "Spring Batch Job·Step 구성 파일"
+
+_meta:
+  author: "speclinker built-in"

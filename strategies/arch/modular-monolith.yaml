@@ -1,0 +1,46 @@
+name: modular-monolith
+kind: arch
+description: "Modular Monolith — 모듈 단위로 격리된 모노리스 (각 모듈 안은 자유 아키텍처)"
+version: 1
+priority: 300
+
+matches_profile:
+  backend.architecture.pattern: [modular-monolith, msa-single]
+
+call_chain:
+  # 모듈 안의 layer (보통 N-Tier 또는 Hexagonal의 단순화 버전)
+  follow_layers: [service, services, repository, repositories, dao, application, domain]
+  skip_layers: []
+  follow_paths_glob:
+    - "**/modules/**"
+    - "**/module/**"
+  # 모듈 간 직접 의존은 보통 금지 — 공개 API(facade·event) 만 노출
+  skip_paths_glob:
+    - "**/shared/internal/**"
+    - "**/_internal/**"
+  max_depth: 4
+
+artifact_mapping:
+  INF:
+    source_glob:
+      - "**/modules/*/api/**"
+      - "**/modules/*/web/**"
+      - "**/modules/*/controllers/**"
+      - "**/modules/*/adapter/in/**"
+    note: "모듈별 API 진입점"
+  SCH:
+    source_glob:
+      - "**/modules/*/entity/**"
+      - "**/modules/*/persistence/**"
+      - "**/modules/*/infrastructure/**"
+    enrich_from: query_extraction
+    note: "모듈별 데이터 모델"
+  ModuleBoundary:                   # Modular-Monolith 전용 산출물
+    source_glob:
+      - "**/modules/*/public/**"
+      - "**/modules/*/facade/**"
+      - "**/modules/*/api/**"
+    note: "모듈 간 공개 API — 이게 트레이서빌리티의 핵심"
+
+_meta:
+  author: "speclinker built-in"

@@ -1,0 +1,14 @@
+{
+  "fixture": "nestjs-prisma",
+  "description": "NestJS + Prisma 단일 도메인 폴더 (Controller·Service·Repository 동일 디렉토리)",
+  "probe_expectations": {
+    "likely_backend_lang": "node",
+    "likely_backend_framework": "nestjs",
+    "likely_persistence_contains": "prisma"
+  },
+  "call_chain_expectations": {
+    "controller": "src/order/order.controller.ts",
+    "service_must_resolve_to": "src/order/order.service.ts",
+    "dao_must_resolve_to":     "src/order/order.repository.ts"
+  }
+}
