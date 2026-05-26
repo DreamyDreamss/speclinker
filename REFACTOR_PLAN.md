@@ -785,12 +785,24 @@ Phase 6.2의 spec.md는 §4 표를 자동 채우지만 `placeholder`/`default`/`
 - [x] confirm 결과 → `.speclinker/screen_plan.confirmed.json` 영구 저장
 - [x] 기존 confirmed.json 있으면 자동 스킵 (재실행 안전)
 
-**7.4 — Runtime 보강 (옵션, 사용자 trigger)**
-- [ ] STEP 2.7 (옵션) — capture.js 재사용한 메뉴 traversal 모드 신설
-  - profile.frontend.discovery.runtime_capture 설정 사용
-  - `capture.js --traverse-menu --selectors="ul.gnb a,ul.sub a"`
-  - 메뉴 클릭 → frame.url 또는 route hint 수집 → screen_plan_static.json에 merge
-- [ ] 발견 결과를 사용자에게 표로 보여주고 추가 confirm
+**7.4 — Runtime 보강 (옵션, 사용자 trigger) — 완료 2026-05-26**
+- [x] `capture.js --traverse-menu` 모드 신설
+  - BFS nav 탐색: L1 클릭(펼치기) → L2 항목 수집 → 클릭 후 iframe URL 기록
+  - nav 컨테이너 미발견 시 전체 DOM href 정적 스캔 fallback
+  - `extractRoute(href, onclick)`: onclick 패턴(`fn.go('/path')`, `location.href=`) 추출 지원
+  - 출력: `_tmp/screen_plan_runtime.json` (screen_plan_static.json과 동일 스키마, source='runtime-bfs')
+- [x] `scripts/screen_plan_merge.py` 신설
+  - static + runtime → merged.json (route 기준 dedup, runtime=보강, 정적=우선)
+  - 런타임 전용 화면 추가, 기존 화면 메뉴정보(menu_l1/l2) 보강
+- [x] SKILL.md STEP 2.7 신설 (BFS → 병합 → confirmed.json)
+
+**7.5 — INF 역주입 루프 — 완료 2026-05-26**
+- [x] `generate_uis_spec.py`: `_api_link()` gaps_out 수집 추가
+  - api_hints 미매칭 시 `_tmp/{screen_id}_inf_gaps.json` 자동 출력
+  - `build_spec()` → `(spec_md, gaps)` 튜플 반환
+  - `--workspace` 옵션으로 workspace root 명시 가능
+- [x] SKILL.md STEP 5-C: INF 역주입 루프 절차 추가
+  - gaps.json 확인 → ddd-api-agent 호출 → INF 생성 → spec.md 재생성 (INF 링크 갱신)
 
 **7.5 — STEP 4 (INF) 흐름 reshape**
 - [ ] router_inventory.json 생성 로직을 screen 루프로 변경
