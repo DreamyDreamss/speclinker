@@ -658,8 +658,8 @@
 
 Phase 6.2의 spec.md는 §4 표를 자동 채우지만 `placeholder`/`default`/`disabled_when`/`유효성`/`연결 API`/`§5 이벤트`/`§8 조건부 렌더링`은 모두 `[TBD]`. 사용자 요청: "지금 너가 말한거 다 보완 필요해". 다음 작업 후보:
 
-- [ ] **U6 capture.js auto-annotate DOM 메타 확장** — `placeholder`/`value`/`disabled`/`required`/`pattern`/`min/max/maxlength` attribute를 widget JSON에 함께 dump (capture 시점, 무료)
-- [ ] **U7 generate_uis_spec.py 컬럼 채움** — widgets.json의 추가 메타를 §4 표에 매핑 (`placeholder`/`default`/`유효성`)
+- [x] **U6 capture.js auto-annotate DOM 메타 확장** (2026-05-26) — `placeholder`/`default_value`/`disabled`/`required`/`readonly`/`pattern`/`min/max/maxlength`/`minlength`/`step`/`options`(select) attribute를 widget JSON에 dump. 기존 widgets.json(meta 없음)과 호환 (없으면 `[TBD]`)
+- [x] **U7 generate_uis_spec.py 컬럼 채움** (2026-05-26) — DOM meta → `타입`(button/input-text/select/...) + `placeholder` + `default` + `disabled_when`(초기 disabled) + `유효성`(required+pattern+maxlength 등 합성) + `selector`(dom_id > name > bbox 우선순위) 자동 채움. `_widget_type`·`_validation_text`·`_selector_text` 헬퍼 분리
 - [ ] **U8 disabled_when 정적 분석** — Vue `v-if`/`:disabled`, React `disabled={}`, jQuery `.attr('disabled')` 등 소스 정규식 + LLM 합성으로 추출 (별도 agent 또는 ddd-ui-agent 강화)
 - [ ] **U9 연결 INF 자동 매핑** — sl-recon STEP 4 결과의 `INF-NNN` ↔ widget click handler에서 호출하는 API path 자동 cross-link → §4 표 `연결 API` 컬럼 + §5 인터랙션 표 동시 채움
 - [ ] **U10 §5 인터랙션 자동** — 위젯의 click/change 이벤트 핸들러 추적 → 호출 API + HTTP 코드 + 도메인 에러 자동 (정적 JS 분석 + LLM)
@@ -755,3 +755,4 @@ Phase 6.2의 spec.md는 §4 표를 자동 채우지만 `placeholder`/`default`/`
 | 2026-05-24 | Phase 3 (convention-learner + profile.overrides 합성 + sl-recon 통합) + Phase 4 (meta-extractor + community/ promote 워크플로우) 완료. 회귀 0 | Claude |
 | 2026-05-26 | Phase 5.1·5.2 완료. fixture 4→7종 (go-gin-gorm, django-drf, vue-fsd 추가). run_matrix.py 신설로 정량 회귀 측정 도입. 결과: probe 1.00 / call_chain 1.00 (perfect) | Claude |
 | 2026-05-26 | Phase 6.2 본격 완료 ★. capture.js consolidated (CDP attach + 메뉴 자동 진입 + 등록 클릭 + 8탭 측정/캡처/마커 + widgets.json dump), annotate_preview.py 마커 v2, generate_uis_spec.py 신설(§0~§9 자동). nkshop-bos-admin Pr201Form 실서비스 검증 통과. 다음: Phase 6.4 위젯 메타 자동 보완 (placeholder/default/disabled_when/연결 API/§5/§8) | Claude |
+| 2026-05-26 | Phase 6.4 U6+U7 완료. capture.js DOM 메타 확장(placeholder/default/required/pattern/maxlength/options 등 11종 attr dump), generate_uis_spec.py §4 표 자동 채움(타입·placeholder·default·disabled_when·유효성·selector). 기존 widgets.json 호환. 다음: U8(disabled_when 정적), U9(연결 API), U10/U11(§5·§8) | Claude |

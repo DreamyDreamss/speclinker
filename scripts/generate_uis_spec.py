@@ -56,18 +56,66 @@ def load_widgets(path):
         return []
 
 
+def _md_escape(s):
+    return (s or '').strip().replace('|', '\\|').replace('\n', ' ')
+
+
+def _widget_type(w):
+    """DOM meta → §4 표의 '타입' 컬럼 (button/input-text/select/textarea/...)."""
+    tag  = (w.get('tag') or '').lower()
+    typ  = (w.get('type') or '').lower()
+    if tag == 'select':   return 'select'
+    if tag == 'textarea': return 'textarea'
+    if tag == 'button' or typ in ('button','submit'): return 'button'
+    if tag == 'a':        return 'link/button'
+    if typ:               return f'input-{typ}'
+    return tag or '(auto)'
+
+
+def _validation_text(w):
+    """required·pattern·min/max·maxlength → '유효성' 컬럼 한 줄."""
+    parts = []
+    if w.get('required'):  parts.append('required')
+    if w.get('readonly'):  parts.append('readonly')
+    if w.get('disabled'):  parts.append('disabled')
+    if w.get('pattern'):   parts.append(f"pattern=`{w['pattern']}`")
+    if w.get('maxlength'): parts.append(f"max={w['maxlength']}자")
+    if w.get('minlength'): parts.append(f"min={w['minlength']}자")
+    if w.get('min') is not None and w.get('min') != '': parts.append(f"min={w['min']}")
+    if w.get('max') is not None and w.get('max') != '': parts.append(f"max={w['max']}")
+    return ', '.join(parts) if parts else '[TBD]'
+
+
+def _selector_text(w):
+    """위젯 식별용 selector 우선순위: dom_id > name > bbox."""
+    if w.get('dom_id'): return f"`#{w['dom_id']}`"
+    if w.get('name'):   return f"`[name=\"{w['name']}\"]`"
+    bbox = w.get('bbox') or [0,0,0,0]
+    return f'`bbox={bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}`'
+
+
 def render_widget_table(widgets):
-    """widgets.json → §4 위젯 표 markdown rows."""
+    """widgets.json → §4 위젯 표 markdown rows.
+    DOM meta(placeholder/default/required 등)는 capture.js Phase 6.4 U6에서 dump.
+    """
     if not widgets:
         return '| (위젯 자동 발견 없음) | - | - | - | - | - | - | - | - | - | - |'
     rows = []
     for w in widgets:
-        wid = w.get('id', '-')
-        num = w.get('number', '-')
-        label = (w.get('label') or '').strip().replace('|', '\\|')
-        bbox = w.get('bbox') or [0, 0, 0, 0]
+        wid   = w.get('id', '-')
+        num   = w.get('number', '-')
+        wtype = _widget_type(w)
+        label = _md_escape(w.get('label'))
+        placeholder = _md_escape(w.get('placeholder')) if w.get('placeholder') else '[TBD]'
+        default_v   = _md_escape(str(w.get('default_value'))) if w.get('default_value') not in (None, '') else '[TBD]'
+        # disabled_when — disabled=true 면 '초기상태 disabled', 아니면 정적분석 필요
+        disabled_when = '초기 disabled' if w.get('disabled') else '[TBD]'
+        validation    = _validation_text(w)
+        selector_md   = _selector_text(w)
+        api_hint      = '[TBD]'  # U9 — sl-recon STEP 4 INF cross-link
+        source        = '(auto-discover)'
         rows.append(
-            f'| {wid} | {num} | (auto) | {label} | [TBD] | [TBD] | [TBD] | [TBD] | `bbox={bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}` | [TBD] | (auto-discover) |'
+            f'| {wid} | {num} | {wtype} | {label} | {placeholder} | {default_v} | {disabled_when} | {validation} | {selector_md} | {api_hint} | {source} |'
         )
     return '\n'.join(rows)
 

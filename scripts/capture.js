@@ -142,13 +142,49 @@ fs.mkdirSync(OUT_DIR, { recursive: true });
             const t = (el.textContent || el.value || el.placeholder || el.getAttribute('title') || el.name || '').trim();
             return t.length > 0 && t.length < 30 ? t : '';
           };
+          // DOM meta — Phase 6.4 U6: placeholder/default/required/pattern/maxlength 등
+          const metaOf = el => {
+            const m = {};
+            const tag  = el.tagName.toLowerCase();
+            const type = (el.getAttribute('type') || '').toLowerCase();
+            m.tag  = tag;
+            m.type = type || (tag === 'select' ? 'select' : (tag === 'textarea' ? 'textarea' : tag));
+            if (el.id)            m.dom_id   = el.id;
+            if (el.getAttribute('name'))      m.name      = el.getAttribute('name');
+            if (el.placeholder)               m.placeholder = el.placeholder;
+            // default — value attribute(HTML) 우선, 다음 defaultValue, 다음 현재 value
+            const valAttr  = el.getAttribute('value');
+            const defVal   = el.defaultValue;
+            if (valAttr !== null && valAttr !== '')      m.default_value = valAttr;
+            else if (defVal !== undefined && defVal !== '') m.default_value = defVal;
+            if (el.required)                  m.required = true;
+            if (el.disabled)                  m.disabled = true;
+            if (el.readOnly)                  m.readonly = true;
+            const pattern  = el.getAttribute('pattern');
+            if (pattern)                      m.pattern  = pattern;
+            if (el.maxLength && el.maxLength > 0 && el.maxLength < 9999) m.maxlength = el.maxLength;
+            if (el.minLength && el.minLength > 0) m.minlength = el.minLength;
+            const min = el.getAttribute('min'); if (min)  m.min = min;
+            const max = el.getAttribute('max'); if (max)  m.max = max;
+            const step = el.getAttribute('step'); if (step) m.step = step;
+            // select option 목록 (간략)
+            if (tag === 'select') {
+              const opts = Array.from(el.options || []).slice(0, 10)
+                  .map(o => ({ value: o.value, text: (o.textContent || '').trim().slice(0, 30) }))
+                  .filter(o => o.value || o.text);
+              if (opts.length) m.options = opts;
+            }
+            // onclick handler 존재 여부 (정적 분석은 별도 — 여기는 hint만)
+            if (el.getAttribute('onclick')) m.has_onclick = true;
+            return m;
+          };
           // 1) button + 액션 a
           for (const el of document.querySelectorAll('button, a[class*="btn" i], input[type="button"], input[type="submit"]')) {
             if (!isVisible(el)) continue;
             const lbl = labelOf(el);
             if (!lbl) continue;
             const r = el.getBoundingClientRect();
-            out.push({ tag: el.tagName, label: lbl, x: r.x, y: r.y, w: r.width, h: r.height });
+            out.push({ tag: el.tagName, label: lbl, x: r.x, y: r.y, w: r.width, h: r.height, meta: metaOf(el) });
           }
           // 2) input · select (text/email/password 등) — label 있는 것
           for (const el of document.querySelectorAll('input[name], select[name], textarea[name]')) {
@@ -157,7 +193,7 @@ fs.mkdirSync(OUT_DIR, { recursive: true });
             const name = el.getAttribute('name') || el.placeholder || '';
             if (!name || name.length > 40) continue;
             const r = el.getBoundingClientRect();
-            out.push({ tag: el.tagName, label: name, x: r.x, y: r.y, w: r.width, h: r.height });
+            out.push({ tag: el.tagName, label: name, x: r.x, y: r.y, w: r.width, h: r.height, meta: metaOf(el) });
           }
           // 정렬 — 상→하, 좌→우 (행 단위 그룹화)
           out.sort((a, b) => {
@@ -179,6 +215,7 @@ fs.mkdirSync(OUT_DIR, { recursive: true });
               Math.round(iframeBox.x + w.x + w.w),
               Math.round(iframeBox.y + w.y + w.h),
             ],
+            ...(w.meta || {}),
           }));
           const widgetsJson = outPng.replace(/\.png$/i, '_widgets.json');
           fs.writeFileSync(widgetsJson, JSON.stringify(bboxed, null, 2));
