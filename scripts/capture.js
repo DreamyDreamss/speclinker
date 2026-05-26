@@ -84,6 +84,9 @@ fs.mkdirSync(OUT_DIR, { recursive: true });
   // iframe element handle 1회 잡고 재사용
   const iframeHandleGlobal = await cf.frameElement();
 
+  // 탭 간 위젯 번호 전역 카운터 — 탭마다 1부터 재시작하지 않도록
+  let globalWidgetSeq = 0;
+
   for (const tab of tabs) {
     const outPng = path.join(OUT_DIR, 'preview' + (tab.suffix || '') + '.png');
     try {
@@ -245,18 +248,21 @@ fs.mkdirSync(OUT_DIR, { recursive: true });
         });
         if (widgets.length > 0) {
           // 모든 발견된 widget — limit 없음. UIS spec의 디스크립션 단위.
-          const bboxed = widgets.map((w, i) => ({
-            id: 'A-' + String(i + 1).padStart(2, '0'),
-            number: String(i + 1),
-            label: w.label,
-            bbox: [
-              Math.round(iframeBox.x + w.x),
-              Math.round(iframeBox.y + w.y),
-              Math.round(iframeBox.x + w.x + w.w),
-              Math.round(iframeBox.y + w.y + w.h),
-            ],
-            ...(w.meta || {}),
-          }));
+          const bboxed = widgets.map((w) => {
+            globalWidgetSeq += 1;
+            return {
+              id: 'WG-' + String(globalWidgetSeq).padStart(2, '0'),
+              number: String(globalWidgetSeq),
+              label: w.label,
+              bbox: [
+                Math.round(iframeBox.x + w.x),
+                Math.round(iframeBox.y + w.y),
+                Math.round(iframeBox.x + w.x + w.w),
+                Math.round(iframeBox.y + w.y + w.h),
+              ],
+              ...(w.meta || {}),
+            };
+          });
           const widgetsJson = outPng.replace(/\.png$/i, '_widgets.json');
           fs.writeFileSync(widgetsJson, JSON.stringify(bboxed, null, 2));
           console.error(`    auto-annotate: ${bboxed.length}개 widget 발견`);

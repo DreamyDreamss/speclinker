@@ -263,6 +263,21 @@ def build_spec(ui_dir, uis_id, screen_id, screen_name, route, domain, workspace_
     for t in tabs:
         tabs_with_widgets.append({'name': t['name'], 'order': t['order'], 'widgets': load_widgets(t['widgets_json'])})
 
+    # 레거시 per-tab 번호 보정: 탭이 2개 이상이고 번호가 겹치면 전역 재번호
+    all_nums = []
+    for tw in tabs_with_widgets:
+        for w in tw['widgets']:
+            n = w.get('number')
+            if n is not None:
+                all_nums.append(str(n))
+    if len(all_nums) != len(set(all_nums)):
+        global_seq = 0
+        for tw in tabs_with_widgets:
+            for w in tw['widgets']:
+                global_seq += 1
+                w['number'] = str(global_seq)
+                w['id'] = 'WG-' + str(global_seq).zfill(2)
+
     parts = []
     # frontmatter
     parts.append(f'''---
@@ -349,7 +364,11 @@ revision_history:
     parts.append('')
     for tw in tabs_with_widgets:
         widgets = tw['widgets']
-        parts.append(f'### §4.{tw["order"]} {tw["name"]} 탭 ({len(widgets)}개)')
+        nums = [w.get('number') for w in widgets if w.get('number')]
+        num_range = f'WG-{min(nums)}~{max(nums)}' if nums else '위젯 없음'
+        parts.append(f'### §4.{tw["order"]} {tw["name"]} 탭 ({len(widgets)}개, {num_range})')
+        parts.append('')
+        parts.append('> 이미지: `preview_tab{}_{}*_annotated.png` — 원 안 숫자가 아래 번호와 1:1 대응'.format(tw['order'], tw['name']))
         parts.append('')
         parts.append('| 위젯 ID | 번호 | 타입 | 레이블 | placeholder | default | disabled_when | 유효성 | selector | 연결 API | 소스 |')
         parts.append('|--------|------|------|-------|-------------|---------|---------------|--------|----------|---------|------|')
