@@ -160,23 +160,34 @@ def _disabled_when_text(w):
     return ', '.join(parts) if parts else '[TBD]'
 
 
-def _api_link(w, inf_idx):
-    """U9 — widget.api_hints → INF-NNN 매칭. 없으면 hint만 표시. 없으면 [TBD]."""
+def _api_link(w, inf_idx, gaps_out=None, tab_name=''):
+    """U9 — widget.api_hints → INF-NNN 매칭. 없으면 hint만 표시. 없으면 [TBD].
+    gaps_out이 주어지면 미매칭 api_hints를 INF gap으로 수집한다."""
     hints  = w.get('api_hints') or []
     method = w.get('form_method')
     inf = match_inf(hints, inf_idx, method)
     if inf:
         return f'[{inf}](../../INF/{inf}.md)'
     if hints:
+        if gaps_out is not None:
+            gaps_out.append({
+                'widget_id':    w.get('id', '-'),
+                'widget_label': (w.get('label') or '').strip(),
+                'url':          hints[0],
+                'method':       method or 'GET',
+                'api_hints':    hints,
+                'tab_name':     tab_name,
+            })
         return _md_escape(', '.join(f'`{h}`' for h in hints[:2])) + ' [매칭 INF 없음]'
     if w.get('handler_calls'):
         return _md_escape('fn:' + ', '.join(f'`{f}`' for f in w['handler_calls'][:2]))
     return '[TBD]'
 
 
-def render_widget_table(widgets, inf_idx=None):
+def render_widget_table(widgets, inf_idx=None, gaps_out=None, tab_name=''):
     """widgets.json → §4 위젯 표 markdown rows.
     DOM meta(U6/U7) + condition_hints(U11) + api_hints(U9) 자동 채움.
+    gaps_out 리스트가 주어지면 미매칭 api_hints를 수집한다.
     """
     inf_idx = inf_idx or {}
     if not widgets:
@@ -192,7 +203,7 @@ def render_widget_table(widgets, inf_idx=None):
         disabled_when = _disabled_when_text(w)
         validation    = _validation_text(w)
         selector_md   = _selector_text(w)
-        api_link      = _api_link(w, inf_idx)
+        api_link      = _api_link(w, inf_idx, gaps_out=gaps_out, tab_name=tab_name)
         source        = '(auto-discover)'
         rows.append(
             f'| {wid} | {num} | {wtype} | {label} | {placeholder} | {default_v} | {disabled_when} | {validation} | {selector_md} | {api_link} | {source} |'
@@ -200,11 +211,13 @@ def render_widget_table(widgets, inf_idx=None):
     return '\n'.join(rows)
 
 
-def render_interactions(tabs_with_widgets, inf_idx):
+def render_interactions(tabs_with_widgets, inf_idx, gaps_out=None):
     """U10 — §5 인터랙션 표 자동 생성.
     button/submit + api_hints 가진 widget 만 row 추출 (action 분명한 것만).
+    gaps_out 리스트가 주어지면 §5에서 발견된 미매칭 api_hints도 수집한다.
     """
     rows = []
+    seen_gap_urls = set()  # §4에서 이미 수집된 URL 중복 방지
     for tab in tabs_with_widgets:
         for w in tab['widgets']:
             wtype = _widget_type(w)
@@ -217,6 +230,18 @@ def render_interactions(tabs_with_widgets, inf_idx):
             label = _md_escape(w.get('label')) or '(이름없음)'
             num   = w.get('number') or '-'
             inf   = match_inf(hints, inf_idx, w.get('form_method'))
+            if not inf and hints and gaps_out is not None:
+                url = hints[0]
+                if url not in seen_gap_urls:
+                    seen_gap_urls.add(url)
+                    gaps_out.append({
+                        'widget_id':    w.get('id', '-'),
+                        'widget_label': (w.get('label') or '').strip(),
+                        'url':          url,
+                        'method':       w.get('form_method') or 'GET',
+                        'api_hints':    hints,
+                        'tab_name':     tab.get('name', ''),
+                    })
             inf_md = f'[{inf}](../../INF/{inf}.md)' if inf else (
                 _md_escape('`' + hints[0] + '`') if hints else _md_escape('fn:' + calls[0]) if calls else '[TBD]'
             )
@@ -255,22 +280,26 @@ def render_state_table():
 | ST-05 | 오류 | API 4xx/5xx | 에러 메시지 alert | §2 |'''
 
 
+def _find_workspace_root(ui_dir):
+    """ui_dir에서 위로 탐색하여 docs/ 의 부모(= workspace root)를 찾는다."""
+    cur = os.path.abspath(ui_dir)
+    for _ in range(10):
+        if os.path.basename(cur) == 'docs':
+            return os.path.dirname(cur)
+        parent = os.path.dirname(cur)
+        if parent == cur:
+            break
+        cur = parent
+    return os.path.abspath(os.path.join(ui_dir, '..', '..', '..', '..', '..'))
+
+
 def build_spec(ui_dir, uis_id, screen_id, screen_name, route, domain, workspace_root=None):
     tabs = find_tab_assets(ui_dir)
     today = date.today().isoformat()
-    # workspace_root 추정: ui_dir(.../docs/05_설계서/{domain}/UI/{screen})에서
-    # 'docs' 디렉토리를 위로 거슬러 찾는다. off-by-one 안전.
     if workspace_root is None:
-        cur = os.path.abspath(ui_dir)
-        for _ in range(8):
-            parent = os.path.dirname(cur)
-            if os.path.basename(cur) == 'docs':
-                workspace_root = parent
-                break
-            cur = parent
-        if workspace_root is None:
-            workspace_root = os.path.abspath(os.path.join(ui_dir, '..', '..', '..', '..', '..'))
+        workspace_root = _find_workspace_root(ui_dir)
     inf_idx = load_inf_index(workspace_root, domain)
+    gaps = []  # INF 미매칭 api_hints 수집
     # 모든 탭의 위젯 통합 (§5·§8용)
     tabs_with_widgets = []
     for t in tabs:
@@ -389,7 +418,7 @@ revision_history:
             parts.append('')
         parts.append('| 위젯 ID | 번호 | 타입 | 레이블 | placeholder | default | disabled_when | 유효성 | selector | 연결 API | 소스 |')
         parts.append('|--------|------|------|-------|-------------|---------|---------------|--------|----------|---------|------|')
-        parts.append(render_widget_table(widgets, inf_idx))
+        parts.append(render_widget_table(widgets, inf_idx, gaps_out=gaps, tab_name=tw['name']))
         parts.append('')
 
     # §5 인터랙션 이벤트 매핑 (U10 자동 채움)
@@ -400,7 +429,7 @@ revision_history:
     parts.append('')
     parts.append('| 이벤트 | 트리거 위젯 | 전이 상태 | API 호출 | 성공 시 UI | HTTP 코드 | 도메인 에러 | 화면 메시지 | 후속 행동 |')
     parts.append('|--------|-----------|---------|---------|----------|---------|----------|----------|---------|')
-    parts.append(render_interactions(tabs_with_widgets, inf_idx))
+    parts.append(render_interactions(tabs_with_widgets, inf_idx, gaps_out=gaps))
     parts.append('')
     parts.append('')
 
@@ -457,7 +486,7 @@ flowchart LR
 > - INF cross-link 매칭률은 §5 표에서 `[매칭 INF 없음]` 항목 수로 확인
 ''')
 
-    return '\n'.join(parts)
+    return '\n'.join(parts), gaps
 
 
 def main():
@@ -469,15 +498,39 @@ def main():
     p.add_argument('--route', required=True)
     p.add_argument('--domain', required=True)
     p.add_argument('--out', default='spec.md')
+    p.add_argument('--workspace', default=None,
+                   help='workspace root (기본: ui_dir에서 docs/ 위로 자동 추정)')
     args = p.parse_args()
 
     ui_dir = os.path.abspath(args.ui_dir)
-    spec_md = build_spec(ui_dir, args.uis_id, args.screen_id, args.screen_name, args.route, args.domain)
+    workspace_root = os.path.abspath(args.workspace) if args.workspace else None
+
+    spec_md, gaps = build_spec(
+        ui_dir, args.uis_id, args.screen_id, args.screen_name,
+        args.route, args.domain, workspace_root=workspace_root,
+    )
 
     out_path = args.out if os.path.isabs(args.out) else os.path.join(ui_dir, args.out)
     with open(out_path, 'w', encoding='utf-8') as f:
         f.write(spec_md)
     print(f'spec.md 생성: {out_path} ({len(spec_md)} chars)')
+
+    # INF gaps 파일 출력 (_tmp/{screen_id}_inf_gaps.json)
+    if workspace_root is None:
+        workspace_root = _find_workspace_root(ui_dir)
+    tmp_dir = os.path.join(workspace_root, '_tmp')
+    os.makedirs(tmp_dir, exist_ok=True)
+    gaps_path = os.path.join(tmp_dir, f'{args.screen_id}_inf_gaps.json')
+    with open(gaps_path, 'w', encoding='utf-8') as f:
+        json.dump({
+            'screen_id': args.screen_id,
+            'uis_id':    args.uis_id,
+            'gaps':      gaps,
+        }, f, ensure_ascii=False, indent=2)
+    if gaps:
+        print(f'INF gaps: {gaps_path} ({len(gaps)}건) ← ddd-api-agent 입력으로 사용')
+    else:
+        print(f'INF gaps: {gaps_path} (0건 — 모든 api_hints 매칭됨)')
 
 
 if __name__ == '__main__':

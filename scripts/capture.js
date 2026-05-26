@@ -33,14 +33,191 @@ function flag(n) { return args.includes('--' + n); }
 const positional = args.filter(a => !a.startsWith('--'));
 
 const OUT_DIR = path.resolve(arg('out', positional[0] || '.'));
-const PORT     = arg('port', '9222');
-const FRAME_URL = arg('frame-url', '');
-const TABS_OPT  = arg('tabs', 'none');
-const MARGIN    = parseInt(arg('margin', '200'), 10);
-const ANNOTATE  = flag('annotate');
+const PORT          = arg('port', '9222');
+const FRAME_URL     = arg('frame-url', '');
+const TABS_OPT      = arg('tabs', 'none');
+const MARGIN        = parseInt(arg('margin', '200'), 10);
+const ANNOTATE      = flag('annotate');
 const AUTO_ANNOTATE = flag('auto-annotate');
+const TRAVERSE_MENU = flag('traverse-menu');
+const WORKSPACE     = path.resolve(arg('workspace', process.cwd()));
 
 fs.mkdirSync(OUT_DIR, { recursive: true });
+
+// ── BFS 메뉴 탐색 헬퍼 ─────────────────────────────────────────────────────────
+
+/** href/onclick 에서 앱 내부 라우트 추출. 외부 URL, #, javascript: 제거. */
+function extractRoute(href, onclick) {
+  if (href && href !== '#' && !href.startsWith('javascript') && href !== '') {
+    try {
+      if (href.startsWith('http')) return new URL(href).pathname;
+      return href;
+    } catch (_) {}
+  }
+  if (onclick) {
+    // fn.go('/path'), goPage('/path'), parent.fn.go('/path'), fnGoUrl('/path')
+    const m1 = onclick.match(/\(\s*['"](\/.+?)['"]/);
+    if (m1) return m1[1];
+    // location.href = '/path'
+    const m2 = onclick.match(/location\.href\s*=\s*['"](\/.+?)['"]/);
+    if (m2) return m2[1];
+  }
+  return null;
+}
+
+function makeRuntimeScreen(route, name, menuL1 = '', menuL2 = '', fullUrl = '') {
+  return {
+    id: '', route, name: name || route.split('/').pop(),
+    entry: '', component_files: [], domain: '',
+    source: 'runtime-bfs', framework_hint: 'runtime-bfs',
+    status: 'pending', layout_role: 'master',
+    parent_screen: null, tabs: [],
+    capture: {
+      preview_status: 'none', cdp_required: true,
+      route_keyword: route.split('/').pop().replace(/\?.*/, ''),
+    },
+    metadata: { menu_l1: menuL1, menu_l2: menuL2, full_url: fullUrl || route },
+  };
+}
+
+async function doTraverseMenu(page, cf) {
+  const screens = [];
+  const seenRoutes = new Set();
+
+  // nav 컨테이너 탐색 — 메인 프레임 우선, iframe 폴백
+  const NAV_SELECTORS = [
+    '.lnb', '#lnb', '.snb', '#snb', '.gnb', '#gnb',
+    '.sidebar', '#sidebar', '.left-menu', '.side-menu', '.nav-menu',
+    'nav', '[role="navigation"]',
+  ];
+  let navFrame = null;
+  let navSel   = null;
+  for (const sel of NAV_SELECTORS) {
+    if ((await page.locator(sel).count()) > 0) { navFrame = page; navSel = sel; break; }
+    if (cf && (await cf.locator(sel).count()) > 0) { navFrame = cf; navSel = sel; break; }
+  }
+
+  if (!navSel) {
+    console.error('[traverse-menu] nav 컨테이너 미발견 → 전체 DOM href 정적 스캔 fallback');
+    const hrefs = await page.evaluate(() => {
+      const seen = new Set(); const out = [];
+      for (const a of document.querySelectorAll('a')) {
+        const href = (a.getAttribute('href') || '').trim();
+        const onclick = a.getAttribute('onclick') || '';
+        const text = (a.textContent || '').trim();
+        if (!text || seen.has(href + onclick)) continue;
+        seen.add(href + onclick);
+        out.push({ href, onclick, text });
+      }
+      return out;
+    });
+    for (const link of hrefs) {
+      const route = extractRoute(link.href, link.onclick);
+      if (route && !seenRoutes.has(route)) {
+        seenRoutes.add(route);
+        screens.push(makeRuntimeScreen(route, link.text, '', link.text, ''));
+      }
+    }
+  } else {
+    console.error(`[traverse-menu] nav: ${navSel} (${navFrame === page ? 'main' : 'iframe'})`);
+
+    // nav DOM 트리 추출 — L1 > L2 구조
+    const navTree = await navFrame.evaluate((sel) => {
+      const nav = document.querySelector(sel);
+      if (!nav) return [];
+      const tree = [];
+      // L1: 직계 li 또는 ul > li
+      const l1Candidates = nav.querySelectorAll(':scope > li, :scope > ul > li');
+      for (const l1El of l1Candidates) {
+        const l1Link = l1El.querySelector(':scope > a');
+        const l1Text = (l1Link ? l1Link.textContent : l1El.textContent || '').trim().slice(0, 40);
+        const children = [];
+        const subList = l1El.querySelector(':scope > ul, :scope > div > ul, :scope > ol');
+        if (subList) {
+          for (const l2a of subList.querySelectorAll('a')) {
+            children.push({
+              text: (l2a.textContent || '').trim().slice(0, 40),
+              href: l2a.getAttribute('href') || '',
+              onclick: l2a.getAttribute('onclick') || '',
+            });
+          }
+        }
+        if (l1Link) {
+          const l1href = l1Link.getAttribute('href') || '';
+          const l1onclick = l1Link.getAttribute('onclick') || '';
+          tree.push({ text: l1Text, href: l1href, onclick: l1onclick, children });
+        }
+      }
+      return tree;
+    }, navSel);
+
+    console.error(`[traverse-menu] L1 메뉴 ${navTree.length}개`);
+
+    for (const l1 of navTree) {
+      // L1 클릭 (서브메뉴 펼치기)
+      if (l1.children.length > 0) {
+        try {
+          await navFrame.locator(navSel + ' a').filter({ hasText: new RegExp('^' + l1.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$') }).first().click({ timeout: 3000 });
+          await page.waitForTimeout(600);
+        } catch (_) {}
+      }
+
+      const items = l1.children.length > 0 ? l1.children : [{ text: l1.text, href: l1.href, onclick: l1.onclick }];
+      console.error(`  [${l1.text}] L2 ${items.length}개`);
+
+      for (const l2 of items) {
+        if (!l2.text) continue;
+        const prevUrl = cf ? cf.url() : page.url();
+
+        try {
+          // 텍스트 기반 locator로 클릭
+          const loc = navFrame.locator('a').filter({ hasText: new RegExp('^' + l2.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$') }).first();
+          await loc.click({ timeout: 3000 });
+          await page.waitForTimeout(1800);
+
+          const newUrl = cf ? cf.url() : page.url();
+          if (newUrl && newUrl !== prevUrl && !newUrl.startsWith('about:')) {
+            let route;
+            try { const u = new URL(newUrl); route = u.pathname + (u.search || ''); } catch(_) { route = newUrl; }
+            if (!seenRoutes.has(route)) {
+              seenRoutes.add(route);
+              screens.push(makeRuntimeScreen(route, l2.text, l1.text, l2.text, newUrl));
+              console.error(`    → ${route}`);
+            }
+          } else {
+            // URL 변화 없음 → href/onclick에서 정적 추출
+            throw new Error('no-navigation');
+          }
+        } catch (_) {
+          const route = extractRoute(l2.href, l2.onclick);
+          if (route && !seenRoutes.has(route)) {
+            seenRoutes.add(route);
+            screens.push(makeRuntimeScreen(route, l2.text, l1.text, l2.text, ''));
+            console.error(`    → ${route} [static]`);
+          }
+        }
+      }
+    }
+  }
+
+  // 출력
+  const tmpDir = path.join(WORKSPACE, '_tmp');
+  fs.mkdirSync(tmpDir, { recursive: true });
+  const outPath = path.join(tmpDir, 'screen_plan_runtime.json');
+  const now = new Date().toISOString();
+  fs.writeFileSync(outPath, JSON.stringify({
+    version: 1,
+    generated_at: now,
+    confirmed_by: '', confirmed_at: '',
+    discovery: {
+      mode_used: 'runtime', static_count: 0,
+      runtime_count: screens.length, manual_count: 0,
+      excluded_count: 0, framework_used: 'runtime-bfs',
+    },
+    screens,
+  }, null, 2));
+  console.error(`\n[BFS 완료] ${screens.length}개 화면 → ${outPath}`);
+}
 
 (async () => {
   const browser = await chromium.connectOverCDP(`http://localhost:${PORT}`);
@@ -51,6 +228,15 @@ fs.mkdirSync(OUT_DIR, { recursive: true });
   const cf = FRAME_URL
     ? page.frames().find(f => f.url().includes(FRAME_URL))
     : page.frames().find(f => f !== page.mainFrame() && !f.url().startsWith('about:'));
+
+  // ── traverse-menu 전용 모드: BFS 탐색 후 종료 ──────────────────────────────
+  if (TRAVERSE_MENU) {
+    if (!cf) console.error('[traverse-menu] content frame 없음 — main frame으로 진행');
+    await doTraverseMenu(page, cf || null);
+    await browser.close();
+    process.exit(0);
+  }
+
   if (!cf) { console.error('content frame 없음'); process.exit(1); }
   console.error(`★ frame: ${cf.url()}`);
 
