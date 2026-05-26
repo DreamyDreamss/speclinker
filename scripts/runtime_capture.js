@@ -94,6 +94,52 @@ function launchOptions(headless) {
   return opts;
 }
 
+// ── 컨텐츠 iframe 자동 선택 (jwork·SPA SPA 패턴) ──
+// hint:
+//   'auto'              자동 — main 아닌 frame 중 route 매칭 우선, 그 다음 가장 큰 frame
+//   CSS selector string main 페이지에서 해당 selector 의 iframe 잡음
+//   false / 'page'      iframe 무시
+// routeHint: route 키워드 (예: '/product/prdreg/pr201Form' → 'pr201Form')
+//            jwork 처럼 메뉴 클릭마다 새 frame 추가되는 패턴에서 — URL 매칭으로 진짜 화면 frame 선택
+async function pickContentFrame(page, hint, routeHint) {
+  if (hint && hint !== 'auto' && typeof hint === 'string' && hint.startsWith('iframe')) {
+    try {
+      const h = await page.locator(hint).elementHandle({ timeout: 1500 });
+      if (h) return await h.contentFrame();
+    } catch (_) { return null; }
+  }
+  // 보조 frame (download·preview 등) 제외
+  const cands = page.frames().filter(f =>
+    f !== page.mainFrame() &&
+    !f.url().startsWith('about:') &&
+    !/grid-file-download|jfile-download|arsFile|hidden|preview/i.test(f.name() || '')
+  );
+  if (cands.length === 0) return null;
+  // 1) route 키워드 매칭 우선 — jwork 처럼 메뉴 클릭으로 새 frame 추가되는 패턴
+  if (routeHint) {
+    const key = routeHint.split('/').filter(Boolean).pop().replace(/\.\w+$/, '');  // 'pr201Form'
+    if (key) {
+      const matched = cands.find(f => f.url().toLowerCase().includes(key.toLowerCase()));
+      if (matched) return matched;
+    }
+  }
+  // 2) 가장 늦게 생성된 frame (최근 클릭으로 추가된 거) — page.frames() 순서 = 생성 순
+  if (cands.length > 1) return cands[cands.length - 1];
+  // 3) fallback: 가장 큰 viewport
+  let best = null, bestArea = 0;
+  for (const f of cands) {
+    try {
+      const handle = await f.frameElement();
+      if (!handle) continue;
+      const box = await handle.boundingBox();
+      if (!box) continue;
+      const area = box.width * box.height;
+      if (area > bestArea) { best = f; bestArea = area; }
+    } catch (_) {}
+  }
+  return best || cands[0];
+}
+
 // ── 만료 감지 ──
 function isLoginPage(currentUrl, finalUrl) {
   // 캡처 대상 URL이 아닌 로그인 URL로 리다이렉트된 경우
@@ -127,19 +173,28 @@ async function executePreActions(page, actions) {
         const target = a.url && a.url.startsWith('http') ? a.url : BASE_URL.replace(/\/$/, '') + (a.url || '');
         await page.goto(target, { waitUntil: a.waitUntil || WAIT_UNTIL, timeout: a.timeoutMs || TIMEOUT_MS });
       } else if (a.action === 'click') {
-        await page.click(a.selector, { timeout: a.timeoutMs || 5000 });
+        // Phase 6.2+: force/hover 옵션 추가 (좌측 접힌 메뉴 등 visibility 문제 우회)
+        await page.click(a.selector, {
+          timeout: a.timeoutMs || 5000,
+          force: a.force === true,
+        });
+      } else if (a.action === 'hover') {
+        await page.hover(a.selector, { timeout: a.timeoutMs || 5000, force: a.force === true });
       } else if (a.action === 'type' || a.action === 'fill') {
         await page.fill(a.selector, a.value || '');
       } else if (a.action === 'select') {
         await page.selectOption(a.selector, a.value);
       } else if (a.action === 'wait') {
         if (a.selector) {
-          await page.waitForSelector(a.selector, { timeout: a.timeoutMs || 5000 });
+          await page.waitForSelector(a.selector, { timeout: a.timeoutMs || 5000, state: a.state || 'visible' });
         } else if (a.ms) {
           await page.waitForTimeout(a.ms);
         }
       } else if (a.action === 'press') {
         await page.keyboard.press(a.key);
+      } else if (a.action === 'evaluate') {
+        // jwork 자체 함수 호출 (예: openMenu('PR201'))
+        await page.evaluate(a.script);
       } else {
         console.error(`  ⚠️  ${tag} 알 수 없는 action: ${a.action}`);
       }
@@ -166,14 +221,22 @@ async function bootstrap() {
     console.error('초기 페이지 로드 실패 (브라우저는 열려있음):', e.message);
   });
 
-  // Enter 키 대기
-  process.stdin.setRawMode(true);
-  process.stdin.resume();
-  await new Promise(resolve => {
-    process.stdin.once('data', resolve);
-  });
-  process.stdin.setRawMode(false);
-  process.stdin.pause();
+  // Enter 키 대기 (TTY) 또는 시간 대기 (background — Bash run_in_background 등)
+  if (process.stdin.isTTY) {
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    await new Promise(resolve => {
+      process.stdin.once('data', resolve);
+    });
+    process.stdin.setRawMode(false);
+    process.stdin.pause();
+  } else {
+    // TTY 아님 (background 실행) — BOOTSTRAP_WAIT_SEC (기본 300초) 대기 후 자동 저장
+    // 사용자가 GUI Chrome에서 로그인하는 동안 카운트다운
+    const wait = parseInt(process.env.BOOTSTRAP_WAIT_SEC || '300', 10);
+    console.error(`[non-TTY] ${wait}초 대기 후 자동 storageState 저장 — 그동안 Chrome 창에서 로그인 완료해주세요`);
+    await new Promise(r => setTimeout(r, wait * 1000));
+  }
 
   // storageState 저장
   await ctx.storageState({ path: STORAGE_STATE });
@@ -272,8 +335,189 @@ async function captureAll() {
         expiredCount++;
         errMsg = `로그인 페이지로 리다이렉트 (${finalUrl})`;
       } else {
-        await page.screenshot({ path: outPng, fullPage: true });
+        // Phase 6.2 — 트릭 0. 순수 Playwright fullPage.
+        // capture_plan.tabCaptures 가 있으면 — 한 진입 후 각 탭 클릭 + 캡처.
+        // 컨텐츠 iframe 안의 탭을 클릭해야 하므로 contentFrame 우선 시도.
+        if (Array.isArray(plan && plan.tabCaptures) && plan.tabCaptures.length > 0) {
+          const cf = await pickContentFrame(page, 'auto', item.route);
+          console.error(`  선택된 frame: ${cf ? cf.url() : 'null'}`);
+          if (cf) {
+            const tabsCount = await cf.locator("a:has-text('기초정보')").count();
+            console.error(`  iframe 안 '기초정보' 매칭 갯수: ${tabsCount}`);
+          }
+          for (const tab of plan.tabCaptures) {
+            const tabOut = outPng.replace(/\.png$/i, (tab.suffix || `_${tab.name}`) + '.png');
+            try {
+              if (!tab.skipClick && tab.frameSelector && cf) {
+                const cnt = await cf.locator(tab.frameSelector).count();
+                console.error(`    tab '${tab.name}' selector 매칭: ${cnt}`);
+                await cf.locator(tab.frameSelector).first().click({ force: true, timeout: 5000 });
+              }
+              if (tab.waitMs) await page.waitForTimeout(tab.waitMs);
+              // iframe content 면 frame body element screenshot (element 전체)
+              if (cf) {
+                await cf.locator('body').screenshot({ path: tabOut });
+              } else {
+                await page.screenshot({ path: tabOut, fullPage: true });
+              }
+              console.error(`  tab '${tab.name}' → ${path.relative(WS, tabOut)}`);
+            } catch (te) {
+              console.error(`  tab '${tab.name}' 실패: ${te.message}`);
+            }
+          }
+        } else {
+          await page.screenshot({ path: outPng, fullPage: true });
+        }
         captureOk = true;
+      }
+      // 옛 트릭 코드 보존 (불사용) — Phase 6.2 휴리스틱
+      if (false) {
+        const wantFrame = plan && plan.captureFrame !== undefined ? plan.captureFrame : 'auto';
+        let captured = false;
+        if (wantFrame !== false && wantFrame !== 'page') {
+          const contentFrame = await pickContentFrame(page, wantFrame, item.route);
+          if (contentFrame) {
+            try {
+              console.error(`  ★ frame: ${contentFrame.url()}`);
+              // 1. body overflow:hidden 해제 + 명시 width/height 제거 → 진짜 컨텐츠 크기 측정
+              const sz = await contentFrame.evaluate(() => {
+                document.body.style.overflow = 'visible';
+                document.body.style.height   = 'auto';
+                document.documentElement.style.overflow = 'visible';
+                document.documentElement.style.height   = 'auto';
+                // 자식 중 height 차지하는 모든 컨테이너의 max 측정
+                const all = Array.from(document.body.querySelectorAll('*'));
+                let maxBottom = 0;
+                for (const el of all) {
+                  const r = el.getBoundingClientRect();
+                  const bottom = r.bottom + window.scrollY;
+                  if (bottom > maxBottom && r.width > 100) maxBottom = bottom;
+                }
+                return {
+                  w: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth),
+                  h: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight, maxBottom),
+                  bodyW: document.body.offsetWidth,
+                  bodyH: document.body.offsetHeight,
+                };
+              });
+              console.error(`  body offset: ${sz.bodyW} x ${sz.bodyH} / scroll+children max: ${sz.w} x ${sz.h}`);
+
+              // 2. iframe element 자체를 진짜 크기로 강제 확대 (부모 layout 무시)
+              //    + 부모 페이지의 메뉴/헤더 hide. 단 iframe ancestor chain 은 보존.
+              const iframeHandle = await contentFrame.frameElement();
+              if (iframeHandle) {
+                // 우선 충분히 큰 임시 height 으로 iframe 확대 (lazy 자식 렌더링 트리거)
+                await iframeHandle.evaluate((iframeEl, sz) => {
+                  iframeEl.style.position = 'fixed';
+                  iframeEl.style.top = '0px';
+                  iframeEl.style.left = '0px';
+                  iframeEl.style.width  = sz.w + 'px';
+                  iframeEl.style.height = (sz.h * 2 + 2000) + 'px';  // 임시 큰 height
+                  iframeEl.style.zIndex = '999999';
+                  iframeEl.style.border = 'none';
+                  iframeEl.style.display = 'block';
+
+                  const ancestors = new Set();
+                  let p = iframeEl;
+                  while (p) { ancestors.add(p); p = p.parentElement; }
+                  function hideSiblings(el) {
+                    const parent = el.parentElement;
+                    if (!parent || parent === document.documentElement) return;
+                    for (const sibling of parent.children) {
+                      if (!ancestors.has(sibling)) sibling.style.display = 'none';
+                    }
+                    hideSiblings(parent);
+                  }
+                  hideSiblings(iframeEl);
+
+                  document.body.style.overflow = 'hidden';
+                  document.body.style.margin = '0';
+                  document.body.style.padding = '0';
+                }, sz);
+                await page.waitForTimeout(1200);
+
+                // 3. iframe 확대 후 — frame 안 진짜 컨텐츠 재측정 (lazy·tab 다 렌더된 상태)
+                const finalSz = await contentFrame.evaluate(() => {
+                  // body overflow 풀고 재측정
+                  document.body.style.overflow = 'visible';
+                  document.documentElement.style.overflow = 'visible';
+                  // 자식 모든 element 의 bottom 최대값
+                  const all = document.body.getElementsByTagName('*');
+                  let maxBottom = 0;
+                  for (const el of all) {
+                    const r = el.getBoundingClientRect();
+                    const bottom = r.bottom;
+                    if (bottom > maxBottom && r.width > 50) maxBottom = bottom;
+                  }
+                  return {
+                    w: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth, 1920),
+                    h: Math.max(document.documentElement.scrollHeight, document.body.scrollHeight, maxBottom),
+                  };
+                });
+                console.error(`  최종 컨텐츠 크기: ${finalSz.w} x ${finalSz.h}`);
+
+                // 4. iframe 정확한 크기로 재설정
+                await iframeHandle.evaluate((iframeEl, sz) => {
+                  iframeEl.style.width  = sz.w + 'px';
+                  iframeEl.style.height = sz.h + 'px';
+                }, finalSz);
+                await page.waitForTimeout(500);
+
+                // 5. fullPage 캡처 — iframe만 보이는 상태라 정확히 iframe 영역만
+                await page.screenshot({ path: outPng, fullPage: true });
+                captured = true;
+              } else {
+                await page.screenshot({
+                  path: outPng,
+                  clip: { x: 0, y: 0, width: sz.w, height: sz.h },
+                });
+                captured = true;
+              }
+            } catch (frameErr) {
+              console.error(`  [WARN] frame body screenshot 실패 — page fullPage 폴백: ${frameErr.message}`);
+            }
+          }
+        }
+        if (!captured) {
+          await page.screenshot({ path: outPng, fullPage: true });
+        }
+        captureOk = true;
+
+        // Phase 6.2 (2026-05-26): capture_plan.json에 widgets 가 있으면
+        // selector별 boundingBox()를 수집해 preview_widgets.json 으로 저장.
+        // annotate_preview.py 가 이 JSON + preview.png 를 합성해 preview_annotated.png 생성.
+        if (plan && Array.isArray(plan.widgets) && plan.widgets.length > 0) {
+          const collected = [];
+          for (const w of plan.widgets) {
+            if (!w.selector) continue;
+            try {
+              const el = await page.$(w.selector);
+              if (!el) continue;
+              const box = await el.boundingBox();
+              if (!box) continue;
+              collected.push({
+                id:       w.id || '',
+                number:   w.number || '',
+                selector: w.selector,
+                label:    w.label || '',
+                bbox: [
+                  Math.round(box.x),
+                  Math.round(box.y),
+                  Math.round(box.x + box.width),
+                  Math.round(box.y + box.height),
+                ],
+              });
+            } catch (_) { /* selector 매칭 실패는 무시 — 한 화면에 모든 위젯이 항상 존재하지는 않음 */ }
+          }
+          if (collected.length > 0) {
+            const widgetsOut = path.join(outDir, 'preview_widgets.json');
+            try {
+              fs.writeFileSync(widgetsOut, JSON.stringify(collected, null, 2));
+            } catch (e) {
+              console.error(`  [WARN] preview_widgets.json 저장 실패: ${e.message}`);
+            }
+          }
+        }
       }
     } catch (e) {
       errMsg = e.message.slice(0, 200);

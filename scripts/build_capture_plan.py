@@ -100,6 +100,88 @@ def make_actions_dynamic(route):
     ]
 
 
+# ────────────────────────────────────────────────────────────
+# Phase 6.2 (2026-05-26): spec.md 의 §4 위젯 표 파싱 → widgets 필드
+# ────────────────────────────────────────────────────────────
+
+def _strip_inline_code(s: str) -> str:
+    """`x` 또는 ``x`` 같은 markdown inline code 제거. 빈 셀(-) 도 빈 문자열로."""
+    s = (s or '').strip()
+    if s in ('-', '—', '–', ''):
+        return ''
+    # backtick 제거
+    s = re.sub(r'^`+|`+$', '', s)
+    return s.strip()
+
+
+def _parse_widget_table(md_body: str) -> list:
+    """spec.md 본문에서 §4 위젯 정의 표를 파싱해 widgets 리스트 반환.
+
+    Phase 6.1 형식:
+    | 위젯 ID | 번호 | 타입 | 레이블 | placeholder | default | disabled_when | 유효성 | selector | 연결 API | 소스 |
+    """
+    # §4 ~ §5 사이 추출
+    m = re.search(r'###?\s*§4[^\n]*\n(.+?)(?=\n###?\s*§5|\Z)', md_body, re.S)
+    if not m:
+        return []
+    block = m.group(1)
+
+    # 헤더 줄 찾기 (위젯 ID 포함)
+    lines = [ln for ln in block.split('\n') if ln.strip().startswith('|')]
+    if len(lines) < 3:
+        return []
+    header = [c.strip() for c in lines[0].strip().strip('|').split('|')]
+    # column index 매핑 (찾을 수 있는 만큼)
+    idx = {}
+    for i, h in enumerate(header):
+        h_norm = h.lower().replace(' ', '')
+        if '위젯id' in h_norm or h_norm == 'id':
+            idx['id'] = i
+        elif h_norm in ('번호', 'no'):
+            idx['number'] = i
+        elif '레이블' in h_norm or '컬럼명' in h_norm or h_norm == 'label':
+            idx['label'] = i
+        elif h_norm == 'selector':
+            idx['selector'] = i
+
+    # selector 컬럼 못 찾으면 추출 불가
+    if 'selector' not in idx:
+        return []
+
+    widgets = []
+    # 데이터 행 (구분자 줄 제외)
+    for ln in lines[2:]:
+        cells = [c.strip() for c in ln.strip().strip('|').split('|')]
+        if len(cells) <= idx['selector']:
+            continue
+        wid = _strip_inline_code(cells[idx['id']]) if 'id' in idx else ''
+        sel = _strip_inline_code(cells[idx['selector']])
+        if not sel:
+            continue
+        widget = {
+            'id':       wid,
+            'number':   _strip_inline_code(cells[idx['number']]) if 'number' in idx else '',
+            'label':    _strip_inline_code(cells[idx['label']]) if 'label' in idx else '',
+            'selector': sel,
+        }
+        widgets.append(widget)
+    return widgets
+
+
+def load_widgets_for_screen(ws: str, domain: str, screen_id: str) -> list:
+    """docs/05_설계서/{도메인}/UI/{화면ID}/spec.md 가 있으면 §4 파싱해 위젯 반환."""
+    if not (domain and screen_id):
+        return []
+    spec_path = os.path.join(ws, 'docs', '05_설계서', domain, 'UI', screen_id, 'spec.md')
+    if not os.path.exists(spec_path):
+        return []
+    try:
+        body = open(spec_path, encoding='utf-8').read()
+    except Exception:
+        return []
+    return _parse_widget_table(body)
+
+
 def main():
     if not os.path.exists(INV_PATH):
         print(f'[ERROR] {INV_PATH} 없음 — sl-recon STEP 5 먼저 실행 필요', file=sys.stderr)
@@ -158,6 +240,16 @@ def main():
         else:
             entry['preActions'] = []
             entry['hint'] = '자동 분류 불가 — 수동 편집 권장'
+
+        # Phase 6.2 (2026-05-26): spec.md 가 있으면 §4 위젯 표 자동 파싱해 widgets 주입
+        # runtime_capture.js 가 캡처 시점에 selector 별 boundingBox 측정 → preview_widgets.json
+        screen_id = item.get('screenId') or item.get('screen') or ''
+        if not screen_id and item.get('entryFile'):
+            entry_base = os.path.splitext(os.path.basename(item['entryFile']))[0]
+            screen_id = entry_base[:1].upper() + entry_base[1:] if entry_base else ''
+        widgets = load_widgets_for_screen(WS, entry.get('domain') or '', screen_id)
+        if widgets:
+            entry['widgets'] = widgets
 
         counts[rtype] = counts.get(rtype, 0) + 1
         plan[uis_id] = entry

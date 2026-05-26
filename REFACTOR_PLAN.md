@@ -621,6 +621,59 @@
 - [ ] Go·Rust·Kotlin import 추출 지원 (Phase 6 multi-language)
 - [ ] git tag `phase-{N}-done` 체계 (환경 제한으로 보류)
 
+---
+
+## Phase 6 — UIS 한국 SI 디스크립션 호환 (2026-05-26 진행)
+
+> 사용자 요청: 화면설계서 실무 조사 결과를 반영해 UIS 생성 방식 개선.
+> 결정: 번호 체계 `[1][2][3]` ASCII / 위젯 ID 결합 `WG-01 [1]` / preview 없을 때 §2 자기충족.
+
+### Phase 6.1 — 디스크립션 마커 통합 (완료)
+- [x] **U1 ddd-ui-agent.md Phase 6**: §2 ASCII에 `[N]` 번호 + `WG-NN [N]` 결합 표기. §4 위젯 표 컬럼 확장 (번호·placeholder·default·disabled_when·selector)
+- [x] **U2 §5 인터랙션 표 분리**: HTTP 코드·도메인 에러·화면 메시지·후속 행동 4컬럼
+- [x] **U5 §0 형식 변경**: `preview_annotated.png` 우선 노출. 없으면 `preview.png` + §2 자기충족
+- [x] **frontmatter revision_history 추가** (감리 호환)
+- [x] **Self-Critique 강화**: §2 ↔ §4 번호 1:1 매칭 검증, selector 채움 강제
+- [x] **`scripts/annotate_preview.py` 신설**: preview.png + preview_widgets.json → preview_annotated.png. Pillow 기반. 마커 검증 통과
+
+### Phase 6.2 — 캡처 파이프라인 자동화 (2026-05-26 완료) ★★★
+
+실제 화면 캡처가 안 풀리던 핵심 난제를 모두 해결. nkshop-bos-admin (jwork+JSP SPA, 8탭 상품등록) 실서비스로 검증.
+
+- [x] **U3 capture.js 신설 (consolidated)** — CDP `connectOverCDP` 기반 attach 캡처. 단일 스크립트로 일원화:
+  - `Page.captureScreenshot` + `Emulation.setDeviceMetricsOverride`로 viewport scrollH+margin 강제 (captureBeyondViewport 폐기 — fixed 반복·공백 발생)
+  - iframe 내부 다중 스크롤 컨테이너 자동 탐지 (`scrollHeight > best && clientHeight > 200`)
+  - jwork ajax SPA의 frame.url 비변경 문제 — route keyword 매칭으로 content frame 식별
+  - **탭 활성화 통찰** — pr201Form 같은 화면은 "등록" 버튼 클릭 후에야 8탭 활성. capture.js가 자동 click 후 8탭 순회
+  - 탭 클릭은 `a[href]` 속성이 아닌 `a:text-is('탭명')` 사용 (jwork 핸들러 attribute click 무반응)
+  - 탭 간 측정 누적 버그 — iframe.height='' 초기화 + `clearDeviceMetricsOverride`를 매 iteration 진입 시 호출
+  - 8탭 각각 다른 widget 수·바이트 (154KB/35w, 135KB/21w, 110KB/19w 등) 검증 완료
+- [x] **auto-annotate 통합** — button·input·select·a 자동 발견 → 작은 동그라미(r=10) + 숫자만(`[]` 제거) 마커. limit 제거(전부 마킹). 결과 `preview_*_widgets.json` 자동 dump
+- [x] **annotate_preview.py 사이즈/표기 v2** — font 22→12, marker_r 20→10, outline 3→1, 번호 bracket strip, Windows cp949 회피로 `PYTHONIOENCODING=utf-8` 강제
+- [x] **generate_uis_spec.py 신설** — `preview_*.png` + `preview_*_widgets.json` 디렉토리 스캔 → Phase 6.1 형식 spec.md 자동 생성 (§0 8탭 미리보기 + §4 탭별 위젯 표). 보완 항목은 `[TBD]` 마크
+- [x] **CDP attach 워크플로우** — 사용자가 Chrome `--remote-debugging-port=9222`로 로그인까지만, plugin이 메뉴 자동 진입 + 등록 클릭 + 8탭 캡처 + 마커 + spec.md 생성을 일괄 자동 수행
+- [x] **실서비스 검증** — `D:\nkshop-bos\nkshop-bos-admin` Pr201Form 8탭 / spec.md 52,231 chars 생성 확인
+
+### Phase 6.4 — 위젯 메타 자동 보완 (예정)
+
+Phase 6.2의 spec.md는 §4 표를 자동 채우지만 `placeholder`/`default`/`disabled_when`/`유효성`/`연결 API`/`§5 이벤트`/`§8 조건부 렌더링`은 모두 `[TBD]`. 사용자 요청: "지금 너가 말한거 다 보완 필요해". 다음 작업 후보:
+
+- [ ] **U6 capture.js auto-annotate DOM 메타 확장** — `placeholder`/`value`/`disabled`/`required`/`pattern`/`min/max/maxlength` attribute를 widget JSON에 함께 dump (capture 시점, 무료)
+- [ ] **U7 generate_uis_spec.py 컬럼 채움** — widgets.json의 추가 메타를 §4 표에 매핑 (`placeholder`/`default`/`유효성`)
+- [ ] **U8 disabled_when 정적 분석** — Vue `v-if`/`:disabled`, React `disabled={}`, jQuery `.attr('disabled')` 등 소스 정규식 + LLM 합성으로 추출 (별도 agent 또는 ddd-ui-agent 강화)
+- [ ] **U9 연결 INF 자동 매핑** — sl-recon STEP 4 결과의 `INF-NNN` ↔ widget click handler에서 호출하는 API path 자동 cross-link → §4 표 `연결 API` 컬럼 + §5 인터랙션 표 동시 채움
+- [ ] **U10 §5 인터랙션 자동** — 위젯의 click/change 이벤트 핸들러 추적 → 호출 API + HTTP 코드 + 도메인 에러 자동 (정적 JS 분석 + LLM)
+- [ ] **U11 §8 조건부 렌더링 자동** — `v-if`/`v-show`/`hasPermission()`/`isVisible` 등 권한·상태 분기 정적 분석 → §8 표 자동
+- [ ] **U12 sl-recon STEP 5-C 통합** — capture.js + generate_uis_spec.py를 STEP 5-C로 정식 편입 (현재는 수동 호출). ddd-ui-agent.md가 spec.md 자동 생성본을 받아 §3 블록 정의·§7 화면 전환만 보완하는 형태
+
+### Phase 6.3 — UIS 추가 SI 호환 (재정의 2026-05-26)
+
+**~~메뉴 구조도 mermaid~~는 제거** — UA 대시보드 `IAView.tsx`가 이미 `menuTree` 자료구조로 동일 시각화 제공. _TOC.md + UIS-F 색인 표로 md 차원의 평면 목록 충분. 진짜 감리 납품 시점에 `menuTree JSON → mermaid` 변환 스크립트만 별도로 추가.
+
+- [ ] §7 화면 전환을 mermaid flowchart로 자동 변환 (표 + diagram 병기, 5개 이상 시 가독성 ↑)
+- [ ] templates/UI_Spec_v1.0_template.md 데모 화면(로그인) Phase 6.1 새 형식으로 갱신
+- [ ] §3 블록·§5 이벤트 표에도 `[N]` 번호 컬럼 일관성 (현재 §4만 가짐)
+
 **Phase 3 (컨벤션 학습)**
 - [ ] 3.1 convention-learner 에이전트 신설
 - [ ] 3.2 overlay 메커니즘 (effective_strategy 합성에 conventions.yaml 머지)
@@ -701,3 +754,4 @@
 | 2026-05-24 | Phase 2.2 확장(strategy 22개 보유) + 2.4 부분 완료(ddd-api/db/ui 카탈로그 슬림화). load_effective_layers가 frontend/batch 디렉토리도 합성. 검증: yaml 22/22, 합성 조합 10/10, smoke 4/4 | Claude |
 | 2026-05-24 | Phase 3 (convention-learner + profile.overrides 합성 + sl-recon 통합) + Phase 4 (meta-extractor + community/ promote 워크플로우) 완료. 회귀 0 | Claude |
 | 2026-05-26 | Phase 5.1·5.2 완료. fixture 4→7종 (go-gin-gorm, django-drf, vue-fsd 추가). run_matrix.py 신설로 정량 회귀 측정 도입. 결과: probe 1.00 / call_chain 1.00 (perfect) | Claude |
+| 2026-05-26 | Phase 6.2 본격 완료 ★. capture.js consolidated (CDP attach + 메뉴 자동 진입 + 등록 클릭 + 8탭 측정/캡처/마커 + widgets.json dump), annotate_preview.py 마커 v2, generate_uis_spec.py 신설(§0~§9 자동). nkshop-bos-admin Pr201Form 실서비스 검증 통과. 다음: Phase 6.4 위젯 메타 자동 보완 (placeholder/default/disabled_when/연결 API/§5/§8) | Claude |
