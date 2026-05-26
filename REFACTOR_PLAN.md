@@ -757,31 +757,33 @@ Phase 6.2의 spec.md는 §4 표를 자동 채우지만 `placeholder`/`default`/`
 - [x] `templates/screen_plan_schema.yaml` 신설 (file-based / config-based / menu-based / runtime-found 4종 호환)
 - [x] REFACTOR_PLAN.md §Phase 7 신설 (SSoT)
 
-**7.1 — 정적 화면 발견 (다음 세션 1순위)**
-- [ ] `scripts/screen_plan_discover.py` 신설 (LLM 없음, 정적만)
-- [ ] framework별 정적 분석기 분기:
+**7.1 — 정적 화면 발견 (완료 2026-05-26)**
+- [x] `scripts/screen_plan_discover.py` 신설 (LLM 없음, 정적만)
+- [x] framework별 정적 분석기 분기:
   - `_discover_next_pages()` — `pages/` 또는 `app/` 디렉토리 walk
   - `_discover_react_router()` — `<Route path=` / `createBrowserRouter([])` 정규식 + AST
   - `_discover_vue_router()` — `routes: [{path,component}]` config 추출
   - `_discover_angular()` — `RouterModule.forRoot([])`
   - `_discover_jsp_spring()` — `@RequestMapping` + JSP 파일 매핑
-  - `_discover_files()` — pages·views·screens 디렉토리 fallback
-- [ ] `profile.frontend.framework`로 자동 분기, framework=null이면 모든 분석기 시도 후 max
-- [ ] `_tmp/screen_plan_static.json` 생성 (entry+route+component_files+source)
+  - `_discover_files()` — pages·views·screens 디렉토리 fallback (trusted-root 키워드 필터 없음)
+- [x] `profile.frontend.framework`로 자동 분기, framework=null이면 모든 분석기 시도 후 max
+- [x] `_tmp/screen_plan_static.json` 생성 (entry+route+component_files+source)
+- [x] 검증: vue-fsd fixture 1화면 (entry+3 component_files 정확), 7 fixture 회귀 0
 
-**7.2 — INF Registry 신설**
-- [ ] `.speclinker/inf_registry.json` 스키마 (URL+method SSoT + used_by_screens[])
-- [ ] `scripts/inf_registry.py` (load/lookup/upsert API)
-- [ ] capture.js의 `api_hints[]`와 ddd-api-agent 결과를 모두 registry에 누적
-- [ ] 같은 URL+method = 같은 INF-ID 보장
+**7.2 — INF Registry 신설 (완료 2026-05-26)**
+- [x] `.speclinker/inf_registry.json` 스키마 (URL+method SSoT + used_by_screens[], _index로 O(1) lookup)
+- [x] `scripts/inf_registry.py` (load/lookup/upsert/add_screen_usage/import_from_widgets_json + CLI)
+- [x] `import_from_widgets_json()` — capture.js widgets.json api_hints[] 일괄 등록 API 제공
+- [x] 같은 URL+method = 같은 INF-ID 보장 (검증: 동일 URL 2회 upsert → INF-001 1개 + used_by_screens 누적)
 
-**7.3 — screen_plan confirm 체크포인트 신설**
-- [ ] sl-recon SKILL.md에 STEP 2.5 (현재 STEP 2 도메인 확정 직전)
-- [ ] 화면 plan 표 출력 → 사용자 결정:
-  - a) 이게 다임 → 진행
+**7.3 — screen_plan confirm 체크포인트 신설 (완료 2026-05-26)**
+- [x] sl-recon SKILL.md에 STEP 2.5 (도메인 확정 직전, STEP 3 바로 앞)
+- [x] 화면 plan 표 출력 → 사용자 결정 (a/b/c 3옵션 명시)
+  - a) 이게 다임 → confirmed.json 저장 + 진행
   - b) runtime 보강 필요 → STEP 2.7로 (Chrome attach 안내)
-  - c) 일부만 수정 → manual 추가/제외 후 진행
-- [ ] confirm 결과 → `.speclinker/screen_plan.confirmed.json` 영구 저장
+  - c) 일부만 수정 → manual 보정 후 confirmed.json 저장
+- [x] confirm 결과 → `.speclinker/screen_plan.confirmed.json` 영구 저장
+- [x] 기존 confirmed.json 있으면 자동 스킵 (재실행 안전)
 
 **7.4 — Runtime 보강 (옵션, 사용자 trigger)**
 - [ ] STEP 2.7 (옵션) — capture.js 재사용한 메뉴 traversal 모드 신설
@@ -868,3 +870,6 @@ Phase 6.2의 spec.md는 §4 표를 자동 채우지만 `placeholder`/`default`/`
 | 2026-05-26 | Phase 6.4 U6+U7 완료. capture.js DOM 메타 확장(placeholder/default/required/pattern/maxlength/options 등 11종 attr dump), generate_uis_spec.py §4 표 자동 채움(타입·placeholder·default·disabled_when·유효성·selector). 기존 widgets.json 호환. 다음: U8(disabled_when 정적), U9(연결 API), U10/U11(§5·§8) | Claude |
 | 2026-05-26 | Phase 6.4 U8~U12 본격 완료 ★★★. capture.js metaOf에 onclick/form.action/data-url/data-href + condition_hints 추출. generate_uis_spec.py load_inf_index + match_inf로 INF cross-link (정확+prefix 매칭). render_interactions(§5)·render_conditions(§8) 자동. sl-recon SKILL.md 5순위 attach 캡처 섹션 + ddd-ui-agent.md 5순위 행. legacy widgets.json 안전 fallback 검증. → Phase 6 디스크립션 호환 작업 종결 | Claude |
 | 2026-05-26 | Phase 7.0 결정·스키마 완료 ★. **Screen-first RECON 개편 결정** (Source-first → Screen-first, INF를 URL SSoT 공유 자원으로 격상). 결정 D8~D12 추가. profile_schema.yaml에 frontend.discovery 섹션 + screen_plan_schema.yaml 신설 (file/config/menu/runtime 4종 호환). REFACTOR_PLAN §Phase 7 SSoT 작성 (7.0~7.8 task 분해). 다음: 7.1 정적 화면 발견 (screen_plan_discover.py) | Claude |
+| 2026-05-26 | Phase 7.1 완료 ★. `scripts/screen_plan_discover.py` 신설. 6종 framework 분석기 (next/react/vue/angular/spring-mvc/files-fallback) + profile.yaml 연동 + manual_screens 지원 + BFS component import 추적 (directory→index.* 해석 포함) + `_tmp/screen_plan_static.json` 출력. 검증: vue-fsd 1화면+3컴포넌트, 7 fixture 회귀 0. 다음: 7.2 INF Registry 신설 | Claude |
+| 2026-05-26 | Phase 7.2 완료 ★. `scripts/inf_registry.py` 신설. URL+method SSoT + O(1) _index lookup + upsert dedup + used_by_screens 역인덱스 + import_from_widgets_json() API + CLI (upsert/lookup/list/import). 검증: 동일 URL 2회 upsert → INF-001 1개 + used_by_screens 누적 | Claude |
+| 2026-05-26 | Phase 7.3 완료 ★. sl-recon SKILL.md에 STEP 2.5 신설 (도메인 confirm 직전). 화면 plan 표 출력 + a/b/c 3옵션 confirm + .speclinker/screen_plan.confirmed.json 영구 저장. 기존 confirmed.json 있으면 자동 스킵 | Claude |

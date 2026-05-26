@@ -542,6 +542,107 @@ else:
 
 ---
 
+## ✋ STEP 2.5 — 정적 화면 발견 + Screen Plan 확정 (Phase 7 신규)
+
+> **Phase 7 Screen-first RECON**: 화면이 1차 산출물. 도메인 confirm 직전 화면 목록을 먼저 확정한다.
+> 이미 `.speclinker/screen_plan.confirmed.json`이 있으면 이 단계를 건너뛴다.
+
+### STEP 2.5-0: 기존 confirmed plan 확인
+
+```bash
+!python3 -c "
+import os, json
+path = '.speclinker/screen_plan.confirmed.json'
+if os.path.exists(path):
+    data = json.load(open(path, encoding='utf-8'))
+    screens = data.get('screens', [])
+    print(f'screen_plan.confirmed.json 존재 ({len(screens)}개, confirmed_by={data.get(\"confirmed_by\",\"\")!r})')
+    print('STEP 2.5 스킵 - STEP 3으로 이동')
+else:
+    print('screen_plan.confirmed.json 없음 -> 정적 발견 진행')
+"
+```
+
+`confirmed.json`이 있으면 **STEP 3으로 바로 이동**.
+
+### STEP 2.5-1: 정적 화면 발견
+
+```bash
+!python3 -c "
+import os, sys, subprocess
+env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8') if '=' in l and not l.startswith('#'))
+plugin = env.get('PLUGIN_PATH', '')
+script = os.path.join(plugin, 'scripts', 'screen_plan_discover.py') if plugin else ''
+if script and os.path.exists(script):
+    r = subprocess.run([sys.executable, script, '.'], capture_output=True, text=True, encoding='utf-8', errors='ignore')
+    if r.stdout: print(r.stdout)
+    if r.returncode != 0:
+        print('[WARN] screen_plan_discover 실패 - STEP 2.5 스킵:', (r.stderr or '')[:500])
+else:
+    print('screen_plan_discover.py 없음 - STEP 2.5 스킵')
+"
+```
+
+결과 요약:
+
+```bash
+!python3 -c "
+import json, os
+path = '_tmp/screen_plan_static.json'
+if not os.path.exists(path):
+    print('[WARN] screen_plan_static.json 없음 - 화면 발견 실패')
+else:
+    data = json.load(open(path, encoding='utf-8'))
+    screens = data.get('screens', [])
+    disc    = data.get('discovery', {})
+    fw = disc.get('framework_used','?')
+    print(f'framework: {fw}  |  정적 {disc.get(\"static_count\",0)}개 + 수동 {disc.get(\"manual_count\",0)}개')
+    print()
+    for i, s in enumerate(screens, 1):
+        nf = len(s.get('component_files', []))
+        bn = os.path.basename(s.get('entry','') or '(no entry)')
+        print(f'  {i:3}. {s[\"route\"]:45}  {bn:25}  +{nf} 컴포넌트')
+    print()
+    print(f'총 {len(screens)}개 화면 감지')
+"
+```
+
+### ✋ STEP 2.5-2 — Screen Plan 사용자 확정 (필수 체크포인트)
+
+위 화면 목록을 사용자에게 보여주고 **아래 세 가지 중 하나를 선택받는다.**  
+**확인 전 STEP 3 진행 금지.**
+
+```
+[화면 목록 확인 요청]
+위 화면 목록에 대해 선택해 주세요:
+
+a) 이게 다임 -> 그대로 확정하고 진행합니다
+b) runtime 보강 필요 -> Chrome --remote-debugging-port=9222 로 앱을 실행 후 로그인하고
+   알려주시면 STEP 2.7 메뉴 traversal로 화면 목록을 보강합니다
+c) 일부 수정 -> 추가/제외할 화면 번호나 route를 알려주세요
+```
+
+**a) 선택 시** — `_tmp/screen_plan_static.json`을 confirmed로 저장:
+
+```bash
+!python3 -c "
+import json, os
+from datetime import datetime, timezone
+src = '_tmp/screen_plan_static.json'
+dst = '.speclinker/screen_plan.confirmed.json'
+os.makedirs('.speclinker', exist_ok=True)
+data = json.load(open(src, encoding='utf-8'))
+data['confirmed_by'] = 'user'
+data['confirmed_at'] = datetime.now(timezone.utc).astimezone().isoformat()
+json.dump(data, open(dst, 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
+print(f'저장: {dst}  ({len(data[\"screens\"])}개 화면 확정)')
+"
+```
+
+**c) 수정 시** — 사용자 수정 내용 반영 후 동일하게 confirmed.json 저장.
+
+---
+
 ## ✋ STEP 3 — 사용자 도메인 검토 (필수 체크포인트)
 
 `_domain_plan.json`의 내용을 사용자에게 보기 좋게 출력하고 **반드시 확인을 받는다.**
