@@ -236,71 +236,106 @@ fs.mkdirSync(OUT_DIR, { recursive: true });
             return m;
           };
 
-          // ------ 그리드 바디 내부 요소는 마킹 대상 제외 ------
-          // (jqGrid .jqgrid-bdiv, 기타 그리드 바디 행) — 버튼 툴바는 포함
-          const gridBodyEls = new Set(document.querySelectorAll(
-            '.jqgrid-bdiv *, .ui-jqgrid-bdiv *, .slick-viewport *, .ag-center-cols-container *'
-          ));
-
-          // === PASS 1: 복합 위젯 (composite) 먼저 처리 ===
-
-          // [P-A] 날짜 범위 — 같은 td 안에 날짜 input 2개 이상
-          for (const td of document.querySelectorAll('td')) {
-            const dateEls = [...td.querySelectorAll(
-              'input.date-s2, input.date-s3, input.date-s, input[jwork_mask="mask_date"], input[class*="datepick"]'
-            )].filter(e => isVisible(e) && !seenEls.has(e) && !gridBodyEls.has(e));
-            if (dateEls.length >= 2) {
-              const label = containerLabel(td) || labelOf(dateEls[0]) || '날짜 범위';
-              const r0 = dateEls[0].getBoundingClientRect();
-              const rN = dateEls[dateEls.length - 1].getBoundingClientRect();
-              const bbox = { x: r0.x, y: r0.y, w: rN.x + rN.width - r0.x, h: Math.max(r0.height, rN.height) };
-              dateEls.forEach(e => seenEls.add(e));
-              out.push({ label, type_hint: 'date-range', ...bbox, meta: { ...metaOf(dateEls[0]), composite_ids: dateEls.map(e => e.id).filter(Boolean) } });
-            }
+          // ------ 데이터 그리드 바디 감지 (구조 기반, 클래스명 불필요) ------
+          // 판단 기준: <table> or role=grid 이고, <thead> 있고, <tbody>에 행 5개 이상이며 input이 거의 없음
+          const gridBodyEls = new Set();
+          const addGridBody = root => { for (const el of root.querySelectorAll('*')) gridBodyEls.add(el); };
+          for (const el of document.querySelectorAll('[role="grid"], [role="treegrid"]')) addGridBody(el);
+          for (const tbl of document.querySelectorAll('table')) {
+            const tbody = tbl.querySelector('tbody');
+            if (!tbody) continue;
+            const rows = tbody.querySelectorAll('tr');
+            const inputs = tbody.querySelectorAll('input:not([type="hidden"]), select, textarea');
+            // 행 5개 이상이고 입력 요소가 행 수보다 적으면 → 데이터 표시 테이블
+            if (rows.length >= 5 && inputs.length < rows.length) addGridBody(tbody);
+          }
+          // 알려진 그리드 라이브러리 바디 (구조 확인 후 추가)
+          for (const sel of ['.jqgrid-bdiv', '.ui-jqgrid-bdiv', '.ag-center-cols-container',
+                              '.slick-viewport', '.k-grid-content', '.dx-datagrid-rowsview',
+                              '.dataTables_scrollBody', '.handsontable .wtHolder']) {
+            for (const el of document.querySelectorAll(sel)) addGridBody(el);
           }
 
-          // [P-B] 코드 검색 — 같은 td 안에 텍스트 input + 팝업 트리거 링크
-          //   jwork 패턴: [코드input][명input][ico_sch.png a#xxxPop]
-          for (const td of document.querySelectorAll('td')) {
-            const textEls = [...td.querySelectorAll('input[type="text"], input:not([type])')].filter(e => isVisible(e) && !seenEls.has(e) && !gridBodyEls.has(e));
-            const popLinks = [...td.querySelectorAll('a[id$="Pop"], a[id*="Pop"][id*="sch" i], a[id*="Pop"][id*="Srch" i], a > img[alt*="검색"]')];
-            if (textEls.length >= 1 && popLinks.length >= 1) {
-              const label = containerLabel(td) || labelOf(textEls[0]);
-              if (!label) continue;
-              const r = textEls[0].getBoundingClientRect();
-              textEls.forEach(e => seenEls.add(e));
-              popLinks.forEach(e => { seenEls.add(e); const p = e.closest && e.closest('a'); if (p) seenEls.add(p); });
-              out.push({ label, type_hint: 'code-lookup', x: r.x, y: r.y, w: r.width, h: r.height, meta: { ...metaOf(textEls[0]), composite_ids: textEls.map(e => e.id).filter(Boolean) } });
-            }
+          // ------ 날짜 범위 신호 (구조+의미 기반) ------
+          // "날짜범위"를 나타내는 신호: 두 날짜 input 사이에 ~/-/to 텍스트 노드,
+          //   또는 input의 id/name/placeholder가 begin/start/end/from/to/bgn/cl 패턴
+          const isDateInput = el => {
+            if (el.type === 'date' || el.type === 'datetime-local' || el.type === 'month') return true;
+            const combo = ((el.id || '') + (el.name || '') + (el.placeholder || '')).toLowerCase();
+            return /date|dtm|bgndt|cldt|begin|start|end|from(?!rm)|_to$|strt|bgn|_cl$|_end|_st$/.test(combo);
+          };
+
+          // ------ 검색 트리거 신호 (구조+의미 기반) ------
+          // 어떤 프레임워크든: 돋보기 이미지, "검색"/"조회" 텍스트 버튼, search role
+          const isSearchTrigger = el => {
+            const txt = (el.textContent || el.getAttribute('alt') || el.getAttribute('aria-label') || '').trim();
+            if (/^(검색|조회|찾기|search|find|lookup)$/i.test(txt)) return true;
+            const src = (el.getAttribute('src') || el.getAttribute('href') || '').toLowerCase();
+            if (/search|magnif|sch|find|lookup/.test(src)) return true;
+            const cls = (el.className || '').toString().toLowerCase();
+            if (/search|magnif|lookup|sch/.test(cls)) return true;
+            // SVG path 내 돋보기 패턴 (Material Icons, FontAwesome 등)
+            if (el.querySelector && el.querySelector('[d*="M15.5 14h-.79l"]')) return true;
+            return false;
+          };
+
+          // === PASS 1: 복합 위젯 ===
+
+          // [P-A] 날짜 범위 — 컨테이너(td/div/span) 안에 날짜 input 2개 이상
+          for (const cont of document.querySelectorAll('td, .form-group, .field-group, fieldset, [class*="range"]')) {
+            if (gridBodyEls.has(cont)) continue;
+            const dateEls = [...cont.querySelectorAll('input')].filter(e =>
+              isDateInput(e) && isVisible(e) && !seenEls.has(e) && !gridBodyEls.has(e)
+            );
+            if (dateEls.length < 2) continue;
+            // 같은 직계 컨테이너 소속 확인 (자식 form-group 내 중복 방지)
+            const directParent = el => el.parentElement;
+            if (new Set(dateEls.map(directParent)).size > 2) continue;
+            const label = containerLabel(cont) || labelOf(dateEls[0]) || '날짜 범위';
+            const r0 = dateEls[0].getBoundingClientRect();
+            const rN = dateEls[dateEls.length - 1].getBoundingClientRect();
+            dateEls.forEach(e => seenEls.add(e));
+            out.push({ label, type_hint: 'date-range',
+              x: r0.x, y: r0.y, w: rN.x + rN.width - r0.x, h: Math.max(r0.height, rN.height),
+              meta: { ...metaOf(dateEls[0]), composite_ids: dateEls.map(e => e.id).filter(Boolean) } });
           }
 
-          // [P-C] 파일 업로드 컴포넌트 — jwork .jfile-wrap 또는 input[type=file] 감싸는 div
-          for (const el of document.querySelectorAll('.jfile-wrap, [id*="FileUpload"], [class*="file-upload"], [id*="jfile"]')) {
+          // [P-B] 코드 검색 복합 위젯
+          // 신호: 같은 컨테이너 안에 텍스트 input + 검색 트리거(이미지/버튼/링크)
+          for (const cont of document.querySelectorAll('td, .input-group, .field-group, .form-group, [class*="search-box"]')) {
+            if (gridBodyEls.has(cont)) continue;
+            const textEls = [...cont.querySelectorAll('input[type="text"], input:not([type])')].filter(e =>
+              isVisible(e) && !seenEls.has(e) && !gridBodyEls.has(e)
+            );
+            if (textEls.length < 1) continue;
+            // 검색 트리거 탐색: img, a, button 중 검색 의미를 가진 것
+            const triggers = [...cont.querySelectorAll('img, a, button, [role="button"]')].filter(isSearchTrigger);
+            if (triggers.length < 1) continue;
+            const label = containerLabel(cont) || labelOf(textEls[0]);
+            if (!label) continue;
+            const r = textEls[0].getBoundingClientRect();
+            textEls.forEach(e => seenEls.add(e));
+            triggers.forEach(e => { seenEls.add(e); const p = e.closest && e.closest('a, button'); if (p) seenEls.add(p); });
+            out.push({ label, type_hint: 'code-lookup', x: r.x, y: r.y, w: r.width, h: r.height,
+              meta: { ...metaOf(textEls[0]), composite_ids: textEls.map(e => e.id).filter(Boolean) } });
+          }
+
+          // [P-C] 파일 업로드 — input[type=file] 또는 그 래퍼 컴포넌트
+          for (const el of document.querySelectorAll('input[type="file"]')) {
             if (!isVisible(el) || seenEls.has(el) || gridBodyEls.has(el)) continue;
-            const inner = el.querySelector('input[type="file"]');
-            const label = containerLabel(el) || labelOf(el) || labelOf(inner || el) || '파일 첨부';
-            seenEls.add(el); if (inner) seenEls.add(inner);
-            const r = el.getBoundingClientRect();
-            out.push({ label, type_hint: 'file-upload', x: r.x, y: r.y, w: r.width, h: r.height, meta: metaOf(inner || el) });
+            // 래퍼가 있으면 래퍼를 대표로
+            const wrapper = el.closest('[class*="upload"], [class*="file"], [id*="file" i], [id*="File"]') || el;
+            const label = containerLabel(wrapper) || containerLabel(el) || labelOf(el) || '파일 첨부';
+            seenEls.add(el); if (wrapper !== el) seenEls.add(wrapper);
+            const r = (isVisible(wrapper) ? wrapper : el).getBoundingClientRect();
+            out.push({ label, type_hint: 'file-upload', x: r.x, y: r.y, w: r.width, h: r.height, meta: metaOf(el) });
           }
 
-          // === PASS 2: jwork 버튼 (span.btn-* > a) ===
-          for (const span of document.querySelectorAll(
-            'span[class*="btn-basic"], span[class*="btn-table-in"], span[class*="btn-link"]'
-          )) {
-            if (!isVisible(span) || gridBodyEls.has(span)) continue;
-            const a = span.querySelector('a');
-            if (!a || seenEls.has(a)) continue;
-            const lbl = labelOf(a) || (a.id ? a.id.replace(/^btn/, '') : '') || '버튼';
-            if (!lbl) continue;
-            seenEls.add(a); seenEls.add(span);
-            const r = span.getBoundingClientRect();
-            out.push({ label: lbl, type_hint: 'button', x: r.x, y: r.y, w: r.width, h: r.height, meta: metaOf(a) });
-          }
-
-          // === PASS 3: 표준 버튼 (button 태그, input[button|submit], [role=button], a[onclick]) ===
+          // === PASS 2: 버튼 ===
+          // HTML 의미 기반: <button>, input[type=button|submit|reset], [role=button]
+          // + 시각적 버튼 패턴: 클릭 가능한 <a>/<span> (onclick, 또는 버튼 래퍼 안에 있는 경우)
           for (const el of document.querySelectorAll(
-            'button, input[type="button"], input[type="submit"], input[type="reset"], [role="button"], a[onclick], a[href^="javascript"]'
+            'button, input[type="button"], input[type="submit"], input[type="reset"], [role="button"]'
           )) {
             if (seenEls.has(el) || !isVisible(el) || gridBodyEls.has(el)) continue;
             seenEls.add(el);
@@ -308,8 +343,18 @@ fs.mkdirSync(OUT_DIR, { recursive: true });
             const r = el.getBoundingClientRect();
             out.push({ label: lbl, type_hint: 'button', x: r.x, y: r.y, w: r.width, h: r.height, meta: metaOf(el) });
           }
+          // 시각적 버튼: onclick이 있거나, 버튼처럼 생긴 <a>/<span>/<div>
+          // 단, 검색 트리거로 이미 처리된 것 제외
+          for (const el of document.querySelectorAll('a[onclick], a[href^="javascript"], span[onclick], div[onclick]')) {
+            if (seenEls.has(el) || !isVisible(el) || gridBodyEls.has(el)) continue;
+            const lbl = labelOf(el);
+            if (!lbl || lbl.length < 1) continue;
+            seenEls.add(el);
+            const r = el.getBoundingClientRect();
+            out.push({ label: lbl, type_hint: 'button', x: r.x, y: r.y, w: r.width, h: r.height, meta: metaOf(el) });
+          }
 
-          // === PASS 4: 체크박스/라디오 — name별 그룹화, 그룹당 마커 1개 ===
+          // === PASS 3: 체크박스/라디오 — name별 그룹화 ===
           const radioGroups = {}, checkGroups = {};
           for (const el of document.querySelectorAll('input[type="checkbox"], input[type="radio"]')) {
             if (seenEls.has(el) || !isVisible(el) || gridBodyEls.has(el)) continue;
@@ -335,11 +380,11 @@ fs.mkdirSync(OUT_DIR, { recursive: true });
             out.push({ label: '[체크박스] ' + g.label, type_hint: 'checkbox', x: g.r.x, y: g.r.y, w: g.r.width, h: g.r.height, meta });
           }
 
-          // === PASS 5: 나머지 단순 입력 (select/textarea/text) ===
+          // === PASS 4: 나머지 단순 입력 ===
           for (const el of document.querySelectorAll('input, select, textarea')) {
             if (seenEls.has(el) || !isVisible(el) || gridBodyEls.has(el)) continue;
             const t = (el.getAttribute('type') || '').toLowerCase();
-            if (['hidden','button','submit','reset','image','checkbox','radio'].includes(t)) continue;
+            if (['hidden','button','submit','reset','image','checkbox','radio','file'].includes(t)) continue;
             const lbl = labelOf(el) || containerLabel(el);
             if (!lbl) continue;
             seenEls.add(el);
