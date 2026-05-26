@@ -245,9 +245,18 @@ def render_state_table():
 def build_spec(ui_dir, uis_id, screen_id, screen_name, route, domain, workspace_root=None):
     tabs = find_tab_assets(ui_dir)
     today = date.today().isoformat()
-    # workspace_root = ui_dir 기준 4단계 상위 (docs/05_설계서/{domain}/UI/{screen}) — 추정
+    # workspace_root 추정: ui_dir(.../docs/05_설계서/{domain}/UI/{screen})에서
+    # 'docs' 디렉토리를 위로 거슬러 찾는다. off-by-one 안전.
     if workspace_root is None:
-        workspace_root = os.path.abspath(os.path.join(ui_dir, '..', '..', '..', '..'))
+        cur = os.path.abspath(ui_dir)
+        for _ in range(8):
+            parent = os.path.dirname(cur)
+            if os.path.basename(cur) == 'docs':
+                workspace_root = parent
+                break
+            cur = parent
+        if workspace_root is None:
+            workspace_root = os.path.abspath(os.path.join(ui_dir, '..', '..', '..', '..', '..'))
     inf_idx = load_inf_index(workspace_root, domain)
     # 모든 탭의 위젯 통합 (§5·§8용)
     tabs_with_widgets = []
