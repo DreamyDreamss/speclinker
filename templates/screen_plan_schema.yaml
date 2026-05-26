@@ -1,0 +1,113 @@
+# screen_plan.yaml — Phase 7 (Screen-first RECON) v1
+#
+# 권위 있는 파일 위치: ".speclinker/screen_plan.confirmed.json"
+# (JSON으로 저장 — 스크립트가 cross-load. 이 YAML은 schema 정의용 reference.)
+#
+# 생성 흐름:
+#   STEP 0 — screen_plan_discover.py가 정적 분석 → _tmp/screen_plan_static.json
+#   STEP 1 — 사용자 confirm + 필요 시 사용자가 runtime 보강 명시 trigger
+#   STEP 2 — 영구 저장 .speclinker/screen_plan.confirmed.json
+#
+# 다양한 framework 호환:
+#   - file-based (Next pages·Nuxt·JSP·Razor)
+#   - config-based (React Router·Vue Router·Angular)
+#   - menu-based (jwork·legacy iframe admin · 사용자 수동 추가)
+#   - runtime-found (Playwright traversal)
+#
+# 핵심 원칙:
+#   - route 또는 entry 둘 중 하나는 반드시 채워짐
+#   - id는 사람 친화 (UIS-F-001) — RECON 진행 중 자동 할당
+#   - source 컬럼이 자동 발견 출처 추적 — 정적/런타임/사람보정 구분
+#   - status로 처리 상태 (pending/in_progress/done/excluded)
+
+version: 1
+generated_at: "2026-05-26T10:00:00+09:00"
+confirmed_by: ""                    # 사용자 confirm 시 갱신
+confirmed_at: ""
+
+# discovery_summary — 어떤 방식으로 화면 plan을 얻었는지
+discovery:
+  mode_used: static                 # static / static+runtime / runtime-only
+  static_count: 12                  # 정적 분석으로 발견한 화면 수
+  runtime_count: 0                  # runtime 보강으로 추가된 수
+  manual_count: 0                   # 사람이 수동 추가
+  excluded_count: 0                 # confirm 단계에서 제외
+  framework_used: react             # 정적 분석 시 적용한 framework strategy
+
+# screens — RECON 처리 대상 화면 목록
+screens:
+  - id: "UIS-F-001"                 # RECON 진행 중 자동 할당
+    route: "/product/list"          # 핵심 식별자 (URL 또는 라우트)
+    name: "상품 목록"                # 사람이 확인할 화면명
+    entry: "src/pages/Product/List.tsx"   # 진입 컴포넌트/페이지 파일 (file-based만)
+    component_files:                # entry가 참조하는 컴포넌트 (정적 import 추적)
+      - "src/components/ProductTable.tsx"
+      - "src/components/SearchForm.tsx"
+    domain: product                 # 도메인 (사람이 confirm)
+    source: router-config           # router-config / file-based / menu-config /
+                                    # menu-runtime / manual / inferred
+    framework_hint: react-router    # 어떤 framework 패턴으로 잡혔는지
+    status: pending                 # pending / in_progress / done / excluded
+    layout_role: master             # master / detail / modal / sub-tab / sub-page
+    parent_screen: null             # sub-tab/modal일 때 부모 UIS-ID
+    tabs:                           # 다탭 화면의 sub-tab (1 UIS, sub로 분리 X)
+      - name: "기초정보"
+        index: 1
+        selector: "a:text-is('기초정보')"
+      - name: "가격정보"
+        index: 2
+        selector: "a:text-is('가격정보')"
+    capture:                        # Phase 6.2 capture.js 연동 메타
+      preview_status: none          # none / captured / annotated
+      cdp_required: false           # jwork 같은 곳은 true
+      route_keyword: "productList"  # iframe SPA frame 식별용
+    metadata:                       # 자유 메모
+      permission: admin
+      note: ""
+
+  - id: "UIS-F-002"
+    route: "/product/edit/:id"
+    name: "상품 수정"
+    entry: "src/pages/Product/Edit.tsx"
+    component_files:
+      - "src/components/ProductForm.tsx"
+    domain: product
+    source: router-config
+    framework_hint: react-router
+    status: pending
+    layout_role: detail
+    parent_screen: null
+    tabs: []
+    capture:
+      preview_status: none
+      cdp_required: false
+      route_keyword: ""
+    metadata:
+      dynamic_route_param: id
+
+  - id: "UIS-F-003"
+    route: "/admin/pr201Form"
+    name: "상품 등록 (다탭 8개)"
+    entry: null                     # jwork는 server-rendered, entry 파일 추정 어려움
+    component_files: []
+    domain: product
+    source: manual                  # 사용자가 직접 추가
+    framework_hint: jwork
+    status: pending
+    layout_role: master
+    parent_screen: null
+    tabs:                           # 다탭은 1 UIS — Phase 6.2 검증된 정책
+      - { name: "기초정보",  index: 1, selector: "a:text-is('기초정보')" }
+      - { name: "가격정보",  index: 2, selector: "a:text-is('가격정보')" }
+      - { name: "단품정보",  index: 3, selector: "a:text-is('단품정보')" }
+    capture:
+      preview_status: none
+      cdp_required: true            # jwork — Phase 6.2 attach 캡처 필요
+      route_keyword: "pr201Form"
+    metadata:
+      pre_trigger: "등록"            # 8탭 활성화 트리거 (Phase 6.2 검증)
+
+# inf_registry_ref — URL+method dedup 인덱스 (Phase 7.2 신설 예정)
+# screens가 INF를 호출할 때 lookup하는 SSoT.
+# 별도 파일: ".speclinker/inf_registry.json"
+inf_registry_ref: ".speclinker/inf_registry.json"

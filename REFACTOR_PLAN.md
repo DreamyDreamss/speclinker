@@ -721,6 +721,116 @@ Phase 6.2의 spec.md는 §4 표를 자동 채우지만 `placeholder`/`default`/`
 
 ---
 
+## Phase 7 — Screen-first RECON 개편 (2026-05-26 결정, 진행 대기)
+
+> **사용자 의사결정 (2026-05-26)**: 현재 Source-first RECON(router → INF 전수 → SCH·UIS) 을 **Screen-first** 로 근본 개편. 화면이 1차 산출물이고, INF는 화면이 호출하는 URL 기반으로 누적·dedup하는 공유 자원으로 격상.
+>
+> 다양한 프로젝트(React/Vue/Next/JSP/jwork/legacy admin 등) 모두 지원 — framework-agnostic 정적 발견 + 사용자 trigger runtime 보강.
+
+### 결정 사항 (D8~D12, Decisions Log 추가)
+
+| # | 결정 | 근거 |
+|---|------|------|
+| D8 | RECON 모델을 Source-first → Screen-first로 전환 | URL 단위 dedup이 자연. UIS↔INF가 다대다. 토큰 30~50% 절감 추정. SI 실무 친화 |
+| D9 | INF를 화면 종속 산출물 → **공유 자원**으로 재정의 | URL+method를 SSoT, `used_by_screens[]` 역인덱스. nkshop-bos-admin 같은 어드민 검증 시 dedup이 자연스러움 |
+| D10 | 화면 발견: **정적 기본 + 사용자 trigger runtime 보강** (option B) | 자동 runtime은 시간·권한·신뢰성 위험. 정적이 70~80% 커버, 부족하면 사용자 동의 후 Phase 6.2 capture.js 메뉴 traversal |
+| D11 | 화면 = route 기본, 다탭은 1 UIS, 모달은 sub-screen | Phase 6.2 nkshop-bos-admin 검증 결과 — 다탭 1 UIS가 자연 |
+| D12 | screen_plan confirm은 도메인 confirm과 **분리** (별도 체크포인트) | 화면 결정이 도메인 결정보다 선행하지 않으면 도메인 split이 부정확 |
+
+### 핵심 데이터 모델 변화
+
+```
+[현재 모델]                        [Phase 7 모델]
+도메인이 INF·UIS 컨테이너          화면이 1차, INF는 URL SSoT 공유 자원
+  도메인 product/                    .speclinker/inf_registry.json
+    INF-001 (POST /save)               {url+method → INF-ID, used_by_screens[]}
+    INF-002 (GET /list)              .speclinker/screen_plan.confirmed.json
+    UIS-F-001 → INF-001                screens: [{id, route, calls: [INF-NNN]}]
+                                     → 화면 N개 ↔ INF M개 다대다 매트릭스
+```
+
+### Phase 7 Task 분해
+
+**7.0 — 결정·스키마 (2026-05-26 완료)**
+- [x] 스크린-퍼스트 RECON 의사결정 (Source-first → Screen-first, runtime trigger=사용자, route=1 UIS)
+- [x] `templates/profile_schema.yaml`에 `frontend.discovery` 섹션 추가 (mode + runtime_capture + manual_screens)
+- [x] `templates/screen_plan_schema.yaml` 신설 (file-based / config-based / menu-based / runtime-found 4종 호환)
+- [x] REFACTOR_PLAN.md §Phase 7 신설 (SSoT)
+
+**7.1 — 정적 화면 발견 (다음 세션 1순위)**
+- [ ] `scripts/screen_plan_discover.py` 신설 (LLM 없음, 정적만)
+- [ ] framework별 정적 분석기 분기:
+  - `_discover_next_pages()` — `pages/` 또는 `app/` 디렉토리 walk
+  - `_discover_react_router()` — `<Route path=` / `createBrowserRouter([])` 정규식 + AST
+  - `_discover_vue_router()` — `routes: [{path,component}]` config 추출
+  - `_discover_angular()` — `RouterModule.forRoot([])`
+  - `_discover_jsp_spring()` — `@RequestMapping` + JSP 파일 매핑
+  - `_discover_files()` — pages·views·screens 디렉토리 fallback
+- [ ] `profile.frontend.framework`로 자동 분기, framework=null이면 모든 분석기 시도 후 max
+- [ ] `_tmp/screen_plan_static.json` 생성 (entry+route+component_files+source)
+
+**7.2 — INF Registry 신설**
+- [ ] `.speclinker/inf_registry.json` 스키마 (URL+method SSoT + used_by_screens[])
+- [ ] `scripts/inf_registry.py` (load/lookup/upsert API)
+- [ ] capture.js의 `api_hints[]`와 ddd-api-agent 결과를 모두 registry에 누적
+- [ ] 같은 URL+method = 같은 INF-ID 보장
+
+**7.3 — screen_plan confirm 체크포인트 신설**
+- [ ] sl-recon SKILL.md에 STEP 2.5 (현재 STEP 2 도메인 확정 직전)
+- [ ] 화면 plan 표 출력 → 사용자 결정:
+  - a) 이게 다임 → 진행
+  - b) runtime 보강 필요 → STEP 2.7로 (Chrome attach 안내)
+  - c) 일부만 수정 → manual 추가/제외 후 진행
+- [ ] confirm 결과 → `.speclinker/screen_plan.confirmed.json` 영구 저장
+
+**7.4 — Runtime 보강 (옵션, 사용자 trigger)**
+- [ ] STEP 2.7 (옵션) — capture.js 재사용한 메뉴 traversal 모드 신설
+  - profile.frontend.discovery.runtime_capture 설정 사용
+  - `capture.js --traverse-menu --selectors="ul.gnb a,ul.sub a"`
+  - 메뉴 클릭 → frame.url 또는 route hint 수집 → screen_plan_static.json에 merge
+- [ ] 발견 결과를 사용자에게 표로 보여주고 추가 confirm
+
+**7.5 — STEP 4 (INF) 흐름 reshape**
+- [ ] router_inventory.json 생성 로직을 screen 루프로 변경
+  - 화면 1개 → entry 파일 + capture api_hints + handler_calls trace → INF 후보 URL 목록
+  - inf_registry에 lookup → 신규만 ddd-api-agent로 처리
+  - registry에 used_by_screens 추가
+- [ ] 화면 처리 후 잔여 router 파일이 있으면 **API-residual 보완** 단계
+  - 어떤 화면에서도 호출 안 된 endpoint를 모두 INF로 등록 (used_by_screens=[])
+
+**7.6 — STEP 5 (SCH·UIS) 흐름 변경**
+- [ ] ddd-db-agent: 도메인의 INF가 결정된 후 → sch_draft 기반 + URL 기준 합성
+- [ ] ddd-ui-agent: screen_plan + inf_registry로 §5 INF 매핑 자동 (capture.js generate_uis_spec.py와 정합)
+
+**7.7 — STEP 6 (SRS·FUNC_MAP) 변경**
+- [ ] SRS-F-XXX를 화면+호출 INF 단위로 합성 (현재 도메인별 → 화면별)
+- [ ] FUNC_MAP을 화면 → SRS → INF → SCH 매트릭스로 (이미 형태 비슷, 정합화)
+
+**7.8 — 회귀 + tag**
+- [ ] 7 fixture가 Screen-first 흐름에서도 통과하는지 검증
+- [ ] nkshop-bos-admin Pr201Form 실서비스로 end-to-end 검증
+- [ ] git tag `phase-7-done`
+
+### 위험 관리
+
+| 위험 | 대응 |
+|------|------|
+| 화면 정적 발견이 약한 framework (jwork·legacy admin) | runtime 보강을 사용자 trigger로 보장. 또는 사용자가 manual_screens로 직접 추가 |
+| 화면 발견 누락 → INF 누락 | API-residual 단계에서 router 잔여를 모두 INF로 등록 (used_by_screens=[]). 누락 0 보장 |
+| 화면이 너무 많음 (100개+) | screen_plan confirm 단계에서 POC_SCREENS와 합쳐 부분 처리 가능 |
+| ddd-* 에이전트 흐름 변경의 큰 폭 | 7.1·7.2·7.3까지 먼저 (정적 + registry), 7.5는 별도 회귀 통과 후 |
+| 기존 산출물 호환성 | screen_plan/inf_registry 없으면 기존 흐름 유지 (점진 도입) |
+
+### 다음 세션 시작 표현
+
+```
+"Phase 7.1부터 진행해"
+"screen_plan_discover.py 만들자"
+"Screen-first RECON 이어가자"
+```
+
+---
+
 ## 13. 다음 세션 시작 안내
 
 ### 다음 세션에서 이어가기 — 사용자가 말하면 좋은 표현
@@ -757,3 +867,4 @@ Phase 6.2의 spec.md는 §4 표를 자동 채우지만 `placeholder`/`default`/`
 | 2026-05-26 | Phase 6.2 본격 완료 ★. capture.js consolidated (CDP attach + 메뉴 자동 진입 + 등록 클릭 + 8탭 측정/캡처/마커 + widgets.json dump), annotate_preview.py 마커 v2, generate_uis_spec.py 신설(§0~§9 자동). nkshop-bos-admin Pr201Form 실서비스 검증 통과. 다음: Phase 6.4 위젯 메타 자동 보완 (placeholder/default/disabled_when/연결 API/§5/§8) | Claude |
 | 2026-05-26 | Phase 6.4 U6+U7 완료. capture.js DOM 메타 확장(placeholder/default/required/pattern/maxlength/options 등 11종 attr dump), generate_uis_spec.py §4 표 자동 채움(타입·placeholder·default·disabled_when·유효성·selector). 기존 widgets.json 호환. 다음: U8(disabled_when 정적), U9(연결 API), U10/U11(§5·§8) | Claude |
 | 2026-05-26 | Phase 6.4 U8~U12 본격 완료 ★★★. capture.js metaOf에 onclick/form.action/data-url/data-href + condition_hints 추출. generate_uis_spec.py load_inf_index + match_inf로 INF cross-link (정확+prefix 매칭). render_interactions(§5)·render_conditions(§8) 자동. sl-recon SKILL.md 5순위 attach 캡처 섹션 + ddd-ui-agent.md 5순위 행. legacy widgets.json 안전 fallback 검증. → Phase 6 디스크립션 호환 작업 종결 | Claude |
+| 2026-05-26 | Phase 7.0 결정·스키마 완료 ★. **Screen-first RECON 개편 결정** (Source-first → Screen-first, INF를 URL SSoT 공유 자원으로 격상). 결정 D8~D12 추가. profile_schema.yaml에 frontend.discovery 섹션 + screen_plan_schema.yaml 신설 (file/config/menu/runtime 4종 호환). REFACTOR_PLAN §Phase 7 SSoT 작성 (7.0~7.8 task 분해). 다음: 7.1 정적 화면 발견 (screen_plan_discover.py) | Claude |

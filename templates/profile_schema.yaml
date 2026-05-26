@@ -91,6 +91,34 @@ frontend:
 
   state_management: null           # redux / zustand / mobx / context-only / pinia / vuex / signals / null
 
+  # ── Phase 7 (Screen-first RECON) ─────────────────────────────
+  # 화면 발견 방식. RECON 시작 시 STEP 0(정적 발견) 자동, STEP 1 사용자 confirm 후
+  # 필요할 때만 runtime 보강을 사용자가 명시적으로 trigger 한다 (자동 X).
+  discovery:
+    mode: static                   # static / static+runtime / runtime-only
+    # mode 자동 결정 hint (사람이 override 가능):
+    #   - next/nuxt/sveltekit/remix : static (파일=라우트, 정확도 95%+)
+    #   - react/vue/angular/svelte  : static (router config 정적 분석, 80~95%)
+    #   - spring-mvc/jsp/asp        : static (Controller+JSP 1:1, 90%+)
+    #   - jwork/iframe-spa/custom   : static+runtime 권장 (정적 30~50%, 사용자 동의 시 보강)
+    #   - 모름                       : 사용자 결정 (default static)
+    runtime_capture:
+      # mode가 static+runtime 또는 runtime-only일 때만 사용.
+      # 사용자가 직접 Chrome --remote-debugging-port=9222 띄우고 로그인 후 명시 호출.
+      enabled: false
+      cdp_port: 9222
+      base_url: ""                 # PREVIEW_BASE_URL 재사용 가능
+      menu_selectors: []           # 예: ["ul.gnb a", "ul.sub-menu a"] — framework별 가이드 제공 예정
+      max_depth: 3                 # 메뉴 traversal 깊이
+      max_screens: 100             # safety 상한
+    # 정적 발견에서 못 잡은 화면을 사용자가 직접 추가 (사람 보정)
+    manual_screens: []
+      # 예시:
+      # - route: /admin/product/list
+      #   entry: src/views/product/List.vue
+      #   name: 상품목록
+      #   note: 동적 import lazy load라 정적 못잡음
+
 # ─────────────────────────────────────────────────────────────
 # 3. batch — 배치/잡 시스템 (없으면 present: false)
 # ─────────────────────────────────────────────────────────────
