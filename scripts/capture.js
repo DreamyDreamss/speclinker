@@ -135,114 +135,179 @@ fs.mkdirSync(OUT_DIR, { recursive: true });
         const iframeBox = await iframeHandleGlobal.boundingBox();
         const widgets = await cf.evaluate(() => {
           const out = [];
-          // visible · 의미 있는 element: button/a.btn/input.button + label 있는 input · select
-          const isVisible = el => {
+          const seenEls = new Set();
+
+          // 뷰포트 경계 제거 — 전체 페이지 캡처이므로 top/left만 체크 (하단 컷 없음)
+          const isVisible = (el, small = false) => {
             const r = el.getBoundingClientRect();
-            return r.width > 20 && r.height > 15 && r.top >= 0 && r.left >= 0
-                && r.bottom < window.innerHeight && r.right < window.innerWidth;
+            const minW = small ? 8 : 14;
+            const minH = small ? 8 : 10;
+            return r.width >= minW && r.height >= minH && r.top >= -50 && r.left >= -50;
           };
+
+          // 레이블 추출 — 우선순위: aria-label > aria-labelledby > title > label[for] >
+          //   closest label > value(btn) > 직접 텍스트 노드 > innerText > placeholder > name
           const labelOf = el => {
-            const t = (el.textContent || el.value || el.placeholder || el.getAttribute('title') || el.name || '').trim();
-            return t.length > 0 && t.length < 30 ? t : '';
+            const aria = el.getAttribute('aria-label');
+            if (aria && aria.trim()) return aria.trim().slice(0, 50);
+            const lblBy = el.getAttribute('aria-labelledby');
+            if (lblBy) {
+              const ref = document.getElementById(lblBy);
+              if (ref) { const t = (ref.textContent || '').trim(); if (t) return t.slice(0, 50); }
+            }
+            const title = el.getAttribute('title');
+            if (title && title.trim()) return title.trim().slice(0, 50);
+            if (el.id) {
+              const lbl = document.querySelector('label[for="' + el.id + '"]');
+              if (lbl) { const t = (lbl.textContent || '').replace(/\s+/g, ' ').trim(); if (t) return t.slice(0, 50); }
+            }
+            const parentLbl = el.closest('label');
+            if (parentLbl) {
+              const t = (parentLbl.textContent || '').replace(/\s+/g, ' ').trim();
+              if (t && t.length < 50) return t;
+            }
+            const val = el.getAttribute('value');
+            if (val && val.trim() && !['checkbox','radio'].includes((el.getAttribute('type')||'').toLowerCase())) return val.trim().slice(0, 50);
+            // 직접 텍스트 노드만 — 자식 엘리먼트 텍스트 제외해 아이콘 오염 방지
+            const directTxt = Array.from(el.childNodes)
+              .filter(n => n.nodeType === Node.TEXT_NODE)
+              .map(n => n.textContent.trim()).filter(Boolean).join(' ');
+            if (directTxt && directTxt.length < 50) return directTxt;
+            // innerText fallback (줄바꿈 정리)
+            const full = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+            if (full && full.length < 50) return full;
+            if (el.placeholder) return el.placeholder.slice(0, 50);
+            const name = el.getAttribute('name');
+            if (name) return name.slice(0, 50);
+            return '';
           };
-          // DOM meta — Phase 6.4 U6: placeholder/default/required/pattern/maxlength 등
+
+          // DOM 메타 수집 (기존 metaOf 유지)
           const metaOf = el => {
             const m = {};
             const tag  = el.tagName.toLowerCase();
             const type = (el.getAttribute('type') || '').toLowerCase();
             m.tag  = tag;
             m.type = type || (tag === 'select' ? 'select' : (tag === 'textarea' ? 'textarea' : tag));
-            if (el.id)            m.dom_id   = el.id;
-            if (el.getAttribute('name'))      m.name      = el.getAttribute('name');
+            if (el.id)                        m.dom_id   = el.id;
+            if (el.getAttribute('name'))      m.name     = el.getAttribute('name');
             if (el.placeholder)               m.placeholder = el.placeholder;
-            // default — value attribute(HTML) 우선, 다음 defaultValue, 다음 현재 value
-            const valAttr  = el.getAttribute('value');
-            const defVal   = el.defaultValue;
+            const valAttr = el.getAttribute('value');
+            const defVal  = el.defaultValue;
             if (valAttr !== null && valAttr !== '')      m.default_value = valAttr;
             else if (defVal !== undefined && defVal !== '') m.default_value = defVal;
-            if (el.required)                  m.required = true;
-            if (el.disabled)                  m.disabled = true;
-            if (el.readOnly)                  m.readonly = true;
-            const pattern  = el.getAttribute('pattern');
-            if (pattern)                      m.pattern  = pattern;
+            if (el.required)  m.required = true;
+            if (el.disabled)  m.disabled = true;
+            if (el.readOnly)  m.readonly = true;
+            const pattern = el.getAttribute('pattern'); if (pattern) m.pattern = pattern;
             if (el.maxLength && el.maxLength > 0 && el.maxLength < 9999) m.maxlength = el.maxLength;
             if (el.minLength && el.minLength > 0) m.minlength = el.minLength;
-            const min = el.getAttribute('min'); if (min)  m.min = min;
-            const max = el.getAttribute('max'); if (max)  m.max = max;
+            const mn = el.getAttribute('min'); if (mn) m.min = mn;
+            const mx = el.getAttribute('max'); if (mx) m.max = mx;
             const step = el.getAttribute('step'); if (step) m.step = step;
-            // select option 목록 (간략)
             if (tag === 'select') {
               const opts = Array.from(el.options || []).slice(0, 10)
-                  .map(o => ({ value: o.value, text: (o.textContent || '').trim().slice(0, 30) }))
-                  .filter(o => o.value || o.text);
+                .map(o => ({ value: o.value, text: (o.textContent || '').trim().slice(0, 30) }))
+                .filter(o => o.value || o.text);
               if (opts.length) m.options = opts;
             }
-            // Phase 6.4 U9·U10 — onclick / form action / ajax URL hint dump
             const apiHints = new Set();
             const onclick = el.getAttribute('onclick') || '';
             if (onclick) {
               m.has_onclick = true;
               m.onclick_raw = onclick.slice(0, 200);
-              // URL 직접 (".../api/..." 같은 path)
               for (const mm of onclick.matchAll(/['"](\/[\w\-./{}:]+)['"]/g)) {
                 if (mm[1].length > 2 && mm[1].length < 120) apiHints.add(mm[1]);
               }
-              // fnSearch() / saveProduct() / goPage('...') 같은 함수 호출 (이름만)
               for (const mm of onclick.matchAll(/\b([a-z][a-zA-Z0-9_]{2,})\s*\(/g)) {
-                if (mm[1] && mm[1].length < 40 && !['if','for','while','return','function','alert','confirm'].includes(mm[1])) {
+                if (mm[1] && mm[1].length < 40 && !['if','for','while','return','function','alert','confirm'].includes(mm[1]))
                   (m.handler_calls = m.handler_calls || []).push(mm[1]);
-                }
               }
             }
-            // form action (button/submit 위젯의 닫힌 폼)
             const form = el.closest && el.closest('form');
             if (form) {
               const act = form.getAttribute('action');
               if (act) { m.form_action = act; if (act.startsWith('/')) apiHints.add(act); }
               if (form.getAttribute('name')) m.form_name = form.getAttribute('name');
-              const mth = form.getAttribute('method');
-              if (mth) m.form_method = mth.toUpperCase();
+              const mth = form.getAttribute('method'); if (mth) m.form_method = mth.toUpperCase();
             }
-            // data-url, data-href (일부 SI 어드민 컨벤션)
             for (const a of ['data-url','data-href','data-api','data-action']) {
               const v = el.getAttribute(a);
               if (v && v.startsWith('/')) apiHints.add(v);
             }
             if (apiHints.size) m.api_hints = Array.from(apiHints).slice(0, 5);
-            // U11 — 조건부 렌더링 hint (정적 한계 명시: 발견된 신호만)
             const cls = (el.className || '').toString();
             const cond = [];
-            if (cls.match(/(?:^|\s)(?:hidden|invisible|disabled|d-none)(?:\s|$)/)) cond.push('class:' + cls.match(/(?:^|\s)(hidden|invisible|disabled|d-none)(?:\s|$)/)[1]);
+            const hiddenMatch = cls.match(/(?:^|\s)(hidden|invisible|disabled|d-none)(?:\s|$)/);
+            if (hiddenMatch) cond.push('class:' + hiddenMatch[1]);
             if (el.getAttribute('aria-hidden') === 'true') cond.push('aria-hidden');
             for (const a of ['data-role','data-permission','data-show-if','data-if','v-if','v-show']) {
-              const v = el.getAttribute(a);
-              if (v) cond.push(`${a}=${v.slice(0,40)}`);
+              const v = el.getAttribute(a); if (v) cond.push(a + '=' + v.slice(0, 40));
             }
             if (cond.length) m.condition_hints = cond;
             return m;
           };
-          // 1) button + 액션 a
-          for (const el of document.querySelectorAll('button, a[class*="btn" i], input[type="button"], input[type="submit"]')) {
-            if (!isVisible(el)) continue;
-            const lbl = labelOf(el);
-            if (!lbl) continue;
+
+          // 그룹 1: 버튼류 — button / input[button|submit|reset] / [role=button] / onclick a / data-action a
+          const btnSel = [
+            'button',
+            'input[type="button"]', 'input[type="submit"]', 'input[type="reset"]',
+            '[role="button"]',
+            'a[onclick]', 'a[class*="btn" i]', 'a[href^="javascript"]',
+            'a[data-action]', 'a[data-href]',
+          ].join(',');
+          for (const el of document.querySelectorAll(btnSel)) {
+            if (seenEls.has(el) || !isVisible(el)) continue;
+            seenEls.add(el);
+            const lbl = labelOf(el) || '(버튼)';
             const r = el.getBoundingClientRect();
             out.push({ tag: el.tagName, label: lbl, x: r.x, y: r.y, w: r.width, h: r.height, meta: metaOf(el) });
           }
-          // 2) input · select (text/email/password 등) — label 있는 것
-          for (const el of document.querySelectorAll('input[name], select[name], textarea[name]')) {
-            if (!isVisible(el)) continue;
-            if (['hidden','button','submit','checkbox','radio'].includes(el.type)) continue;
-            const name = el.getAttribute('name') || el.placeholder || '';
-            if (!name || name.length > 40) continue;
+
+          // 그룹 2: 텍스트 입력 · 셀렉트 · 텍스트에어리어
+          for (const el of document.querySelectorAll('input, select, textarea')) {
+            if (seenEls.has(el) || !isVisible(el)) continue;
+            const t = (el.getAttribute('type') || '').toLowerCase();
+            if (['hidden','button','submit','reset','image','checkbox','radio'].includes(t)) continue;
+            const lbl = labelOf(el);
+            if (!lbl) continue;
+            seenEls.add(el);
             const r = el.getBoundingClientRect();
-            out.push({ tag: el.tagName, label: name, x: r.x, y: r.y, w: r.width, h: r.height, meta: metaOf(el) });
+            out.push({ tag: el.tagName, label: lbl, x: r.x, y: r.y, w: r.width, h: r.height, meta: metaOf(el) });
           }
-          // 정렬 — 상→하, 좌→우 (행 단위 그룹화)
+
+          // 그룹 3: 체크박스 · 라디오 — name별 그룹화, 그룹당 마커 1개
+          const radioGroups = {}, checkGroups = {};
+          for (const el of document.querySelectorAll('input[type="checkbox"], input[type="radio"]')) {
+            if (!isVisible(el, true)) continue;
+            const nm = el.getAttribute('name') || ('_' + Math.random());
+            const lbl = labelOf(el) || el.value || '';
+            if (el.type === 'radio') {
+              if (!radioGroups[nm]) radioGroups[nm] = { el, labels: [], r: el.getBoundingClientRect() };
+              if (lbl && !radioGroups[nm].labels.includes(lbl)) radioGroups[nm].labels.push(lbl);
+            } else {
+              if (!checkGroups[nm]) checkGroups[nm] = { el, labels: [], r: el.getBoundingClientRect() };
+              if (lbl && !checkGroups[nm].labels.includes(lbl)) checkGroups[nm].labels.push(lbl);
+            }
+          }
+          for (const [nm, g] of Object.entries(radioGroups)) {
+            if (seenEls.has(g.el)) continue; seenEls.add(g.el);
+            const opts = g.labels.slice(0, 4).join('/');
+            const meta = metaOf(g.el); meta.type = 'radio'; if (g.labels.length) meta.radio_options = g.labels;
+            out.push({ tag: 'INPUT', label: '[라디오] ' + (opts || nm), x: g.r.x, y: g.r.y, w: g.r.width, h: g.r.height, meta });
+          }
+          for (const [nm, g] of Object.entries(checkGroups)) {
+            if (seenEls.has(g.el)) continue; seenEls.add(g.el);
+            const opts = g.labels.slice(0, 4).join('/');
+            const meta = metaOf(g.el); meta.type = 'checkbox'; if (g.labels.length) meta.checkbox_options = g.labels;
+            out.push({ tag: 'INPUT', label: '[체크박스] ' + (opts || nm), x: g.r.x, y: g.r.y, w: g.r.width, h: g.r.height, meta });
+          }
+
+          // 정렬 — 상→하, 좌→우 (행 단위)
           out.sort((a, b) => {
-            const yDiff = a.y - b.y;
-            if (Math.abs(yDiff) < 25) return a.x - b.x;  // 같은 행
-            return yDiff;
+            const dy = a.y - b.y;
+            if (Math.abs(dy) < 25) return a.x - b.x;
+            return dy;
           });
           return out;
         });
