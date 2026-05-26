@@ -105,13 +105,26 @@ def _md_escape(s):
 
 
 def _widget_type(w):
-    """DOM meta → §4 표의 '타입' 컬럼 (button/input-text/select/textarea/...)."""
-    tag  = (w.get('tag') or '').lower()
-    typ  = (w.get('type') or '').lower()
+    """type_hint(capture.js 복합 감지) 우선, 없으면 DOM meta fallback."""
+    hint = (w.get('type_hint') or '').lower()
+    if hint == 'date-range':  return '날짜범위'
+    if hint == 'code-lookup': return '코드검색'
+    if hint == 'file-upload': return '파일첨부'
+    if hint == 'button':      return 'button'
+    if hint == 'radio':       return 'radio'
+    if hint == 'checkbox':    return 'checkbox'
+    if hint == 'select':      return 'select'
+    if hint == 'textarea':    return 'textarea'
+    if hint == 'text':        return 'input-text'
+    # legacy fallback (type_hint 없는 구버전 widgets.json)
+    tag = (w.get('tag') or '').lower()
+    typ = (w.get('type') or '').lower()
     if tag == 'select':   return 'select'
     if tag == 'textarea': return 'textarea'
-    if tag == 'button' or typ in ('button','submit'): return 'button'
+    if tag == 'button' or typ in ('button', 'submit'): return 'button'
     if tag == 'a':        return 'link/button'
+    if typ == 'checkbox': return 'checkbox'
+    if typ == 'radio':    return 'radio'
     if typ:               return f'input-{typ}'
     return tag or '(auto)'
 
