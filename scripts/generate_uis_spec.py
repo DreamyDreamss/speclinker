@@ -261,7 +261,12 @@ def build_spec(ui_dir, uis_id, screen_id, screen_name, route, domain, workspace_
     # 모든 탭의 위젯 통합 (§5·§8용)
     tabs_with_widgets = []
     for t in tabs:
-        tabs_with_widgets.append({'name': t['name'], 'order': t['order'], 'widgets': load_widgets(t['widgets_json'])})
+        tabs_with_widgets.append({
+            'name': t['name'],
+            'order': t['order'],
+            'widgets': load_widgets(t['widgets_json']),
+            'annotated_png': t.get('annotated_png'),
+        })
 
     # 레거시 per-tab 번호 보정: 탭이 2개 이상이고 번호가 겹치면 전역 재번호
     all_nums = []
@@ -304,20 +309,18 @@ revision_history:
 
 ''')
 
-    # §0 화면 미리보기
+    # §0 화면 미리보기 — annotated 썸네일만 (원본 제외)
     parts.append('## §0 화면 미리보기')
+    parts.append('')
+    parts.append('> 아래 이미지의 원 안 번호는 §4 위젯 표의 번호와 1:1 대응. 탭별 상세는 §4에서 확인.')
     parts.append('')
     if not tabs:
         parts.append('![[preview.png]]')
     else:
         for t in tabs:
-            parts.append(f'### §0.{t["order"]} {t["name"]}')
-            parts.append('')
-            parts.append(f'**원본**: ![[{t["png"]}]]')
-            parts.append('')
-            if t['annotated_png']:
-                parts.append(f'**디스크립션 마커**: ![[{t["annotated_png"]}]]')
-                parts.append('')
+            annotated = t.get('annotated_png')
+            img = annotated if annotated else t['png']
+            parts.append(f'**[{t["order"]}] {t["name"]}** — ![[{img}]]')
             parts.append('')
     parts.append('')
 
@@ -368,8 +371,9 @@ revision_history:
         num_range = f'WG-{min(nums)}~{max(nums)}' if nums else '위젯 없음'
         parts.append(f'### §4.{tw["order"]} {tw["name"]} 탭 ({len(widgets)}개, {num_range})')
         parts.append('')
-        parts.append('> 이미지: `preview_tab{}_{}*_annotated.png` — 원 안 숫자가 아래 번호와 1:1 대응'.format(tw['order'], tw['name']))
-        parts.append('')
+        if tw.get('annotated_png'):
+            parts.append(f'![[{tw["annotated_png"]}]]')
+            parts.append('')
         parts.append('| 위젯 ID | 번호 | 타입 | 레이블 | placeholder | default | disabled_when | 유효성 | selector | 연결 API | 소스 |')
         parts.append('|--------|------|------|-------|-------------|---------|---------------|--------|----------|---------|------|')
         parts.append(render_widget_table(widgets, inf_idx))
