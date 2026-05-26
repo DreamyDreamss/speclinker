@@ -17,6 +17,50 @@ import re
 from datetime import date
 
 
+def load_inf_index(workspace_root, domain):
+    """docs/05_설계서/{domain}/INF/INF-*.md 스캔 → {(METHOD, path): INF-ID} 인덱스.
+    Phase 6.4 U9 — widget api_hints 매칭용. workspace_root는 절대경로.
+    """
+    inf_dir = os.path.join(workspace_root, 'docs', '05_설계서', domain, 'INF')
+    idx = {}  # (method_upper, path_lower) -> inf_id
+    if not os.path.isdir(inf_dir):
+        return idx
+    for fname in os.listdir(inf_dir):
+        if not (fname.startswith('INF-') and fname.endswith('.md')):
+            continue
+        try:
+            body = open(os.path.join(inf_dir, fname), encoding='utf-8').read()
+        except Exception:
+            continue
+        m_id  = re.search(r'^inf-id:\s*(\S+)', body, re.M | re.I)
+        m_mtd = re.search(r'^method:\s*(\S+)',  body, re.M | re.I)
+        m_pth = re.search(r'^path:\s*(\S+)',    body, re.M | re.I)
+        if m_id and m_pth:
+            inf_id = m_id.group(1)
+            mtd    = (m_mtd.group(1) if m_mtd else '*').upper()
+            pth    = m_pth.group(1).lower()
+            idx[(mtd, pth)] = inf_id
+            idx[('*',  pth)] = inf_id  # method-agnostic fallback
+    return idx
+
+
+def match_inf(api_hints, inf_idx, form_method=None):
+    """widget의 api_hints 중 INF 매칭되는 첫 ID. 부분 일치 허용 (path startswith)."""
+    if not api_hints or not inf_idx:
+        return None
+    for hint in api_hints:
+        h = hint.lower()
+        # 1) 정확 매칭
+        for (mtd, pth), inf in inf_idx.items():
+            if pth == h and (mtd in ('*', (form_method or '*').upper()) or form_method is None):
+                return inf
+        # 2) prefix/startswith 매칭
+        for (mtd, pth), inf in inf_idx.items():
+            if (h.startswith(pth) or pth.startswith(h)) and len(pth) > 4:
+                return inf
+    return None
+
+
 def find_tab_assets(ui_dir):
     """디렉토리에서 preview_tab*_*.png + 그에 매칭되는 widgets.json 찾기.
     Returns: [{'name': str, 'png': path, 'widgets_json': path|None, 'order': int}]
@@ -94,10 +138,34 @@ def _selector_text(w):
     return f'`bbox={bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}`'
 
 
-def render_widget_table(widgets):
+def _disabled_when_text(w):
+    """U8 — disabled state + condition_hints 통합."""
+    parts = []
+    if w.get('disabled'): parts.append('초기 disabled')
+    for c in (w.get('condition_hints') or []):
+        parts.append(c)
+    return ', '.join(parts) if parts else '[TBD]'
+
+
+def _api_link(w, inf_idx):
+    """U9 — widget.api_hints → INF-NNN 매칭. 없으면 hint만 표시. 없으면 [TBD]."""
+    hints  = w.get('api_hints') or []
+    method = w.get('form_method')
+    inf = match_inf(hints, inf_idx, method)
+    if inf:
+        return f'[{inf}](../../INF/{inf}.md)'
+    if hints:
+        return _md_escape(', '.join(f'`{h}`' for h in hints[:2])) + ' [매칭 INF 없음]'
+    if w.get('handler_calls'):
+        return _md_escape('fn:' + ', '.join(f'`{f}`' for f in w['handler_calls'][:2]))
+    return '[TBD]'
+
+
+def render_widget_table(widgets, inf_idx=None):
     """widgets.json → §4 위젯 표 markdown rows.
-    DOM meta(placeholder/default/required 등)는 capture.js Phase 6.4 U6에서 dump.
+    DOM meta(U6/U7) + condition_hints(U11) + api_hints(U9) 자동 채움.
     """
+    inf_idx = inf_idx or {}
     if not widgets:
         return '| (위젯 자동 발견 없음) | - | - | - | - | - | - | - | - | - | - |'
     rows = []
@@ -108,15 +176,61 @@ def render_widget_table(widgets):
         label = _md_escape(w.get('label'))
         placeholder = _md_escape(w.get('placeholder')) if w.get('placeholder') else '[TBD]'
         default_v   = _md_escape(str(w.get('default_value'))) if w.get('default_value') not in (None, '') else '[TBD]'
-        # disabled_when — disabled=true 면 '초기상태 disabled', 아니면 정적분석 필요
-        disabled_when = '초기 disabled' if w.get('disabled') else '[TBD]'
+        disabled_when = _disabled_when_text(w)
         validation    = _validation_text(w)
         selector_md   = _selector_text(w)
-        api_hint      = '[TBD]'  # U9 — sl-recon STEP 4 INF cross-link
+        api_link      = _api_link(w, inf_idx)
         source        = '(auto-discover)'
         rows.append(
-            f'| {wid} | {num} | {wtype} | {label} | {placeholder} | {default_v} | {disabled_when} | {validation} | {selector_md} | {api_hint} | {source} |'
+            f'| {wid} | {num} | {wtype} | {label} | {placeholder} | {default_v} | {disabled_when} | {validation} | {selector_md} | {api_link} | {source} |'
         )
+    return '\n'.join(rows)
+
+
+def render_interactions(tabs_with_widgets, inf_idx):
+    """U10 — §5 인터랙션 표 자동 생성.
+    button/submit + api_hints 가진 widget 만 row 추출 (action 분명한 것만).
+    """
+    rows = []
+    for tab in tabs_with_widgets:
+        for w in tab['widgets']:
+            wtype = _widget_type(w)
+            if wtype not in ('button', 'link/button') and (w.get('type') or '').lower() not in ('button', 'submit'):
+                continue
+            hints = w.get('api_hints') or []
+            calls = w.get('handler_calls') or []
+            if not (hints or calls):
+                continue
+            label = _md_escape(w.get('label')) or '(이름없음)'
+            num   = w.get('number') or '-'
+            inf   = match_inf(hints, inf_idx, w.get('form_method'))
+            inf_md = f'[{inf}](../../INF/{inf}.md)' if inf else (
+                _md_escape('`' + hints[0] + '`') if hints else _md_escape('fn:' + calls[0]) if calls else '[TBD]'
+            )
+            method = w.get('form_method', '[TBD]')
+            event_name = '클릭'
+            rows.append(
+                f'| {event_name} ({label}) | [{tab["name"]}] WG-{num} | ST-02 | {inf_md} | ST-03 | {method} 200 | [TBD] | [TBD] | [TBD] |'
+            )
+    if not rows:
+        rows.append('| 페이지 진입 | route mount | ST-01 | [TBD] | ST-03 | - | - | - | - |')
+    return '\n'.join(rows)
+
+
+def render_conditions(tabs_with_widgets):
+    """U11 — §8 조건부 렌더링 표. capture.js가 dump한 condition_hints/disabled 신호."""
+    rows = []
+    for tab in tabs_with_widgets:
+        for w in tab['widgets']:
+            cond = w.get('condition_hints') or []
+            if not cond and not w.get('disabled'):
+                continue
+            num = w.get('number') or '-'
+            label = _md_escape(w.get('label')) or '-'
+            cond_text = '초기 disabled' if w.get('disabled') and not cond else _md_escape(', '.join(cond))
+            rows.append(f'| {cond_text} | [{tab["name"]}] WG-{num} {label} | - | DOM 정적 신호 (auto) |')
+    if not rows:
+        rows.append('| [TBD — 정적 분석 신호 없음] | [TBD] | [TBD] | 사람 보완 필요 |')
     return '\n'.join(rows)
 
 
@@ -128,9 +242,17 @@ def render_state_table():
 | ST-05 | 오류 | API 4xx/5xx | 에러 메시지 alert | §2 |'''
 
 
-def build_spec(ui_dir, uis_id, screen_id, screen_name, route, domain):
+def build_spec(ui_dir, uis_id, screen_id, screen_name, route, domain, workspace_root=None):
     tabs = find_tab_assets(ui_dir)
     today = date.today().isoformat()
+    # workspace_root = ui_dir 기준 4단계 상위 (docs/05_설계서/{domain}/UI/{screen}) — 추정
+    if workspace_root is None:
+        workspace_root = os.path.abspath(os.path.join(ui_dir, '..', '..', '..', '..'))
+    inf_idx = load_inf_index(workspace_root, domain)
+    # 모든 탭의 위젯 통합 (§5·§8용)
+    tabs_with_widgets = []
+    for t in tabs:
+        tabs_with_widgets.append({'name': t['name'], 'order': t['order'], 'widgets': load_widgets(t['widgets_json'])})
 
     parts = []
     # frontmatter
@@ -216,28 +338,26 @@ revision_history:
     parts.append('')
     parts.append('> auto-annotate가 자동 발견한 button·input·select·a. `[TBD]` 항목은 사람이 보완.')
     parts.append('')
-    for t in tabs:
-        widgets = load_widgets(t['widgets_json'])
-        parts.append(f'### §4.{t["order"]} {t["name"]} 탭 ({len(widgets)}개)')
+    for tw in tabs_with_widgets:
+        widgets = tw['widgets']
+        parts.append(f'### §4.{tw["order"]} {tw["name"]} 탭 ({len(widgets)}개)')
         parts.append('')
         parts.append('| 위젯 ID | 번호 | 타입 | 레이블 | placeholder | default | disabled_when | 유효성 | selector | 연결 API | 소스 |')
         parts.append('|--------|------|------|-------|-------------|---------|---------------|--------|----------|---------|------|')
-        parts.append(render_widget_table(widgets))
+        parts.append(render_widget_table(widgets, inf_idx))
         parts.append('')
 
-    # §5 인터랙션 이벤트 매핑
-    parts.append('''## §5 인터랙션 이벤트 매핑
-
-> 이벤트별 API 호출·에러 매핑은 INF 추출(sl-recon STEP 4) 후 자동 합성.
-> 현재는 placeholder.
-
-| 이벤트 | 트리거 위젯 | 전이 상태 | API 호출 | 성공 시 UI | HTTP 코드 | 도메인 에러 | 화면 메시지 | 후속 행동 |
-|--------|-----------|---------|---------|----------|---------|----------|----------|---------|
-| 페이지 진입 | route mount | ST-01 | [TBD INF-NNN] | ST-03 | - | - | - | - |
-| 조회 클릭 | [TBD 위젯번호] | ST-02 | [TBD INF-NNN] | ST-03 | 4xx | [TBD] | [TBD] | [TBD] |
-| 저장 클릭 | [TBD 위젯번호] | ST-02 | [TBD INF-NNN] | ST-06 | 4xx | [TBD] | [TBD] | [TBD] |
-
-''')
+    # §5 인터랙션 이벤트 매핑 (U10 자동 채움)
+    parts.append('## §5 인터랙션 이벤트 매핑')
+    parts.append('')
+    parts.append('> capture.js가 dump한 `api_hints`/`handler_calls` + INF-{도메인} 디렉토리 매칭으로 자동 채움.')
+    parts.append('> 매칭 안 된 항목은 path만 표시 + `[매칭 INF 없음]`.')
+    parts.append('')
+    parts.append('| 이벤트 | 트리거 위젯 | 전이 상태 | API 호출 | 성공 시 UI | HTTP 코드 | 도메인 에러 | 화면 메시지 | 후속 행동 |')
+    parts.append('|--------|-----------|---------|---------|----------|---------|----------|----------|---------|')
+    parts.append(render_interactions(tabs_with_widgets, inf_idx))
+    parts.append('')
+    parts.append('')
 
     # §6 화면 상태 정의
     parts.append('''## §6 화면 상태 정의
@@ -263,29 +383,33 @@ flowchart LR
 
 ''')
 
-    # §8 조건부 렌더링
-    parts.append('''## §8 조건부 렌더링 (권한·상태)
+    # §8 조건부 렌더링 (U11 자동 채움)
+    parts.append('## §8 조건부 렌더링 (권한·상태)')
+    parts.append('')
+    parts.append('> capture.js가 dump한 DOM 신호(disabled / hidden / aria-hidden / v-if / data-role 등)만 표시.')
+    parts.append('> 정적 분석 한계 — 변수 기반 조건은 [TBD]로 두고 사람·LLM 보완 필요.')
+    parts.append('')
+    parts.append('| 조건/신호 | 영향 위젯 | 숨김/비활성 | 비고 |')
+    parts.append('|----------|----------|------------|------|')
+    parts.append(render_conditions(tabs_with_widgets))
+    parts.append('')
+    parts.append('')
 
-| 조건 | 표시 요소 | 숨김/비활성 요소 | 비고 |
-|------|---------|---------------|------|
-| [TBD] | [TBD] | [TBD] | [TBD] |
-
-''')
-
-    # §9 미확인
+    # §9 미확인 (Phase 6.4 갱신 — 자동 처리된 항목 제거)
     parts.append(f'''## §9 미확인 사항
 
-- 위젯 표의 `placeholder`/`default`/`disabled_when`/`유효성`/`연결 API` — 소스 분석 또는 사람 보완 필요
-- §5 인터랙션 이벤트의 실제 API 호출 매핑 — sl-recon STEP 4 (INF 추출) 후 자동 채워짐
-- §3 블록 정의의 실제 영역 분할 — 사람 검수
+- §4 `disabled_when` — DOM 신호(disabled/v-if/aria-hidden 등)는 자동, 변수 기반 동적 조건은 사람·LLM 보완
+- §4 `연결 API` — `api_hints` 매칭 안 된 항목(`[매칭 INF 없음]` 표시): handler 함수 안에서 동적 URL 생성하는 경우 — 사람 보완
+- §3 블록 정의의 실제 영역 분할 — 사람 검수 (capture.js auto-annotate 보강 가능)
 - §7 화면 전환의 실제 다음 화면 — RTM 매핑 후
-- §8 조건부 렌더링 — 소스의 `v-if`/`hasPermission` 등 분석 후 (auto-discover 가능)
+- §8 조건부 렌더링 — DOM 정적 신호 외 변수 기반 조건은 사람·LLM 보완
 
 ---
 
-> 자동 생성 도구:
-> - 캡처: `capture.js --tabs=auto --auto-annotate` ({len(tabs)}탭)
-> - spec.md: `generate_uis_spec.py`
+> 자동 생성 도구 (Phase 6.4 U6~U11 완비):
+> - 캡처: `capture.js --tabs=auto --auto-annotate` (DOM 메타 11종 + api_hints + condition_hints dump)
+> - spec.md: `generate_uis_spec.py` (§4 풀자동 + §5 INF cross-link + §8 조건 신호 자동)
+> - INF cross-link 매칭률은 §5 표에서 `[매칭 INF 없음]` 항목 수로 확인
 ''')
 
     return '\n'.join(parts)

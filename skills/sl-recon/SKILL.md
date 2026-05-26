@@ -1287,6 +1287,25 @@ docs/05_설계서/{domain}/UI/{화면ID}/preview.png
 
 PNG 없음 상태로 진행. spec.md의 `![[preview.png]]` 라인은 그대로 두면 Obsidian이 누락 표시.
 
+**5순위 — 다탭 SI 어드민 attach 캡처 (선택, Phase 6.2·6.4)**
+
+복잡한 jwork·다탭 화면(예: 상품등록 8탭)은 자동 1순위로 못 잡힐 수 있다. 이 경우 사용자가 Chrome `--remote-debugging-port=9222` 로 로그인까지 마친 상태에서 `scripts/capture.js`를 attach 모드로 호출한다. 메뉴 자동 진입 + 트리거 버튼 클릭 + 다탭 순회 + auto-annotate + widgets.json(DOM 메타 11종 + api_hints + condition_hints) dump를 일괄 처리한다. 이어서 `scripts/generate_uis_spec.py`가 widgets.json + INF 디렉토리를 cross-link 해서 §4 풀자동 / §5 INF 매핑 / §8 조건 신호까지 spec.md 본문을 자동 작성한다.
+
+```bash
+# 1) Chrome 디버깅 모드로 띄우고 로그인까지 사용자가 직접
+#    Start-Process chrome -ArgumentList '--remote-debugging-port=9222','--user-data-dir=C:/tmp/chrome-attach'
+# 2) 화면별 attach 캡처 (사용자 명시 호출)
+!node "%PLUGIN_PATH%\\scripts\\capture.js" --out=docs/05_설계서/{domain}/UI/{화면ID} \
+       --frame-url={routeKeyword} --tabs=auto --auto-annotate
+# 3) spec.md 자동 생성 (widgets.json → §4/§5/§8 자동)
+!python3 "%PLUGIN_PATH%\\scripts\\generate_uis_spec.py" \
+       docs/05_설계서/{domain}/UI/{화면ID} \
+       --uis-id=UIS-F-{NNN} --screen-id={화면ID} --screen-name={화면명} \
+       --route={route} --domain={domain}
+```
+
+이 경로는 자동 디스패치되지 않는다(사용자 화면 인지·로그인 필요). PREVIEW_BASE_URL 캡처가 부족하다고 판단되는 화면만 선별 적용.
+
 **4순위 — BO admin 폴백 (선택, jwork 전용):**
 
 `project.env`에 `PREVIEW_FALLBACK_BO=true` 설정 시 BO admin 스타일 HTML 생성 → screenshot.js로 캡처.  

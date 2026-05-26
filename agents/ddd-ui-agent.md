@@ -138,6 +138,7 @@ Read 도구로 `{entryFile}` 읽기.
 | 2 | 사용자 수동 제출 | `search-result` / 모달 / 권한별 / 복잡 플로우는 직접 캡처해서 `docs/.../UI/{화면ID}/preview.png` 떨궈놓기. capture_plan.json의 항목에 `manualOverride: true` 추가 후 사용자 정의 preActions 작성도 가능 |
 | 3 | 자산 없음 | spec.md의 `![[preview.png]]`는 빈 링크로 남음 (Obsidian에서 누락 표시) |
 | 4 (선택) | `PREVIEW_FALLBACK_BO=true` | sl-recon이 BO admin 폴백 HTML 생성 후 캡처 (jwork 전용) |
+| 5 (선택) | 다탭 SI 어드민 attach 캡처 (Phase 6.2·6.4) | 사용자가 Chrome `--remote-debugging-port=9222`로 로그인 마친 뒤 `scripts/capture.js --tabs=auto --auto-annotate` + `scripts/generate_uis_spec.py` 호출. widgets.json(DOM 메타·api_hints·condition_hints) → spec.md §4/§5/§8 자동 채움. 사용자 명시 호출만 (자동 디스패치 X) |
 
 > 자동화 범위:
 > - **standalone**: 메뉴 메인 페이지, 대시보드 등 — 자동

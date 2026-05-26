@@ -174,8 +174,48 @@ fs.mkdirSync(OUT_DIR, { recursive: true });
                   .filter(o => o.value || o.text);
               if (opts.length) m.options = opts;
             }
-            // onclick handler 존재 여부 (정적 분석은 별도 — 여기는 hint만)
-            if (el.getAttribute('onclick')) m.has_onclick = true;
+            // Phase 6.4 U9·U10 — onclick / form action / ajax URL hint dump
+            const apiHints = new Set();
+            const onclick = el.getAttribute('onclick') || '';
+            if (onclick) {
+              m.has_onclick = true;
+              m.onclick_raw = onclick.slice(0, 200);
+              // URL 직접 (".../api/..." 같은 path)
+              for (const mm of onclick.matchAll(/['"](\/[\w\-./{}:]+)['"]/g)) {
+                if (mm[1].length > 2 && mm[1].length < 120) apiHints.add(mm[1]);
+              }
+              // fnSearch() / saveProduct() / goPage('...') 같은 함수 호출 (이름만)
+              for (const mm of onclick.matchAll(/\b([a-z][a-zA-Z0-9_]{2,})\s*\(/g)) {
+                if (mm[1] && mm[1].length < 40 && !['if','for','while','return','function','alert','confirm'].includes(mm[1])) {
+                  (m.handler_calls = m.handler_calls || []).push(mm[1]);
+                }
+              }
+            }
+            // form action (button/submit 위젯의 닫힌 폼)
+            const form = el.closest && el.closest('form');
+            if (form) {
+              const act = form.getAttribute('action');
+              if (act) { m.form_action = act; if (act.startsWith('/')) apiHints.add(act); }
+              if (form.getAttribute('name')) m.form_name = form.getAttribute('name');
+              const mth = form.getAttribute('method');
+              if (mth) m.form_method = mth.toUpperCase();
+            }
+            // data-url, data-href (일부 SI 어드민 컨벤션)
+            for (const a of ['data-url','data-href','data-api','data-action']) {
+              const v = el.getAttribute(a);
+              if (v && v.startsWith('/')) apiHints.add(v);
+            }
+            if (apiHints.size) m.api_hints = Array.from(apiHints).slice(0, 5);
+            // U11 — 조건부 렌더링 hint (정적 한계 명시: 발견된 신호만)
+            const cls = (el.className || '').toString();
+            const cond = [];
+            if (cls.match(/(?:^|\s)(?:hidden|invisible|disabled|d-none)(?:\s|$)/)) cond.push('class:' + cls.match(/(?:^|\s)(hidden|invisible|disabled|d-none)(?:\s|$)/)[1]);
+            if (el.getAttribute('aria-hidden') === 'true') cond.push('aria-hidden');
+            for (const a of ['data-role','data-permission','data-show-if','data-if','v-if','v-show']) {
+              const v = el.getAttribute(a);
+              if (v) cond.push(`${a}=${v.slice(0,40)}`);
+            }
+            if (cond.length) m.condition_hints = cond;
             return m;
           };
           // 1) button + 액션 a

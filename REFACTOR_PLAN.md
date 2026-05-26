@@ -660,11 +660,11 @@ Phase 6.2의 spec.md는 §4 표를 자동 채우지만 `placeholder`/`default`/`
 
 - [x] **U6 capture.js auto-annotate DOM 메타 확장** (2026-05-26) — `placeholder`/`default_value`/`disabled`/`required`/`readonly`/`pattern`/`min/max/maxlength`/`minlength`/`step`/`options`(select) attribute를 widget JSON에 dump. 기존 widgets.json(meta 없음)과 호환 (없으면 `[TBD]`)
 - [x] **U7 generate_uis_spec.py 컬럼 채움** (2026-05-26) — DOM meta → `타입`(button/input-text/select/...) + `placeholder` + `default` + `disabled_when`(초기 disabled) + `유효성`(required+pattern+maxlength 등 합성) + `selector`(dom_id > name > bbox 우선순위) 자동 채움. `_widget_type`·`_validation_text`·`_selector_text` 헬퍼 분리
-- [ ] **U8 disabled_when 정적 분석** — Vue `v-if`/`:disabled`, React `disabled={}`, jQuery `.attr('disabled')` 등 소스 정규식 + LLM 합성으로 추출 (별도 agent 또는 ddd-ui-agent 강화)
-- [ ] **U9 연결 INF 자동 매핑** — sl-recon STEP 4 결과의 `INF-NNN` ↔ widget click handler에서 호출하는 API path 자동 cross-link → §4 표 `연결 API` 컬럼 + §5 인터랙션 표 동시 채움
-- [ ] **U10 §5 인터랙션 자동** — 위젯의 click/change 이벤트 핸들러 추적 → 호출 API + HTTP 코드 + 도메인 에러 자동 (정적 JS 분석 + LLM)
-- [ ] **U11 §8 조건부 렌더링 자동** — `v-if`/`v-show`/`hasPermission()`/`isVisible` 등 권한·상태 분기 정적 분석 → §8 표 자동
-- [ ] **U12 sl-recon STEP 5-C 통합** — capture.js + generate_uis_spec.py를 STEP 5-C로 정식 편입 (현재는 수동 호출). ddd-ui-agent.md가 spec.md 자동 생성본을 받아 §3 블록 정의·§7 화면 전환만 보완하는 형태
+- [x] **U8 disabled_when 정적 신호** (2026-05-26) — DOM `disabled` + `condition_hints` (hidden/aria-hidden/data-role/v-if/v-show/d-none 등) 통합. `_disabled_when_text` 헬퍼가 §4 disabled_when 컬럼에 자동 매핑. 변수 기반 동적 조건은 §9 미확인사항으로 분리 (정적 한계 명시)
+- [x] **U9 연결 INF 자동 매핑** (2026-05-26) — capture.js `metaOf`가 element의 `onclick` URL/`form.action`/`data-url|data-href|data-api|data-action` → widget JSON `api_hints[]` dump. generate_uis_spec.py `load_inf_index`가 docs/05_설계서/{domain}/INF/*.md frontmatter(method+path) 인덱싱 후 `match_inf` (정확 + prefix) 매칭. §4 `연결 API` 컬럼에 `[INF-NNN](../../INF/INF-NNN.md)` 링크 자동, 매칭 실패 시 `path [매칭 INF 없음]` 표시
+- [x] **U10 §5 인터랙션 자동** (2026-05-26) — `render_interactions`가 button/submit + api_hints 가진 위젯만 추출하여 §5 표 자동 생성. INF 매칭 + form.method + 탭명·위젯번호 자동. 실패 시 default placeholder row 1개
+- [x] **U11 §8 조건부 렌더링 자동** (2026-05-26) — `render_conditions`가 capture.js dump의 DOM 신호(disabled/hidden/aria-hidden/v-if/data-role 등) → §8 표 자동. 변수 기반 동적 조건은 정적 한계로 §9에 명시
+- [x] **U12 sl-recon STEP 5-C 통합** (2026-05-26) — `skills/sl-recon/SKILL.md` 5순위 "다탭 SI 어드민 attach 캡처" 섹션 추가. capture.js + generate_uis_spec.py 호출 예시 명시. `agents/ddd-ui-agent.md` Phase 5 표에 5순위 행 추가. 자동 디스패치 X (사용자 화면 인지·로그인 필요)
 
 ### Phase 6.3 — UIS 추가 SI 호환 (재정의 2026-05-26)
 
@@ -756,3 +756,4 @@ Phase 6.2의 spec.md는 §4 표를 자동 채우지만 `placeholder`/`default`/`
 | 2026-05-26 | Phase 5.1·5.2 완료. fixture 4→7종 (go-gin-gorm, django-drf, vue-fsd 추가). run_matrix.py 신설로 정량 회귀 측정 도입. 결과: probe 1.00 / call_chain 1.00 (perfect) | Claude |
 | 2026-05-26 | Phase 6.2 본격 완료 ★. capture.js consolidated (CDP attach + 메뉴 자동 진입 + 등록 클릭 + 8탭 측정/캡처/마커 + widgets.json dump), annotate_preview.py 마커 v2, generate_uis_spec.py 신설(§0~§9 자동). nkshop-bos-admin Pr201Form 실서비스 검증 통과. 다음: Phase 6.4 위젯 메타 자동 보완 (placeholder/default/disabled_when/연결 API/§5/§8) | Claude |
 | 2026-05-26 | Phase 6.4 U6+U7 완료. capture.js DOM 메타 확장(placeholder/default/required/pattern/maxlength/options 등 11종 attr dump), generate_uis_spec.py §4 표 자동 채움(타입·placeholder·default·disabled_when·유효성·selector). 기존 widgets.json 호환. 다음: U8(disabled_when 정적), U9(연결 API), U10/U11(§5·§8) | Claude |
+| 2026-05-26 | Phase 6.4 U8~U12 본격 완료 ★★★. capture.js metaOf에 onclick/form.action/data-url/data-href + condition_hints 추출. generate_uis_spec.py load_inf_index + match_inf로 INF cross-link (정확+prefix 매칭). render_interactions(§5)·render_conditions(§8) 자동. sl-recon SKILL.md 5순위 attach 캡처 섹션 + ddd-ui-agent.md 5순위 행. legacy widgets.json 안전 fallback 검증. → Phase 6 디스크립션 호환 작업 종결 | Claude |
