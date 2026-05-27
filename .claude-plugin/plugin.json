@@ -1,7 +1,7 @@
 {
   "name": "speclinker",
-  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 REQ-ID 체이닝, UA 대시보드 통합. v2.15: 캡처 자동화(bootstrap 내장) + 팝업 트리거 추적 + MyBatis 서비스 위임 분석 + 대시보드 INF/UIS 서브디렉터리 지원",
-  "version": "2.15.0",
+  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 REQ-ID 체이닝, UA 대시보드 통합. v2.16: 캡처 직후 auto-annotate 마커 자동 생성(preview_annotated.png)",
+  "version": "2.16.0",
   "author": {
     "name": "DreamyDreamss"
   },
