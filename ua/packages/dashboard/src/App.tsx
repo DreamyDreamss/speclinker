@@ -31,6 +31,7 @@ const SpecExplorer = lazy(() => import("./components/SpecExplorer"));
 const DocsPanel = lazy(() => import("./components/DocsPanel"));
 const IAView = lazy(() => import("./components/IAView"));
 const SDDPanel = lazy(() => import("./components/SDDPanel"));
+const InsightPanel = lazy(() => import("./components/InsightPanel"));
 
 // Lazy-load heavy / optional components so they ship in separate chunks.
 const CodeViewer = lazy(() => import("./components/CodeViewer"));
@@ -139,7 +140,7 @@ function Dashboard({ accessToken }: { accessToken: string }) {
   const setLinkedFuncMap = useDashboardStore((s) => s.setLinkedFuncMap);
 
   // 추가 뷰 모드
-  const [extraPanel, setExtraPanel] = useState<"none" | "apis" | "docs" | "sdd" | "srs" | "specs" | "ia">("none");
+  const [extraPanel, setExtraPanel] = useState<"none" | "apis" | "docs" | "sdd" | "srs" | "specs" | "ia" | "insights">("none");
 
   const [sidebarWidth, setSidebarWidth] = useState(360);
   const isResizingRef = useRef(false);
@@ -565,19 +566,20 @@ function Dashboard({ accessToken }: { accessToken: string }) {
           <MCPStatusBadge />
           <div className="flex items-center bg-elevated rounded-lg p-0.5 gap-0.5">
             {([
-              { label: "Graph",   isActive: extraPanel === "none" && !siViewActive, onClick: () => { setExtraPanel("none"); setSiViewActive(false); } },
-              { label: "SI",      isActive: siViewActive,                           onClick: () => { setExtraPanel("none"); setSiViewActive(!siViewActive); } },
-              { label: "IA",      isActive: extraPanel === "ia",                    onClick: () => { setExtraPanel(extraPanel === "ia" ? "none" : "ia"); setSiViewActive(false); } },
-              { label: "APIs",    isActive: extraPanel === "apis",                  onClick: () => { setExtraPanel(extraPanel === "apis" ? "none" : "apis"); setSiViewActive(false); } },
-              { label: "Specs",   isActive: extraPanel === "specs",                 onClick: () => { setExtraPanel(extraPanel === "specs" ? "none" : "specs"); setSiViewActive(false); } },
-              { label: "SRS",     isActive: extraPanel === "srs",                   onClick: () => { setExtraPanel(extraPanel === "srs" ? "none" : "srs"); setSiViewActive(false); } },
-              { label: "SDD",     isActive: extraPanel === "sdd",                   onClick: () => { setExtraPanel(extraPanel === "sdd" ? "none" : "sdd"); setSiViewActive(false); } },
-              { label: "Docs",    isActive: extraPanel === "docs",                  onClick: () => { setExtraPanel(extraPanel === "docs" ? "none" : "docs"); setSiViewActive(false); } },
+              { label: "Graph",    title: "코드 구조 그래프",   isActive: extraPanel === "none" && !siViewActive, onClick: () => { setExtraPanel("none"); setSiViewActive(false); } },
+              { label: "SI Dev",   title: "스펙+그래프+RTM",    isActive: siViewActive,                           onClick: () => { setExtraPanel("none"); setSiViewActive(!siViewActive); } },
+              { label: "IA",       title: "화면-API 관계",      isActive: extraPanel === "ia",                    onClick: () => { setExtraPanel(extraPanel === "ia" ? "none" : "ia"); setSiViewActive(false); } },
+              { label: "AIDD",     title: "AI 개발 추적 (SDD)", isActive: extraPanel === "sdd",                   onClick: () => { setExtraPanel(extraPanel === "sdd" ? "none" : "sdd"); setSiViewActive(false); } },
+              { label: "APIs",     title: "API 명세 탐색",      isActive: extraPanel === "apis",                  onClick: () => { setExtraPanel(extraPanel === "apis" ? "none" : "apis"); setSiViewActive(false); } },
+              { label: "SRS",      title: "기능 명세서",        isActive: extraPanel === "srs",                   onClick: () => { setExtraPanel(extraPanel === "srs" ? "none" : "srs"); setSiViewActive(false); } },
+              { label: "Insights", title: "스펙↔소스 인사이트", isActive: extraPanel === "insights",              onClick: () => { setExtraPanel(extraPanel === "insights" ? "none" : "insights"); setSiViewActive(false); } },
+              { label: "Docs",     title: "문서 탐색",          isActive: extraPanel === "docs",                  onClick: () => { setExtraPanel(extraPanel === "docs" ? "none" : "docs"); setSiViewActive(false); } },
             ] as const).map((tab) => (
               <button
                 key={tab.label}
                 type="button"
                 onClick={tab.onClick}
+                title={tab.title}
                 className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
                   tab.isActive
                     ? "bg-accent/15 text-accent shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
@@ -662,6 +664,7 @@ function Dashboard({ accessToken }: { accessToken: string }) {
                 : extraPanel === "srs" ? <SRSBrowser />
                 : extraPanel === "specs" ? <SpecExplorer />
                 : extraPanel === "sdd" ? <SDDPanel />
+                : extraPanel === "insights" ? <InsightPanel />
                 : <DocsPanel />}
             </Suspense>
           </div>

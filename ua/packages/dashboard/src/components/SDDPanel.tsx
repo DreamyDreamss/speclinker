@@ -1,6 +1,51 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useDashboardStore } from "../store";
 import SpecMarkdown from "./SpecMarkdown";
+
+// ─── Copy command button ──────────────────────────────────────────────────────
+
+function AIDDButton({ id, size = "sm" }: { id: string; size?: "sm" | "xs" }) {
+  const [copied, setCopied] = useState(false);
+  const cmd = `/sl-aidd ${id}`;
+  const copy = useCallback(() => {
+    navigator.clipboard.writeText(cmd).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [cmd]);
+
+  if (size === "xs") {
+    return (
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); copy(); }}
+        title={`복사: ${cmd}`}
+        className={`shrink-0 text-[9px] font-mono px-1.5 py-0.5 rounded border transition-all ${
+          copied
+            ? "bg-emerald-400/15 border-emerald-400/40 text-emerald-400"
+            : "bg-blue-400/8 border-blue-400/30 text-blue-400/80 hover:bg-blue-400/15 hover:border-blue-400/60"
+        }`}
+      >
+        {copied ? "✓" : "▶ Run"}
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); copy(); }}
+      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium border transition-all ${
+        copied
+          ? "bg-emerald-400/10 border-emerald-400/30 text-emerald-400"
+          : "bg-blue-400/8 border-blue-400/30 text-blue-400 hover:bg-blue-400/15 hover:border-blue-400/50"
+      }`}
+    >
+      <span>{copied ? "✓ 복사됨" : "▶ /sl-aidd"}</span>
+      <code className="font-mono text-[10px] opacity-70">{id}</code>
+    </button>
+  );
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -593,7 +638,7 @@ function AIGenQueue({ coverages }: { coverages: ReqCoverage[] }) {
         {visible.map((item) => {
           const cfg = STATUS_CONFIG[item.status];
           return (
-            <div key={item.req.id} className="flex items-start gap-3 px-4 py-3 hover:bg-elevated/30 transition-colors">
+            <div key={item.req.id} className="flex items-start gap-3 px-4 py-3 hover:bg-elevated/30 transition-colors group">
               <span
                 className={`shrink-0 mt-0.5 text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${cfg.bg} ${cfg.color}`}
               >
@@ -610,6 +655,9 @@ function AIGenQueue({ coverages }: { coverages: ReqCoverage[] }) {
                 </div>
                 <div className="text-[9px] text-text-muted mt-0.5">{cfg.desc}</div>
               </div>
+              {item.status === "ready" && (
+                <AIDDButton id={item.req.id} size="xs" />
+              )}
             </div>
           );
         })}
@@ -1045,33 +1093,48 @@ function FuncSDDPanel() {
           ) : (
             filteredCoverages.map((cv) => {
               const isSelected = cv.func.id === selectedFuncId;
+              const isReady = cv.inf === "done" && cv.code === "none";
               return (
-                <button
+                <div
                   key={cv.func.id}
-                  type="button"
-                  onClick={() => setSelectedFuncId(isSelected ? null : cv.func.id)}
-                  className={`w-full text-left px-3 py-2 border-b border-border-subtle transition-colors ${
+                  className={`border-b border-border-subtle transition-colors ${
                     isSelected
                       ? "bg-amber-500/10 border-l-2 border-l-amber-400"
                       : "hover:bg-elevated/60"
                   }`}
                 >
-                  <div className="flex items-center justify-between gap-1 mb-1">
-                    <span className="font-mono text-[10px] text-amber-400 shrink-0">{cv.func.id}</span>
-                    <div className="flex items-center gap-0.5">
-                      {(["srs", "inf", "sch", "uis", "code"] as const).map((k) => (
-                        <span key={k} className={`w-1.5 h-1.5 rounded-full ${
-                          cv[k] === "done" ? "bg-emerald-400"
-                          : cv[k] === "partial" ? "bg-yellow-400"
-                          : "bg-border-subtle"
-                        }`} />
-                      ))}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedFuncId(isSelected ? null : cv.func.id)}
+                    className="w-full text-left px-3 py-2"
+                  >
+                    <div className="flex items-center justify-between gap-1 mb-1">
+                      <span className="font-mono text-[10px] text-amber-400 shrink-0">{cv.func.id}</span>
+                      <div className="flex items-center gap-1">
+                        {isReady && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse shrink-0" title="Ready to build" />
+                        )}
+                        <div className="flex items-center gap-0.5">
+                          {(["srs", "inf", "sch", "uis", "code"] as const).map((k) => (
+                            <span key={k} className={`w-1.5 h-1.5 rounded-full ${
+                              cv[k] === "done" ? "bg-emerald-400"
+                              : cv[k] === "partial" ? "bg-yellow-400"
+                              : "bg-border-subtle"
+                            }`} />
+                          ))}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                  <div className="text-[10px] text-text-muted truncate">
-                    {cv.func.description || "—"}
-                  </div>
-                </button>
+                    <div className="text-[10px] text-text-muted truncate">
+                      {cv.func.description || "—"}
+                    </div>
+                  </button>
+                  {isReady && (
+                    <div className="px-3 pb-2">
+                      <AIDDButton id={cv.func.id} size="xs" />
+                    </div>
+                  )}
+                </div>
               );
             })
           )}

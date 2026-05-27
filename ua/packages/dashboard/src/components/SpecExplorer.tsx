@@ -347,7 +347,9 @@ function HierarchyView({ onSelect, selectedId }: { onSelect: (s: SpecRef) => voi
           const schIds = row.sch;
           const uisIds = row.uis;
           const hasLinks = srsIds.length + infIds.length + schIds.length + uisIds.length > 0;
-          const title = isGenesis ? (row as typeof parsedRTM![0]).title : (row as typeof funcMap![0]).description;
+          const title = isGenesis
+            ? (row as { title: string }).title
+            : (row as { description: string }).description;
 
           return (
             <div key={row.id} className="border-b border-border-subtle/50 last:border-0">

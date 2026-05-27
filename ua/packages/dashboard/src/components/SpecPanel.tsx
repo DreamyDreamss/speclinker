@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useDashboardStore } from "../store";
+import SpecMarkdown from "./SpecMarkdown";
 
 // ─── Tree types ──────────────────────────────────────────────────────────────
 
@@ -37,7 +38,7 @@ const DIR_META: Record<string, { label: string; icon: string }> = {
   "srs":     { label: "명세 상세",             icon: "📄" },
 };
 
-const REQ_ID_RE = /\b(REQ-[A-Z]+-\d+|SRS-F-\d+|TC-[A-Z]+-\d+|UIS-F-\d+|INF-\d+|SCH-\d+)\b/g;
+// REQ_ID_RE kept for potential future inline highlighting
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -135,7 +136,8 @@ function TreeItem({
 // ─── SpecPanel ────────────────────────────────────────────────────────────────
 
 export default function SpecPanel() {
-  const { setSelectedReqId, selectedReqId } = useDashboardStore();
+  const { setSelectedReqId } = useDashboardStore();
+  void setSelectedReqId; // kept for future REQ-ID click linking
   const [tree, setTree]             = useState<TreeNode[]>([]);
   const [activePath, setActivePath] = useState<string | null>(null);
   const [content, setContent]       = useState<string>("");
@@ -166,39 +168,8 @@ export default function SpecPanel() {
       .catch(() => { setContent("파일을 찾을 수 없습니다."); setLoading(false); });
   }, [activePath]);
 
-  const renderWithHighlights = (text: string) => {
-    const parts: React.ReactNode[] = [];
-    let lastIndex = 0;
-    const re = new RegExp(REQ_ID_RE.source, "g");
-    let match: RegExpExecArray | null;
-    while ((match = re.exec(text)) !== null) {
-      if (match.index > lastIndex) {
-        parts.push(<span key={`t${lastIndex}`}>{text.slice(lastIndex, match.index)}</span>);
-      }
-      const id = match[0];
-      parts.push(
-        <span
-          key={`r${match.index}`}
-          className={`cursor-pointer font-mono text-xs px-1 rounded ${
-            id === selectedReqId
-              ? "bg-purple-600 text-white"
-              : "bg-purple-100 text-purple-800 hover:bg-purple-200"
-          }`}
-          onClick={() => setSelectedReqId(id === selectedReqId ? null : id)}
-        >
-          {id}
-        </span>
-      );
-      lastIndex = re.lastIndex;
-    }
-    if (lastIndex < text.length) {
-      parts.push(<span key={`t${lastIndex}`}>{text.slice(lastIndex)}</span>);
-    }
-    return parts;
-  };
-
   return (
-    <div className="flex h-full bg-gray-900 text-gray-100 overflow-hidden">
+    <div className="flex h-full bg-surface text-text-primary overflow-hidden">
       {/* 파일 트리 사이드바 */}
       <div className="w-48 min-w-[12rem] border-r border-gray-700 overflow-y-auto py-1 shrink-0">
         {treeLoading ? (
@@ -223,16 +194,20 @@ export default function SpecPanel() {
       </div>
 
       {/* 파일 내용 */}
-      <div className="flex-1 overflow-auto p-3 min-w-0">
+      <div className="flex-1 overflow-auto min-w-0 flex flex-col">
         {activePath && (
-          <div className="text-gray-600 text-xs mb-2 font-mono truncate">{activePath}</div>
+          <div className="text-text-muted/50 text-[10px] px-3 pt-2 pb-1 font-mono truncate border-b border-border-subtle shrink-0">
+            {activePath}
+          </div>
         )}
         {loading ? (
-          <div className="text-gray-500 text-sm">로딩 중…</div>
+          <div className="text-text-muted text-xs p-3">로딩 중…</div>
+        ) : content ? (
+          <div className="flex-1 overflow-auto">
+            <SpecMarkdown content={content} className="p-3" />
+          </div>
         ) : (
-          <pre className="text-xs font-mono whitespace-pre-wrap leading-relaxed text-gray-300">
-            {renderWithHighlights(content)}
-          </pre>
+          <div className="text-text-muted text-xs p-3">내용 없음</div>
         )}
       </div>
     </div>

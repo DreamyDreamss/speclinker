@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useDashboardStore } from "../store";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -191,7 +191,7 @@ function DocMap({
   // Layout: 2 rows
   // Row 0 (top): RD  SRS  DDD  TC  TR
   // Row 1 (bot): (gap) SAD (gap) RTM (gap)
-  const W = 86; const H = 52; const GX = 22; const GY = 20;
+  const W = 86; const H = 52; const GX = 22; const _GY = 20; void _GY;
   const ROW_Y = [20, 100];
   const COL_X = [10, 10 + W + GX, 10 + 2*(W+GX), 10 + 3*(W+GX), 10 + 4*(W+GX)];
 
@@ -213,8 +213,8 @@ function DocMap({
   const cy = (key: string) => POS[key].y + H / 2;
   const cy_top = (key: string) => POS[key].y;
   const cy_bot = (key: string) => POS[key].y + H;
-  const cx_right = (key: string) => POS[key].x + W;
-  const cx_left = (key: string) => POS[key].x;
+  const _cx_right = (key: string) => POS[key].x + W; void _cx_right;
+  const _cx_left = (key: string) => POS[key].x; void _cx_left;
 
   const arrowPath = (s: string, t: string) => {
     const sx = cx(s), sy = cy(s), tx = cx(t), ty = cy(t);
