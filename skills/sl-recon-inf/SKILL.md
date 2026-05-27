@@ -12,16 +12,26 @@ triggers:
 ```bash
 !python3 -c "
 import json, os, sys
-cp = '_tmp/recon_checkpoint.json'
-hints = '_tmp/uis_api_hints.json'
+errors = []
+cp     = '_tmp/recon_checkpoint.json'
+hints  = '_tmp/uis_api_hints.json'
+router = '_tmp/router_inventory_with_chain.json'
+plan   = '_tmp/inf_generation_plan.json'
 if not os.path.exists(cp):
-    print('[ERROR] /sl-recon 을 먼저 실행하세요 (체크포인트 없음)')
-    sys.exit(1)
+    errors.append('[FAIL] recon_checkpoint.json 없음 — /sl-recon 먼저 실행')
 if not os.path.exists(hints):
-    print('[ERROR] uis_api_hints.json 없음 — /sl-recon-uis STEP 6-5 확인')
+    errors.append('[FAIL] uis_api_hints.json 없음 — /sl-recon-uis STEP 6-5 확인')
+if not os.path.exists(router):
+    errors.append('[FAIL] router_inventory_with_chain.json 없음 — /sl-recon STEP 4-2 확인')
+if not os.path.exists(plan):
+    errors.append('[FAIL] inf_generation_plan.json 없음 — /sl-recon STEP 4-3 확인')
+if errors:
+    for e in errors: print(e)
     sys.exit(1)
-data = json.load(open(hints, encoding='utf-8'))
-print(f'[OK] api_hints {len(data)}개 처리 예정')
+hints_data  = json.load(open(hints,  encoding='utf-8'))
+router_data = json.load(open(router, encoding='utf-8'))
+plan_data   = json.load(open(plan,   encoding='utf-8'))
+print(f'[OK] api_hints {len(hints_data)}개 | router_groups {len(router_data)}개 | inf_plan {len(plan_data)}개 처리 예정')
 "
 ```
 

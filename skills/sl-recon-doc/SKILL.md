@@ -11,18 +11,22 @@ triggers:
 
 ```bash
 !python3 -c "
-import json, os, sys
-cp = '_tmp/recon_checkpoint.json'
+import json, os, sys, glob
+errors    = []
+cp        = '_tmp/recon_checkpoint.json'
+inventory = '_tmp/screen_inventory.json'
 if not os.path.exists(cp):
-    print('[ERROR] /sl-recon 을 먼저 실행하세요 (체크포인트 없음)')
-    sys.exit(1)
-# INF 파일 존재 확인
-import glob
+    errors.append('[FAIL] recon_checkpoint.json 없음 — /sl-recon 먼저 실행')
+if not os.path.exists(inventory):
+    errors.append('[FAIL] screen_inventory.json 없음 — /sl-recon-uis STEP 6-1 확인')
 inf_files = glob.glob('docs/05_설계서/*/INF/INF-*.md')
 if not inf_files:
-    print('[ERROR] INF 파일 없음 — /sl-recon-inf 먼저 실행하세요')
+    errors.append('[FAIL] INF 파일 없음 — /sl-recon-inf 먼저 실행')
+if errors:
+    for e in errors: print(e)
     sys.exit(1)
-print(f'[OK] INF {len(inf_files)}개 확인. 문서 색인 생성 진행')
+inv_data = json.load(open(inventory, encoding='utf-8'))
+print(f'[OK] INF {len(inf_files)}개 | screen_inventory {len(inv_data)}개 확인. 문서 색인 생성 진행')
 "
 ```
 

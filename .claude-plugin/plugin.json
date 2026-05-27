@@ -1,7 +1,7 @@
 {
   "name": "speclinker",
-  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 REQ-ID 체이닝, UA 대시보드 통합. v2.18: sl-recon 4-Phase 분리(컨텍스트 격리) + BFS iframe 대응 + auto-annotate",
-  "version": "2.18.0",
+  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 REQ-ID 체이닝, UA 대시보드 통합. v2.19: Phase 스킬 필수 의존성 누락 시 즉시 실패 처리",
+  "version": "2.19.0",
   "author": {
     "name": "DreamyDreamss"
   },

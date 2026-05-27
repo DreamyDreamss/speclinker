@@ -12,17 +12,27 @@ triggers:
 ```bash
 !python3 -c "
 import json, os, sys
-cp = '_tmp/recon_checkpoint.json'
-confirmed = '.speclinker/screen_plan.confirmed.json'
-if not os.path.exists(cp):
-    print('[ERROR] /sl-recon 을 먼저 실행하세요 (체크포인트 없음)')
-    sys.exit(1)
+
+errors = []
+confirmed   = '.speclinker/screen_plan.confirmed.json'
+domain_plan = 'docs/05_설계서/_domain_plan.json'
+checkpoint  = '_tmp/recon_checkpoint.json'
+
+if not os.path.exists(checkpoint):
+    errors.append('[FAIL] recon_checkpoint.json 없음 — /sl-recon 먼저 실행')
 if not os.path.exists(confirmed):
-    print('[ERROR] screen_plan.confirmed.json 없음 — /sl-recon STEP 2-2 확인')
+    errors.append('[FAIL] screen_plan.confirmed.json 없음 — /sl-recon STEP 2-2 확인')
+if not os.path.exists(domain_plan):
+    errors.append('[FAIL] _domain_plan.json 없음 — /sl-recon STEP 3 확인')
+
+if errors:
+    for e in errors: print(e)
     sys.exit(1)
-data = json.load(open(confirmed, encoding='utf-8'))
-screens = data.get('screens', [])
-print(f'[OK] 확정 화면 {len(screens)}개 — STEP 6-1에서 screen_inventory.json 생성 예정')
+
+screens = json.load(open(confirmed, encoding='utf-8')).get('screens', [])
+domains = json.load(open(domain_plan, encoding='utf-8')).get('domains', [])
+print(f'[OK] 확정 화면 {len(screens)}개 / 도메인 {len(domains)}개')
+print('     → STEP 6-1에서 screen_inventory.json 생성 예정')
 "
 ```
 
