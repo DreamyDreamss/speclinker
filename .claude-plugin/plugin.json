@@ -1,7 +1,7 @@
 {
   "name": "speclinker",
-  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 REQ-ID 체이닝, UA 대시보드 통합. v2.17: BFS 전용 화면 메뉴 클릭 캡처(jwork iframe 대응) + auto-annotate 마커 자동 생성",
-  "version": "2.17.0",
+  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 REQ-ID 체이닝, UA 대시보드 통합. v2.18: sl-recon 4-Phase 분리(컨텍스트 격리) + BFS iframe 대응 + auto-annotate",
+  "version": "2.18.0",
   "author": {
     "name": "DreamyDreamss"
   },
