@@ -12,6 +12,9 @@
 | `/sl-init` | `skills/sl-init/SKILL.md` | 없음 | GENESIS, RECON |
 | `/sl-genesis [파일]` | `skills/sl-genesis/SKILL.md` | project.env, docs/00_입력자료/ | GENESIS |
 | `/sl-recon` | `skills/sl-recon/SKILL.md` | project.env, 소스코드 존재 | RECON |
+| `/sl-recon-uis` | `skills/sl-recon-uis/SKILL.md` | _tmp/screen_inventory.json, _tmp/recon_checkpoint.json | RECON |
+| `/sl-recon-inf` | `skills/sl-recon-inf/SKILL.md` | _tmp/uis_api_hints.json, _tmp/recon_checkpoint.json | RECON |
+| `/sl-recon-doc` | `skills/sl-recon-doc/SKILL.md` | docs/05_설계서/ INF 존재, _tmp/recon_checkpoint.json | RECON |
 | `/sl-aidd [FUNC-ID]` | `skills/sl-aidd/SKILL.md` | docs/00_FUNC/FUNC_MAP.md 존재 | GENESIS, RECON |
 | `/sl-analyze` | `skills/sl-analyze/SKILL.md` | project.env, docs/05_설계서/ | DELTA |
 | `/sl-change <SR-ID>` | `skills/sl-change/SKILL.md` | project.env, docs/05_설계서/, docs/00_FUNC/FUNC_MAP.md | DELTA |

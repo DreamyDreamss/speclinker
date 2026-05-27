@@ -9,7 +9,10 @@
     "./ua/skills/understand",
     "./ua/skills/understand-domain",
     "./ua/skills/understand-diff",
-    "./ua/skills/understand-dashboard"
+    "./ua/skills/understand-dashboard",
+    "./skills/sl-recon-uis",
+    "./skills/sl-recon-inf",
+    "./skills/sl-recon-doc"
   ],
   "agents": [
     "./agents/spec-agent.md",
