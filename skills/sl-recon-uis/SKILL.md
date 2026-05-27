@@ -13,15 +13,16 @@ triggers:
 !python3 -c "
 import json, os, sys
 cp = '_tmp/recon_checkpoint.json'
-inv = '_tmp/screen_inventory.json'
+confirmed = '.speclinker/screen_plan.confirmed.json'
 if not os.path.exists(cp):
     print('[ERROR] /sl-recon 을 먼저 실행하세요 (체크포인트 없음)')
     sys.exit(1)
-if not os.path.exists(inv):
-    print('[ERROR] screen_inventory.json 없음 — /sl-recon STEP 5 확인')
+if not os.path.exists(confirmed):
+    print('[ERROR] screen_plan.confirmed.json 없음 — /sl-recon STEP 2-2 확인')
     sys.exit(1)
-data = json.load(open(inv, encoding='utf-8'))
-print(f'[OK] 화면 {len(data)}개 처리 예정')
+data = json.load(open(confirmed, encoding='utf-8'))
+screens = data.get('screens', [])
+print(f'[OK] 확정 화면 {len(screens)}개 — STEP 6-1에서 screen_inventory.json 생성 예정')
 "
 ```
 
