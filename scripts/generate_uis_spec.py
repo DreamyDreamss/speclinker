@@ -366,6 +366,20 @@ def build_spec(ui_dir, uis_id, screen_id, screen_name, route, domain, workspace_
                 w['number'] = str(global_seq)
                 w['id'] = 'WG-' + str(global_seq).zfill(2)
 
+    # api_hints 수집 — frontmatter 기록 + scaffold 판단
+    _all_api_hints = []
+    _seen_h = set()
+    for _tw in tabs_with_widgets:
+        for _w in _tw['widgets']:
+            for _h in (_w.get('api_hints') or []):
+                if _h not in _seen_h:
+                    _seen_h.add(_h)
+                    _all_api_hints.append(_h)
+    _api_hints_yaml = ''
+    if _all_api_hints:
+        _api_hints_yaml = '\napi_hints:\n' + '\n'.join(f'  - {_h}' for _h in _all_api_hints)
+
+
     parts = []
     # frontmatter
     parts.append(f'''---
@@ -374,7 +388,7 @@ def build_spec(ui_dir, uis_id, screen_id, screen_name, route, domain, workspace_
 라우트: {route}
 도메인: {domain}
 REQ-F: "[TBD]"
-UIS-ID: {uis_id}
+UIS-ID: {uis_id}{_api_hints_yaml}
 revision_history:
   - version: 1.0
     date: {today}

@@ -106,44 +106,90 @@ Read 도구로 `{entryFile}` 읽기.
 - 라우팅: `useRouter()` / `navigateTo(...)` / `<NuxtLink to=`
 - 권한: `v-if="can('perm')"` / `definePageMeta({ middleware: 'auth' })`
 
-**[JSP/jwork]**
-- 진입: `window.XXXGrid` / `$('#tabArea').tabs()`
-- 폼: `$('input[name="X"]')` / `$('select[name="X"]')`
-- 이벤트: `window.fnName = function()` + JSDoc
-- 권한: `SessionUtils.getAuthYn('BTN_X')` / `userAuth`
+**[JSP/jwork — 2단계 소스 분석 필수]**
+
+JSP 화면의 버튼은 HTML에 `id=` 만 있고, 실제 클릭 핸들러와 API URL은 별도 JS 파일에 있다.  
+**JSP 파일 1개만 읽으면 §5가 절대 채워지지 않는다. JS 파일까지 반드시 읽어야 한다.**
+
+**Step A. JSP HTML 파싱**
+- 버튼·링크 ID 수집: `id="btnSave"`, `id="schMdPop"` → 인접 텍스트·alt·title로 레이블 추출
+- form action URL 직접 추출: `<form action="/product/prdreg/saveXxx">` → 즉시 사용 가능
+- href URL: `<a href="/path">` (`#` 제외)
+- 탭 구조: `<div id="tab1">` / `li a[href="#tab1"]` → 탭 이름-ID 매핑 테이블 작성
+
+**Step B. 포함 JS 파일 목록 추출 → 전부 읽기**
+- `<script src=".../biz/{domain}/pr201t01.js">` 패턴에서 파일 경로 추출
+- 탭별 JS 파일(`pr201t01.js`=기초정보, `pr201t02.js`=배송및AS …)은 탭과 1:1 매핑
+- 메인 폼 JS(`pr201Form.js`)도 포함
+- 파일 수가 많으면 `t01`~`t0N`(탭 JS) + 메인 폼 JS 우선순위로 전부 Read
+
+**Step C. JS 파일 → 버튼ID-URL 매핑 추출**
+```
+패턴 1 (jQuery 이벤트 + Ajax):
+  $("#btnSave").on("click", function() {
+      $.ajax({ url: ctx + "/app/.../saveXxx", ... })
+  })
+  → buttonId="#btnSave", apiPath="/app/.../saveXxx", method="POST"
+
+패턴 2 (jwork fn.ajax):
+  fn.ajax("/app/.../findXxx", params, callback)
+  → apiPath="/app/.../findXxx"
+
+패턴 3 (fn.go 화면이동):
+  fn.go("/product/orders/list")
+  → type="navigation", target="/product/orders/list"
+
+패턴 4 (form submit):
+  $("#mainForm").ajaxSubmit({ url: ctx + "/app/.../saveXxx" })
+  또는 form의 action에서 URL 추출
+
+패턴 5 (팝업 오픈):
+  fn.openPopup("/product/popup/mdPop", ...)
+  → type="popup", target route 추출
+```
+클릭 바인딩(`on("click")` / `bind("click")` / `.click(`)과 인접 Ajax 블록을 함께 파싱해  
+`{ buttonId, label, tab, apiPath, method, type }` 매핑 테이블 완성
+
+**Step D. interaction_map 완성 예시**
+```json
+[
+  { "buttonId": "#btnSave",    "label": "저장",     "tab": "기초정보", "api": "/app/product/prdreg/saveProductDetailInterface", "method": "POST" },
+  { "buttonId": "#mdPop",      "label": "모델검색", "tab": "기초정보", "api": null, "type": "popup" },
+  { "buttonId": "#btnPrdChgHis","label": "변경이력", "tab": "기초정보", "api": "/app/product/prdreg/findChangeHistory", "method": "GET" }
+]
+```
+
+- 권한: `SessionUtils.getAuthYn('BTN_X')` / `userAuth` / `btnEnable` 변수로 disabled 조건 추출
 
 **[Django Templates / Jinja2]**
 - 진입: `{% block content %}` / `{% extends "base.html" %}`
 - 폼: `{{ form.field_name }}` / `{% csrf_token %}`
-- 이벤트: `data-url="{{ url 'view-name' }}"` / HTMX `hx-post`
+- 이벤트: `data-url="{{ url 'view-name' }}"` (URL name만 추출, urls.py에서 실제 path 확인) / HTMX `hx-post` (직접 URL 있음)
 - 권한: `{% if user.has_perm %}` / `@login_required`
 
 **[Thymeleaf (Spring Boot)]**
 - 진입: `th:fragment` / `layout:decorate`
-- 폼: `th:field="*{fieldName}"` / `th:action="@{/path}"`
-- 이벤트: `th:href="@{/path}"` / `th:onclick`
+- 폼: `th:field="*{fieldName}"` / `th:action="@{/path}"` → `/path` 직접 추출
+- 이벤트: `th:href="@{/path}"` / `th:onclick` / 포함 JS 파일 Step B~C 동일 적용
 - 권한: `sec:authorize="hasRole('ADMIN')"`
 
 **[Blade (Laravel) / ERB (Rails)]**
 - 진입: `@extends('layout')` / `<%= yield %>` / `@section`
-- 폼: `{{ old('field') }}` / `<%= form_with %>`
-- 이벤트: `route('name')` / `link_to_path`
+- 폼: `{{ old('field') }}` / `<%= form_with url: path_helper %>`
+- 이벤트: `route('name')` / `link_to_path` → 라우트 이름만 추출, routes 파일에서 실제 path 확인
 - 권한: `@can('permission')` / `before_action :authenticate_user!`
 
-> ⚠️ **서버 렌더링 템플릿 공통 원칙 — api_hints 추출 금지**:  
-> JSP·Django Template·Thymeleaf·Blade·ERB 등 **서버 렌더링 템플릿** 파일에는  
-> 실제 API 엔드포인트 URL이 없다. URL은 서버 측 라우터/컨트롤러에 정의된다.  
->  
-> | 프레임워크 | URL 위치 |
-> |-----------|---------|
-> | Spring MVC (JSP/Thymeleaf) | Java `@RequestMapping/@GetMapping` |
-> | Django | `urls.py`의 `path()` / `re_path()` |
-> | Laravel | `routes/web.php`, `routes/api.php` |
-> | Rails | `config/routes.rb` |
-> | Flask | `app.py` / `blueprint.py` 의 `@app.route` |
->  
-> **spec.md frontmatter의 `api_hints`를 `[]`로 두면** STEP 7의 INF-agent가 서버 라우터에서 올바르게 추출한다.  
-> 템플릿에서 URL 패턴을 억지로 파싱하면 오답이 생성되어 후속 INF 명세가 오염된다.
+> **프레임워크별 URL 추출 가능 여부**:
+>
+> | 프레임워크 | URL 위치 | 추출 방법 |
+> |-----------|---------|---------|
+> | JSP + jQuery/jwork | 포함 JS 파일의 `$.ajax({url:...})` | **Step B~C 필수** — JS 파일 읽어야 함 |
+> | JSP form | `<form action="/path">` | JSP에서 직접 추출 |
+> | Thymeleaf | `th:action="@{/path}"` | 직접 추출 가능 |
+> | HTMX | `hx-post="/path"` | 직접 추출 가능 |
+> | React/Vue/Angular | `axios.post('/path')` / `fetch('/path')` | 컴포넌트에서 직접 추출 |
+> | Django Template | `{% url 'name' %}` | URL name만 → urls.py 참조 필요 |
+> | Blade/ERB | `route('name')` / `url_for` | 라우트 이름 → routes 파일 참조 필요 |
 
 ---
 
@@ -328,6 +374,9 @@ flowchart LR
 [ ] §4 그리드 컬럼이 컴포넌트 파일에서 추출한 실제 field/headerName인가?
 [ ] §5 이벤트 표의 API 링크가 {infDir}INF-XXX.md 형식인가?
 [ ] §5 API 엔드포인트가 진입파일+컴포넌트 파일 전체에서 수집됐는가?
+[ ] **JSP 화면인 경우**: `<script src=...>` 포함 JS 파일을 실제로 읽었는가? (JSP만 읽고 끝내면 §5 채울 수 없음)
+[ ] **JSP 화면인 경우**: `$.ajax({url:...})` / `fn.ajax(url,...)` 패턴을 JS 파일에서 추출했는가?
+[ ] INF 파일이 없는 URL은 `_tmp/{화면ID}_inf_required.json`에 기록했는가?
 [ ] spec.md만 생성했는가? (preview.html / preview.png 직접 생성 시도 금지 — sl-recon STEP 5-C 책임)
 [ ] RECON 모드: REQ-F 값이 [TBD]인가? (REQ-F-NNN 형식 금지)
 [ ] UIS-F 번호가 전달받은 uisId와 일치하는가?
@@ -350,14 +399,36 @@ flowchart LR
 
 ---
 
+## Phase 7.5: INF 필요 목록 출력
+
+§5에서 URL을 추출했지만 INF 파일이 아직 없는 항목을 `_tmp/{화면ID}_inf_required.json`으로 저장한다.  
+이 파일은 STEP 7 ddd-api-agent의 입력으로 사용되어 INF 스펙을 생성한다.  
+INF 생성 완료 후 `scripts/link_uis_inf.py`가 spec.md §5의 URL을 `[INF-NNN](...) `링크로 교체한다 — LLM 재호출 없이 스크립트로 처리.
+
+```json
+{
+  "screen_id": "Pr201Form",
+  "uis_id": "UIS-F-001",
+  "inf_required": [
+    { "url": "/app/product/prdreg/saveProductDetailInterface", "method": "POST", "triggered_by": "#btnSave", "label": "저장" },
+    { "url": "/app/product/prdreg/findInfoPrvs", "method": "GET", "triggered_by": "page_load", "label": "화면 진입 조회" }
+  ]
+}
+```
+
+`inf_required`가 비어있으면 파일 저장 생략.
+
+---
+
 ## Phase 8: 완료 보고
 
 ```
 라우트: {route}
 진입 파일: {entryFile}
-읽은 컴포넌트: {읽은 파일 수}개 / 참조 {componentFiles 수}개
+읽은 JS 파일: {읽은 JS 파일 목록}
 생성 화면: UIS-F-{uisId:03d} ({화면명})
 생성 파일: spec.md
+INF 필요: {N}건 → _tmp/{화면ID}_inf_required.json
 미리보기: sl-recon STEP 5-C (runtime_capture)에서 일괄 처리
-추출 API: {엔드포인트 목록}
+추출 API: {URL 목록 — INF 있는 것은 [INF-NNN] 링크, 없는 것은 URL만}
 ```
