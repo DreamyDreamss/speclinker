@@ -101,6 +101,16 @@ function App() {
   return <Dashboard accessToken={accessToken} />;
 }
 
+function TabEmptyGuide({ cmd, desc }: { cmd: string; desc: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center h-full gap-3 text-text-muted select-none">
+      <p className="text-sm">{desc}</p>
+      <code className="text-xs bg-elevated px-3 py-1.5 rounded-lg text-accent font-mono">{cmd}</code>
+      <p className="text-xs text-text-muted/50">실행 후 대시보드를 새로고침하세요.</p>
+    </div>
+  );
+}
+
 function Dashboard({ accessToken }: { accessToken: string }) {
   const graph = useDashboardStore((s) => s.graph);
   const setGraph = useDashboardStore((s) => s.setGraph);
@@ -138,6 +148,9 @@ function Dashboard({ accessToken }: { accessToken: string }) {
   const setReqImplMap = useDashboardStore((s) => s.setReqImplMap);
   const setFuncMap = useDashboardStore((s) => s.setFuncMap);
   const setLinkedFuncMap = useDashboardStore((s) => s.setLinkedFuncMap);
+  const infList = useDashboardStore((s) => s.infList);
+  const funcMap = useDashboardStore((s) => s.funcMap);
+  const srsList = useDashboardStore((s) => s.srsList);
 
   // 추가 뷰 모드
   const [extraPanel, setExtraPanel] = useState<"none" | "apis" | "docs" | "sdd" | "srs" | "specs" | "ia" | "insights">("none");
@@ -660,10 +673,13 @@ function Dashboard({ accessToken }: { accessToken: string }) {
           <div className="flex-1 min-h-0 overflow-hidden">
             <Suspense fallback={<div className="flex items-center justify-center h-full text-sm text-text-muted">로딩 중...</div>}>
               {extraPanel === "ia" ? <IAView />
-                : extraPanel === "apis" ? <APIExplorer />
-                : extraPanel === "srs" ? <SRSBrowser />
+                : extraPanel === "apis"
+                  ? (infList?.length ? <APIExplorer /> : <TabEmptyGuide cmd="/sl-recon" desc="API 명세(INF)가 없습니다. 역분석을 먼저 실행하세요." />)
+                : extraPanel === "srs"
+                  ? (srsList?.length ? <SRSBrowser /> : <TabEmptyGuide cmd="/sl-genesis 또는 /sl-recon" desc="기능 명세서(SRS)가 없습니다." />)
                 : extraPanel === "specs" ? <SpecExplorer />
-                : extraPanel === "sdd" ? <SDDPanel />
+                : extraPanel === "sdd"
+                  ? (funcMap?.length ? <SDDPanel /> : <TabEmptyGuide cmd="/sl-recon 또는 /sl-genesis" desc="FUNC_MAP이 없습니다. 먼저 스펙을 생성하세요." />)
                 : extraPanel === "insights" ? <InsightPanel />
                 : <DocsPanel />}
             </Suspense>

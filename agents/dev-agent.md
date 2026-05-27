@@ -18,6 +18,19 @@ docs/05_설계서/ 또는 docs/00_FUNC/ 폴더의 설계 문서를 읽고 기능
 
 ---
 
+## 실패 조건
+
+| 조건 | 동작 |
+|------|------|
+| `project.env` 없음 | 중단 → `/sl-init` 안내 |
+| GENESIS 모드 + `docs/05_설계서/API_Design.md` 없음 | 중단 → `/sl-genesis` 안내 |
+| RECON 모드 + `docs/00_FUNC/FUNC_MAP.md` 없음 | 중단 → `/sl-recon` 안내 |
+| `func_context_bundle.py` 없음 | `PLUGIN_PATH` 미설정 경고 후 스펙 파일 수동 로드로 계속 진행 |
+| 구현 대상 FUNC가 모두 `✅ 완료` 상태 | 중단 → "이미 완료된 FUNC만 있음" 안내 |
+| 코드 파일 저장 경로 존재하지 않음 | 경로 자동 생성 후 계속 진행 |
+
+---
+
 ## 실행 전 확인
 
 ```python

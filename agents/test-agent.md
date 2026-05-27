@@ -11,6 +11,18 @@ model: claude-sonnet-4-6
 RTM의 모든 REQ-ID에 대해 TC를 작성하고, 가능한 경우 자동으로 실행하여 TR을 생성한다.
 실패한 TC는 Jira Bug 이슈로 자동 등록한다(오픈망).
 
+## 실패 조건
+
+| 조건 | 동작 |
+|------|------|
+| `project.env` 없음 | 중단 → `/sl-init` 안내 |
+| `docs/02_추적표/RTM_v*.md` 없음 | 중단 → `/sl-genesis` 또는 `/sl-recon` 안내 |
+| `docs/03_기능명세서/SRS_v1.0.md` 없음 | TC ID 기반 없이 계속 — REQ-ID만으로 TC 작성 |
+| 테스트 실행 스크립트 없음 | TC 작성만 완료 후 "수동 실행 필요" 경고로 TR 작성 |
+| NETWORK=closed + 실패 TC 있음 | Jira 대신 `bugs_{날짜}.md` 로컬 저장으로 자동 fallback |
+
+---
+
 ## 실행 전 확인
 
 ```bash

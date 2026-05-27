@@ -9,16 +9,19 @@ SI/ITO 개발 전주기 자동화 플러그인 — 요구사항 정의부터 코
 ```
 ~/.claude/plugins/speclinker/
 │
-├── skills/                  ← Claude Code 슬래시 커맨드 (9개)
-│   ├── sl-init              /sl-init        프로젝트 초기화
-│   ├── sl-genesis           /sl-genesis     인터뷰→설계서 순방향 생성
-│   ├── sl-recon             /sl-recon       기존 코드→설계서 역분석
-│   ├── sl-aidd              /sl-aidd        FUNC 단위 AI 개발 파이프라인
-│   ├── sl-dev               /sl-dev         코드·단위테스트 자동 생성
-│   ├── sl-test              /sl-test        TC 작성·실행·TR 생성
-│   ├── sl-rtm               /sl-rtm         RTM 커버리지 재계산·게시
-│   ├── sl-analyze           /sl-analyze     변경영향분석서(CIA) 작성
-│   └── sl-change            /sl-change      SR 전주기 처리
+├── skills/                  ← Claude Code 슬래시 커맨드 (12개)
+│   ├── sl-init              /sl-init            프로젝트 초기화
+│   ├── sl-genesis           /sl-genesis          인터뷰→설계서 순방향 생성
+│   ├── sl-recon             /sl-recon            기존 코드→설계서 역분석
+│   ├── sl-recon-uis         /sl-recon-uis        RECON Phase-2: 화면 설계서 생성
+│   ├── sl-recon-inf         /sl-recon-inf        RECON Phase-3: API/DB 설계
+│   ├── sl-recon-doc         /sl-recon-doc        RECON Phase-4: 문서·RTM 생성
+│   ├── sl-aidd              /sl-aidd             FUNC 단위 AI 개발 파이프라인
+│   ├── sl-dev               /sl-dev              코드·단위테스트 자동 생성
+│   ├── sl-test              /sl-test             TC 작성·실행·TR 생성
+│   ├── sl-rtm               /sl-rtm              RTM 커버리지 재계산·게시
+│   ├── sl-analyze           /sl-analyze          변경영향분석서(CIA) 작성
+│   └── sl-change            /sl-change           SR 전주기 처리 (로컬 파일·Jira)
 │
 ├── ua/skills/               ← 코드 이해 슬래시 커맨드 (8개, UA 통합)
 │   ├── understand           /understand     코드베이스 지식 그래프 생성
@@ -30,17 +33,21 @@ SI/ITO 개발 전주기 자동화 플러그인 — 요구사항 정의부터 코
 │   ├── understand-knowledge /understand-knowledge  LLM 위키 지식 그래프
 │   └── understand-onboard   /understand-onboard  신규 팀원 온보딩 가이드
 │
-├── agents/                  ← 산출물 생성 서브에이전트 (10개)
-│   ├── spec-agent.md        파이프라인 오케스트레이터
-│   ├── rd-agent.md          요구사항 정의서(RD) 생성
-│   ├── srs-agent.md         SRS 상세화
-│   ├── sad-agent.md         아키텍처 설계서(SAD)
-│   ├── ddd-api-agent.md     API 명세(INF-XXX)
-│   ├── ddd-db-agent.md      DB 스키마(SCH-XXX)
-│   ├── ddd-ui-agent.md      화면 설계(UIS-F-XXX)
-│   ├── rtm-agent.md         RTM 체인 + 품질 게이트
-│   ├── dev-agent.md         코드 생성
-│   └── test-agent.md        테스트 케이스 생성·실행
+├── agents/                  ← 산출물 생성 서브에이전트 (14개)
+│   ├── spec-agent.md           파이프라인 오케스트레이터
+│   ├── rd-agent.md             요구사항 정의서(RD) 생성
+│   ├── srs-agent.md            SRS 상세화
+│   ├── sad-agent.md            아키텍처 설계서(SAD)
+│   ├── ddd-api-agent.md        API 명세(INF-XXX)
+│   ├── ddd-db-agent.md         DB 스키마(SCH-XXX)
+│   ├── ddd-ui-agent.md         화면 설계(UIS-F-XXX)
+│   ├── ddd-batch-agent.md      배치 명세(BAT-XXX)
+│   ├── rtm-agent.md            RTM 체인 + 품질 게이트
+│   ├── dev-agent.md            코드 생성
+│   ├── test-agent.md           테스트 케이스 생성·실행
+│   ├── profile-agent.md        프로젝트 스택 Profile 자동 생성
+│   ├── convention-learner.md   팀 컨벤션 자동 학습
+│   └── meta-extractor.md       미지원 스택 Strategy yaml 초안 생성
 │
 ├── ua/agents/               ← UA 분석 서브에이전트 (9개)
 │
@@ -79,7 +86,7 @@ SI/ITO 개발 전주기 자동화 플러그인 — 요구사항 정의부터 코
 └── CLAUDE.md                ← 커맨드 라우팅 규칙 (Claude가 자동 로드)
 ```
 
-**요약:** 슬래시 커맨드 17개, 서브에이전트 19개, 자동화 스크립트 10개, 문서 템플릿 12개.
+**요약:** 슬래시 커맨드 20개 (speclinker 12 + UA 8), 서브에이전트 23개 (주요 14 + UA 9), 자동화 스크립트 30개+, 문서 템플릿 12개.
 
 ---
 

@@ -721,6 +721,50 @@ Phase 6.2의 spec.md는 §4 표를 자동 채우지만 `placeholder`/`default`/`
 
 ---
 
+## Phase 8 — 플러그인 품질 정비 (2주 예상)
+
+> **목표**: 문서 일관성·에이전트 실패 안전성·대시보드 UX를 플러그인 완성도에 맞게 끌어올린다.
+
+### Task 8.1 — 스크립트 구현 상태 목록화
+- **대상**: `scripts/` 하위 모든 `.py` `.js` `.sh` 파일
+- **작업**: 각 파일 상단에 한 줄 docstring으로 `STATUS: ✅완료 / 🔄진행 / 📋계획` 명시
+- **추가**: `scripts/README.md` 신설 — 파일별 목적·입출력·호출 커맨드 표
+- **검증**: `grep -r "STATUS:" scripts/` 로 전체 커버 확인
+- **소요**: 2일
+
+### Task 8.2 — 에이전트 실패 조건 전수 추가
+- **대상**: `agents/` 하위 전 에이전트 (이미 추가된 dev-agent / test-agent 제외)
+  - `rd-agent.md`, `srs-agent.md`, `sad-agent.md`, `rtm-agent.md`
+  - `ddd-api-agent.md`, `ddd-db-agent.md`, `ddd-ui-agent.md`, `ddd-batch-agent.md`
+  - `spec-agent.md`, `profile-agent.md`, `convention-learner.md`, `meta-extractor.md`
+- **형식**: `## 실패 조건` 섹션 + 표 (조건 | 동작 컬럼)
+- **소요**: 1일
+
+### Task 8.3 — 대시보드 탭 선행 조건 UX 완성
+- **이미 완료**: APIs/SRS/AIDD 탭 → `TabEmptyGuide` 컴포넌트 추가 (2026-05-28)
+- **추가 대상**: IA 탭 — `iaData` 없을 때 안내
+- **추가 대상**: Insights 탭 — 그래프도 스펙도 없을 때 "분석 불가" 명시
+- **소요**: 반나절
+
+### Task 8.4 — README/CLAUDE.md 동기화 스크립트
+- **신규**: `scripts/check_docs_sync.py`
+- **검사 항목**:
+  - `skills/` 디렉토리 실제 개수 vs README 명시 개수
+  - `agents/` 디렉토리 실제 개수 vs README 명시 개수
+  - `CLAUDE.md` 라우팅 표에 없는 스킬 파일 탐지
+  - `strategies/` yaml 개수
+- **출력**: 불일치 목록 + 자동 수정 제안
+- **소요**: 1일
+
+### Phase 8 산출물 체크
+- [ ] Task 8.1: scripts/README.md + STATUS 주석
+- [x] Task 8.3 부분: APIs/SRS/AIDD 탭 TabEmptyGuide (2026-05-28)
+- [ ] Task 8.2: 에이전트 실패 조건 전수 추가
+- [ ] Task 8.3 완료: IA/Insights 탭 empty state
+- [ ] Task 8.4: check_docs_sync.py
+
+---
+
 ## Phase 7 — Screen-first RECON 개편 (2026-05-26 결정, 진행 대기)
 
 > **사용자 의사결정 (2026-05-26)**: 현재 Source-first RECON(router → INF 전수 → SCH·UIS) 을 **Screen-first** 로 근본 개편. 화면이 1차 산출물이고, INF는 화면이 호출하는 URL 기반으로 누적·dedup하는 공유 자원으로 격상.
