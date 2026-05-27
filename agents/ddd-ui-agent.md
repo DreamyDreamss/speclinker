@@ -14,7 +14,7 @@ model: claude-sonnet-4-6
 
 ---
 
-## Phase 0: 입력 확인
+## Phase 0: 입력 확인 + 실행 모드 결정
 
 호출자가 전달한 값을 확인한다:
 - 라우트 경로: `{route}` (예: `/orders`, `/admin/users`)
@@ -27,6 +27,21 @@ model: claude-sonnet-4-6
 - MODE: `{RECON | GENESIS}`
 - 프로젝트 루트: `{절대경로}`
 - 프로젝트 Profile: `.speclinker/profile.yaml` (선택)
+- 기존 spec.md: `{경로}` (선택 — 없으면 전체 생성, 있으면 §5 패치)
+
+### 실행 모드 결정
+
+`기존 spec.md` 경로가 전달됐고 해당 파일이 **실제로 존재**하면 **§5 패치 모드**로 실행한다.
+
+| 모드 | 조건 | 동작 |
+|------|------|------|
+| **§5 패치 모드** | 기존 spec.md 존재 | §5 인터랙션 표만 소스 분석으로 채운다. §0~§4, §6~§9는 그대로 유지. `_inf_required.json` 출력. |
+| **전체 생성 모드** | spec.md 없음 | §0~§9 전체 spec.md를 새로 생성한다. |
+
+> **§5 패치 모드에서 절대 하지 말아야 할 것:**  
+> - 기존 §0/§1/§2/§3/§4/§6/§7/§8/§9 내용 수정·삭제  
+> - spec.md 전체 재작성  
+> - generate_uis_spec.py가 채운 DOM 메타 데이터(bbox, selector 등) 제거
 
 ### Profile 활용 (Phase 1 신규)
 
@@ -230,6 +245,18 @@ JSP 화면의 버튼은 HTML에 `id=` 만 있고, 실제 클릭 핸들러와 API
 
 저장: `docs/05_설계서/{domain}/UI/{화면ID}/spec.md`  
 RECON 모드: `REQ-F: [TBD]` / GENESIS 모드: `REQ-F: REQ-F-XXX`
+
+### §5 패치 모드 (기존 spec.md 존재 시)
+
+Phase 3에서 추출한 interaction_map을 기반으로 **기존 spec.md의 §5만 교체**한다.
+
+1. 기존 spec.md를 Read한다.
+2. `## §5 인터랙션 이벤트 매핑` 섹션을 찾는다.
+3. 섹션 전체를 소스 분석 결과로 교체한다.
+4. 나머지 섹션은 건드리지 않는다.
+5. Write 도구로 저장한다.
+
+**§5 교체 후 Phase 7.5로 이동 (`_inf_required.json` 출력).**
 
 ```markdown
 ---

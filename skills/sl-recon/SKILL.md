@@ -1207,11 +1207,16 @@ print(kg_path)
 " 2>/dev/null
 ```
 
-### STEP 6-0.5: UI 캡처 모드 결정 (capture-first / llm-first)
+### STEP 6-0.5: 캡처 가능 여부 확인
 
-`PREVIEW_STORAGE_STATE`(storageState.json)가 존재하면 **capture-first** 모드로 분기한다.  
-capture-first는 `runtime_capture.js --inspect`로 실제 DOM 위젯 + 네트워크 요청을 수집하고,  
-`generate_uis_spec.py`가 spec.md를 자동 생성한다 — **ddd-ui-agent LLM 호출 없음**.
+`PREVIEW_STORAGE_STATE`(storageState.json) 존재 여부를 확인한다.  
+**캡처(visual)와 소스 분석(interaction)은 보완 관계** — storageState 유무와 무관하게 둘 다 실행한다.
+
+| 단계 | 역할 | 항상 실행? |
+|------|------|---------|
+| STEP 6-2 [A] 런타임 캡처 | DOM 구조·위젯 위치·스크린샷 → §0/§2/§4/§8 | storageState 있을 때만 |
+| STEP 6-3 [B] generate_uis_spec.py | widgets.json → spec.md 시각 초안 | widgets.json 있는 화면만 |
+| STEP 6-4 [C] ddd-ui-agent | 소스 파일 → §5 인터랙션 + _inf_required.json | **항상** |
 
 ```bash
 !python3 -c "
@@ -1221,15 +1226,10 @@ env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
 storage = env.get('PREVIEW_STORAGE_STATE', '.preview-storage.json')
 abs_storage = storage if os.path.isabs(storage) else os.path.join(os.getcwd(), storage)
 has_storage = os.path.exists(abs_storage)
-mode = 'capture-first' if has_storage else 'llm-first'
 print(f'storageState: {abs_storage}  ({\"존재\" if has_storage else \"없음\"})')
-print(f'UI_CAPTURE_MODE = {mode}')
-if mode == 'capture-first':
-    print('  → STEP 6-2: runtime_capture.js --inspect  (preview + widgets.json 자동 생성)')
-    print('  → STEP 6-3: generate_uis_spec.py 전체 실행 (ddd-ui-agent 건너뜀)')
-else:
-    print('  → STEP 6-2: ddd-ui-agent (LLM 기반 spec.md)')
-    print('  → STEP 6-3: widgets.json 있는 화면만 generate_uis_spec.py 실행')
+print(f'STEP 6-2 런타임 캡처: {\"실행\" if has_storage else \"스킵 (storageState 없음)\"}')
+print('STEP 6-3 generate_uis_spec.py: widgets.json 있는 화면만 실행')
+print('STEP 6-4 ddd-ui-agent: 항상 실행 (§5 소스 분석)')
 "
 ```
 
@@ -1276,11 +1276,12 @@ else:
 "
 ```
 
-### STEP 6-2: UIS 생성 — capture-first / llm-first 분기
+### STEP 6-2: [A] 런타임 캡처 (storageState 있을 때만)
 
-#### capture-first (`UI_CAPTURE_MODE=capture-first`)
+storageState가 있으면 `runtime_capture.js --inspect`를 실행한다.  
+**없으면 이 단계를 스킵하고 STEP 6-3으로 바로 이동한다.**
 
-`runtime_capture.js --inspect`를 실행한다. preview.png + 탭별 위젯 JSON을 **한 번의 실행**으로 모든 화면에 생성한다.
+preview.png + 탭별 위젯 JSON을 **한 번의 실행**으로 모든 화면에 생성한다.
 
 ```bash
 # Linux/macOS:
@@ -1295,45 +1296,17 @@ else:
 > `--inspect`가 각 화면 디렉토리(`docs/05_설계서/{domain}/UI/{화면ID}/`)에 생성하는 파일:
 > - `preview.png` — 전체 화면 스크린샷
 > - `preview_tab{N}_{탭명}.png` + `preview_tab{N}_{탭명}_widgets.json` — 탭별 위젯 목록
-> - `network_requests.json` — XHR/fetch 인터셉트 기록 (버튼 api_hints 보완용)
->
-> 완료 후 **STEP 6-3으로 바로 이동** (ddd-ui-agent 호출 불필요).
+> - `network_requests.json` — XHR/fetch 인터셉트 기록
 
-#### llm-first (`UI_CAPTURE_MODE=llm-first`, storageState 없을 때)
+### STEP 6-3: [B] generate_uis_spec.py — 시각 spec.md 초안
 
-`_tmp/screen_inventory.json`을 읽어 배치 처리한다.  
-**이미 `docs/05_설계서/{domain}/UI/{uisId}/spec.md`가 존재하는 화면은 건너뛴다 (재시작 지원).**
+`widgets.json` 또는 `preview_tab*_widgets.json`이 있는 화면에 실행한다.  
+**없는 화면은 이 단계를 스킵한다** — ddd-ui-agent(STEP 6-4)가 전체 spec.md를 생성한다.
 
-```
-_tmp/screen_inventory.json의 각 항목에 대해 Agent 도구 호출 (배치 3개씩 동시):
-  subagent_type: "speclinker:ddd-ui-agent"
-  description: "{route} 화면 명세 생성"
-  prompt: |
-    라우트 경로: {route}
-    진입 파일: {entryFile}
-    참조 컴포넌트: {componentFiles}  ← JSON 배열 그대로 전달
-    도메인: {domain}
-    UIS-F ID: UIS-F-{uisId:03d}
-    INF 디렉토리: {infDir}
-    MODE: RECON
-    워크스페이스: {현재 작업 디렉토리 절대경로}
-    프로젝트 Profile: .speclinker/profile.yaml (있으면 frontend.framework/architecture로 컴포넌트 인식)
+> **이 단계의 역할**: §0/§2/§4/§8 (레이아웃·위젯 위치·DOM 조건) 채움. §5는 `[TBD]` 상태로 남김.  
+> **§5 채우는 것은 STEP 6-4 ddd-ui-agent의 역할** — 소스 파일 분석으로만 알 수 있음.
 
-    ⚠️ spec.md frontmatter의 `api_hints` 필드에 이 화면이 호출하는 API URL 목록을 반드시 기록할 것:
-    api_hints:
-      - { url: "/api/users", method: "GET", description: "유저 목록 조회" }
-    INF 번호는 지금 없어도 됨 — STEP 7에서 생성 후 링크됨.
-```
-
-> **ddd-ui-agent는 spec.md만 생성한다.** preview는 STEP 6-6에서 캡처.  
-> 3개씩 배치 순차 실행 — 토큰 과소비 방지.
-
-### STEP 6-3: generate_uis_spec.py 실행
-
-- **capture-first**: `--inspect`가 생성한 `preview_tab*_widgets.json`(또는 `widgets.json`)이 있는 **모든 화면**에 실행한다.  
-- **llm-first**: 수동 attach 캡처 등으로 `widgets.json`이 있는 화면만 실행한다 (기존 동작).
-
-각 배치 완료 후(capture-first는 runtime_capture 완료 후), 해당 화면 디렉토리에 위젯 JSON이 있으면 실행한다:
+각 화면 디렉토리에 위젯 JSON이 있으면 실행한다:
 
 ```bash
 # 배치 완료 후 각 화면에 대해:
@@ -1374,7 +1347,40 @@ for s in screens:
 "
 ```
 
-### STEP 6-4: api_hints 수집 (STEP 7 입력 준비)
+### STEP 6-4: [C] ddd-ui-agent — 소스 분석 + §5 작성 (항상 실행)
+
+**캡처 여부와 무관하게 모든 화면에 실행한다.**  
+spec.md가 이미 있으면(STEP 6-3에서 생성) §5만 패치한다. 없으면 전체 생성한다.
+
+`_tmp/screen_inventory.json`을 읽어 배치 처리한다.
+
+```
+_tmp/screen_inventory.json의 각 항목에 대해 Agent 도구 호출 (배치 3개씩 동시):
+  subagent_type: "speclinker:ddd-ui-agent"
+  description: "{route} §5 소스 분석"
+  prompt: |
+    라우트 경로: {route}
+    진입 파일: {entryFile}
+    참조 컴포넌트: {componentFiles}
+    도메인: {domain}
+    UIS-F ID: UIS-F-{uisId:03d}
+    INF 디렉토리: {infDir}
+    MODE: RECON
+    워크스페이스: {현재 작업 디렉토리 절대경로}
+    프로젝트 Profile: .speclinker/profile.yaml
+
+    기존 spec.md: docs/05_설계서/{domain}/UI/{screenId}/spec.md
+    (파일이 존재하면 §5만 패치한다. 존재하지 않으면 전체 spec.md를 생성한다.)
+
+    목표:
+    1. 소스 파일에서 버튼→API 매핑을 추출하여 §5 인터랙션 이벤트 매핑 표를 작성한다.
+    2. INF가 없는 URL을 _tmp/{화면ID}_inf_required.json에 기록한다.
+    3. JSP 화면이면 반드시 포함 JS 파일까지 읽어 $.ajax({url:...}) 패턴을 추출한다.
+```
+
+> 3개씩 배치 순차 실행 — 토큰 과소비 방지.
+
+### STEP 6-5: api_hints 수집 (STEP 7 입력 준비)
 
 모든 ddd-ui-agent 배치 완료 후, 각 spec.md의 `api_hints`를 파싱해 전체 URL 목록 생성:
 
@@ -1416,7 +1422,7 @@ print(f'api_hints 수집: {len(result)}개 유니크 URL')
 "
 ```
 
-### STEP 6-5: UI _TOC.md 생성
+### STEP 6-6: UI _TOC.md 생성
 
 > **모든 ddd-ui-agent 배치 완료 후** UI _TOC.md를 생성한다.
 
@@ -1454,7 +1460,7 @@ for d in plan['domains']:
 
 ---
 
-### STEP 6-6: 미리보기 캡처 (4단계 폴백)
+### STEP 6-7: 미리보기 캡처 (4단계 폴백)
 
 각 화면의 `preview.png`를 아래 순서로 확보한다. ddd-ui-agent는 spec.md만 만들었으므로 여기서 이미지를 채운다.
 
