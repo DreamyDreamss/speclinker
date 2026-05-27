@@ -15,6 +15,11 @@ import json
 import argparse
 import re
 from datetime import date
+try:
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+except AttributeError:
+    pass
 
 
 def load_inf_index(workspace_root, domain):
@@ -566,7 +571,7 @@ def main():
     if gaps:
         print(f'INF gaps: {gaps_path} ({len(gaps)}건) ← ddd-api-agent 입력으로 사용')
     else:
-        print(f'INF gaps: {gaps_path} (0건 — 모든 api_hints 매칭됨)')
+        print(f'INF gaps: {gaps_path} (0 gaps - all api_hints matched)')
 
 
 if __name__ == '__main__':

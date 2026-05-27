@@ -12,6 +12,11 @@ Output: _tmp/screen_inventory.json 에 저장 + 요약 stdout
 """
 
 import json, os, sys, collections, re
+try:
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+except AttributeError:
+    pass
 
 # ── 인자 처리 ─────────────────────────────────────────────────────────────────
 workspace_dir = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else os.getcwd()

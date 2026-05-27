@@ -45,6 +45,11 @@ import os
 import re
 import sys
 from datetime import datetime
+try:
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+except AttributeError:
+    pass
 
 
 WS = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else '.')

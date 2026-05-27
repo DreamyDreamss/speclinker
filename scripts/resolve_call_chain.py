@@ -14,6 +14,11 @@ import sys
 import os
 import re
 import json
+try:
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+except AttributeError:
+    pass
 
 # 따라갈 레이어 키워드 (패키지/디렉토리 이름 기준)
 # Phase 2 (2026-05-22): 기본값은 그대로 두고, Profile + Strategy yaml이 있으면
