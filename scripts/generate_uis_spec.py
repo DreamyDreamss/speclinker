@@ -293,6 +293,24 @@ def _find_workspace_root(ui_dir):
     return os.path.abspath(os.path.join(ui_dir, '..', '..', '..', '..', '..'))
 
 
+def _load_project_env(workspace_root):
+    """project.env → dict. 실패 시 빈 dict."""
+    p = os.path.join(workspace_root, 'project.env')
+    out = {}
+    if not os.path.exists(p):
+        return out
+    try:
+        for ln in open(p, encoding='utf-8').readlines():
+            t = ln.strip()
+            if not t or t.startswith('#') or '=' not in t:
+                continue
+            k, _, v = t.partition('=')
+            out[k.strip()] = v.strip()
+    except Exception:
+        pass
+    return out
+
+
 def build_spec(ui_dir, uis_id, screen_id, screen_name, route, domain, workspace_root=None):
     tabs = find_tab_assets(ui_dir)
     today = date.today().isoformat()
@@ -300,6 +318,24 @@ def build_spec(ui_dir, uis_id, screen_id, screen_name, route, domain, workspace_
         workspace_root = _find_workspace_root(ui_dir)
     inf_idx = load_inf_index(workspace_root, domain)
     gaps = []  # INF 미매칭 api_hints 수집
+
+    # 탭 없음 + widgets.json 존재 → runtime_capture --inspect 비탭 화면
+    # find_tab_assets가 못 잡는 경우를 보완
+    if not tabs:
+        fallback_json = os.path.join(ui_dir, 'widgets.json')
+        if os.path.exists(fallback_json):
+            tabs = [{
+                'order': 1,
+                'name': screen_name or screen_id,
+                'png': 'preview.png',
+                'annotated_png': None,
+                'widgets_json': fallback_json,
+            }]
+
+    # project.env에서 BASE_URL 로드 (출처 표기용)
+    env = _load_project_env(workspace_root)
+    base_url = (env.get('PREVIEW_BASE_URL') or '').rstrip('/')
+
     # 모든 탭의 위젯 통합 (§5·§8용)
     tabs_with_widgets = []
     for t in tabs:
@@ -346,7 +382,7 @@ revision_history:
 > **UIS-ID:** {uis_id} | **API:** [TBD] | **DB:** [TBD]
 
 **근거 소스:**
-- 실서비스 캡처 — `office-t.kshop.co.kr{route}`
+- 실서비스 캡처 — `{base_url or '[PREVIEW_BASE_URL]'}{route}`
 - 탭 {len(tabs)}개 자동 발견·캡처
 
 ''')

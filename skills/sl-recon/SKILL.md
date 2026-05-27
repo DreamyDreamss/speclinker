@@ -1338,28 +1338,39 @@ _tmp/screen_inventory.json의 각 항목에 대해 Agent 도구 호출 (배치 3
 ```bash
 # 배치 완료 후 각 화면에 대해:
 !python3 -c "
-import os, sys, subprocess
+import os, sys, subprocess, glob
 env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8') if '=' in l and not l.startswith('#'))
 plugin = env.get('PLUGIN_PATH','')
+ws = os.getcwd()
 import json
 screens = json.load(open('_tmp/screen_inventory.json', encoding='utf-8'))
 for s in screens:
-    uid = f'UIS-F-{s[\"uisId\"]:03d}'
-    screen_id = uid.lower().replace('-', '_')
-    ui_dir = f'docs/05_설계서/{s[\"domain\"]}/UI/{screen_id}'
-    widgets_path = os.path.join(ui_dir, 'widgets.json')
-    if not os.path.exists(widgets_path):
+    uid = f'UIS-F-{s[\"uisId\"]:03d}' if isinstance(s.get('uisId'), int) else (s.get('uisId') or 'UIS-F-001')
+    screen_id = s.get('screenId') or uid.lower().replace('-','_')
+    ui_dir = os.path.join('docs', '05_설계서', s['domain'], 'UI', screen_id)
+    # capture-first: preview_tab*_widgets.json 존재 여부 포함 체크
+    has_widgets = (
+        os.path.exists(os.path.join(ui_dir, 'widgets.json')) or
+        bool(glob.glob(os.path.join(ui_dir, 'preview_tab*_widgets.json')))
+    )
+    if not has_widgets:
         continue
     script = os.path.join(plugin, 'scripts', 'generate_uis_spec.py') if plugin else ''
-    if script and os.path.exists(script):
-        r = subprocess.run([
-            sys.executable, script, ui_dir,
-            f'--uis-id={uid}', f'--screen-id={screen_id}',
-            f'--route={s[\"route\"]}', f'--domain={s[\"domain\"]}',
-        ], capture_output=True, text=True)
-        print(f'{uid}: generate_uis_spec 완료')
-        if r.returncode != 0:
-            print(f'  [WARN] {(r.stderr or \"\")[:200]}')
+    if not (script and os.path.exists(script)):
+        continue
+    screen_name = s.get('screenName') or screen_id
+    cmd = [
+        sys.executable, script, ui_dir,
+        f'--uis-id={uid}', f'--screen-id={screen_id}',
+        f'--screen-name={screen_name}',
+        f'--route={s[\"route\"]}', f'--domain={s[\"domain\"]}',
+        f'--workspace={ws}',
+    ]
+    r = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='ignore')
+    if r.returncode == 0:
+        print(f'{uid} ({screen_id}): generate_uis_spec 완료')
+    else:
+        print(f'{uid}: [WARN] {(r.stderr or \"\")[:300]}')
 "
 ```
 

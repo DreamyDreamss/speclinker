@@ -349,22 +349,52 @@ _JAVA_MAPPING_RE = re.compile(
     r'@(?:Get|Post|Put|Delete|Patch|Request)Mapping\s*\(\s*(?:value\s*=\s*)?["\']([^"\']+)["\']',
     re.I,
 )
-# Python FastAPI: @router.get("/path") / @app.post("/path") / @router.put("/items/{id}")
-_FASTAPI_ROUTE_RE = re.compile(
-    r'@\w+\.(?:get|post|put|delete|patch|head|options)\s*\(\s*["\']([^"\']+)["\']',
+# Python FastAPI / Flask / aiohttp / Litestar decorators
+# FastAPI:  @router.get("/path")  @app.post("/path")
+# Flask:    @app.route("/path", methods=["GET","POST"])  @bp.get("/path")
+# aiohttp:  @routes.get("/path")  @router.post("/path")
+# Litestar: @get("/path")  @post("/path")
+_PYTHON_ROUTE_RE = re.compile(
+    r'@\w+(?:\.\w+)*\.(?:get|post|put|delete|patch|head|options|route)\s*\(\s*["\']([^"\']+)["\']'
+    r'|'
+    r'@(?:get|post|put|delete|patch)\s*\(\s*["\']([^"\']+)["\']',  # Litestar standalone
+    re.I,
+)
+# Express.js / Koa / Hapi (JS/TS)
+# app.get("/path", ...) / router.post("/path", ...) / server.route({method:"GET",path:"/path"})
+_EXPRESS_ROUTE_RE = re.compile(
+    r'(?:app|router|server)\s*\.\s*(?:get|post|put|delete|patch|head|all|use)\s*\(\s*["\']([^"\']+)["\']',
+    re.I,
+)
+# NestJS: @Get("/path") / @Post() / @Controller("/prefix")
+_NESTJS_ROUTE_RE = re.compile(
+    r'@(?:Get|Post|Put|Delete|Patch|Head|Options|All)\s*\(\s*["\']([^"\']+)["\']',
+    re.I,
+)
+_NESTJS_CTRL_RE = re.compile(
+    r'@Controller\s*\(\s*["\']([^"\']+)["\']',
+    re.I,
+)
+# Django urls.py: path("/url", view) / re_path(r"^url/")
+_DJANGO_PATH_RE = re.compile(
+    r'(?:re_)?path\s*\(\s*r?["\']([^"\']+)["\']',
     re.I,
 )
 
 
 def extract_defined_urls(file_path):
-    """컨트롤러 파일에서 정의된 모든 엔드포인트 URL 목록 반환.
+    """컨트롤러/라우터 파일에서 정의된 엔드포인트 URL 목록 반환.
 
-    Java Spring (@GetMapping / @PostMapping / @RequestMapping) 와
-    Python FastAPI (@router.get / @router.post / @app.get 등) 를 모두 처리한다.
-    클래스 레벨 @RequestMapping prefix가 있으면 각 메서드 URL과 결합해 반환한다.
+    지원 언어·프레임워크:
+    - Java: Spring MVC (@GetMapping / @PostMapping / @RequestMapping + 클래스 prefix)
+            NestJS (@Get / @Post + @Controller prefix)
+    - Python: FastAPI, Flask, aiohttp, Litestar (@router.get / @app.route / @get 등)
+              Django urls.py (path() / re_path())
+    - JS/TS: Express.js, Koa, Fastify (app.get / router.post 등)
+             NestJS TypeScript decorators (@Get / @Post + @Controller)
 
     Returns:
-        list[str] — '/product/list', '/api/items/{id}' 같은 경로 문자열 목록 (중복 제거)
+        list[str] — '/product/list', '/api/items/{id}' 같은 경로 목록 (중복 제거)
     """
     if not os.path.exists(file_path):
         return []
@@ -374,7 +404,18 @@ def extract_defined_urls(file_path):
         return []
 
     lang = detect_language(file_path)
+    ext  = os.path.splitext(file_path)[1].lower()
     urls = []
+
+    def _add(url, prefix=''):
+        if not url:
+            return
+        url = url.strip()
+        # Django re_path 정규식 패턴 → 그대로 유지 (^, $ 제거만)
+        url = url.lstrip('^').rstrip('$').rstrip('/')
+        if prefix and not url.startswith(prefix):
+            url = prefix.rstrip('/') + '/' + url.lstrip('/')
+        urls.append(url if url.startswith('/') else '/' + url)
 
     if lang == 'java':
         # 클래스 레벨 prefix (@RequestMapping("/product"))
@@ -383,22 +424,35 @@ def extract_defined_urls(file_path):
         )
         prefix = prefix_m.group(1).rstrip('/') if prefix_m else ''
         for m in _JAVA_MAPPING_RE.finditer(body):
-            url = m.group(1)
-            if prefix and not url.startswith(prefix):
-                url = prefix + '/' + url.lstrip('/')
-            urls.append(url if url.startswith('/') else '/' + url)
+            _add(m.group(1), prefix)
+        # NestJS 처리 (Java 확장자면 TS가 아닌 Java — 보통 해당 없지만 방어)
 
     elif lang == 'python':
-        # FastAPI prefix: APIRouter(prefix="/api/v1")
-        router_prefix_m = re.search(
-            r'APIRouter\s*\([^)]*prefix\s*=\s*["\']([^"\']+)["\']', body, re.I
-        )
-        prefix = router_prefix_m.group(1).rstrip('/') if router_prefix_m else ''
-        for m in _FASTAPI_ROUTE_RE.finditer(body):
-            url = m.group(1)
-            if prefix and not url.startswith(prefix):
-                url = prefix + url
-            urls.append(url if url.startswith('/') else '/' + url)
+        fname_lower = os.path.basename(file_path).lower()
+        if 'urls' in fname_lower or 'url_conf' in fname_lower:
+            # Django urls.py
+            for m in _DJANGO_PATH_RE.finditer(body):
+                _add(m.group(1))
+        else:
+            # FastAPI / Flask / aiohttp / Litestar
+            prefix_m = re.search(
+                r'(?:APIRouter|Blueprint)\s*\([^)]*prefix\s*=\s*["\']([^"\']+)["\']', body, re.I
+            )
+            prefix = prefix_m.group(1).rstrip('/') if prefix_m else ''
+            for m in _PYTHON_ROUTE_RE.finditer(body):
+                _add(m.group(1) or m.group(2), prefix)
+
+    elif lang in ('ts', 'js'):
+        # NestJS: @Controller prefix + @Get/@Post 메서드
+        ctrl_m = _NESTJS_CTRL_RE.search(body)
+        ctrl_prefix = ctrl_m.group(1).rstrip('/') if ctrl_m else ''
+        for m in _NESTJS_ROUTE_RE.finditer(body):
+            _add(m.group(1), ctrl_prefix)
+        # Express / Koa / Fastify
+        for m in _EXPRESS_ROUTE_RE.finditer(body):
+            u = m.group(1)
+            # Express app.use('/api') 같은 마운트 경로도 수집 (prefix 역할)
+            _add(u)
 
     return list(dict.fromkeys(urls))  # 순서 보존 중복 제거
 
@@ -837,7 +891,11 @@ def main():
     workspace_root = sys.argv[2]
 
     inventory = json.load(open(inventory_path, encoding='utf-8'))
-    # inventory는 배치 그룹 배열 (list of list)
+    # inventory는 배치 그룹 배열 (list of list) 또는 flat list (이전 버전 호환)
+    if inventory and isinstance(inventory[0], dict):
+        # flat list → 3개씩 그룹핑
+        BATCH = 3
+        inventory = [inventory[i:i+BATCH] for i in range(0, len(inventory), BATCH)]
 
     total_files = 0
     total_schemas = 0

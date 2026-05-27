@@ -247,12 +247,37 @@ async function bootstrap() {
   console.error('Bootstrap 완료. 이제 인자 없이 실행하면 자동 캡처됩니다.');
 }
 
-// ── INSPECT 헬퍼: 탭 셀렉터 탐지 ──
+// ── INSPECT 헬퍼: 탭 셀렉터 탐지 (프레임워크 무관) ──
 async function findTabSelector(frame) {
+  // 우선순위: 명시적 role/ARIA > 공통 클래스 패턴 > 프레임워크별 > jwork
   const candidates = [
-    '#tabArea a', '.tab-menu a', '.tabs a',
-    '.tabArea a', '[role=tab]', '.tab-header a',
-    '.tab > ul > li > a', 'ul.tab > li > a',
+    // ARIA (React/Vue/Angular/Svelte — 모든 modern SPA)
+    '[role=tab]',
+    // Bootstrap 4/5
+    '.nav-tabs .nav-link',
+    '.nav-pills .nav-link',
+    // Ant Design (React)
+    '.ant-tabs-tab',
+    // Element UI / Element Plus (Vue)
+    '.el-tabs__item',
+    // Material UI (React) — data-value 탭
+    '.MuiTab-root',
+    // Vuetify
+    '.v-tab',
+    // jwork (사내 Java Spring MVC)
+    '#tabArea a',
+    '.tabArea a',
+    '.tab-menu a',
+    '.tab-menu > li > a',
+    // 범용 패턴
+    '[class*="tab"] > [class*="item"]:not([style*="display:none"])',
+    'ul.tabs > li > a',
+    '.tab-list a',
+    '.tab > ul > li > a',
+    // data 속성 기반
+    '[data-tab]',
+    '[data-toggle=tab]',
+    '[data-bs-toggle=tab]',
   ];
   for (const sel of candidates) {
     try {
@@ -269,10 +294,24 @@ async function extractWidgetsFromFrame(frame, tabName) {
     return await frame.evaluate((tabName) => {
       const widgets = [];
       let counter = 1;
+      // 공통 입력 요소 + 프레임워크별 버튼 패턴
       const sel = [
         'input:not([type=hidden])', 'select', 'textarea',
         'button', 'input[type=button]', 'input[type=submit]',
+        // 링크형 버튼 (범용)
         'a.btn', 'a.button', 'a[onclick]',
+        // ARIA 버튼 (React/Vue/Angular 컴포넌트)
+        '[role=button]:not(button)',
+        // Ant Design
+        '.ant-btn', '.ant-input', '.ant-select', '.ant-checkbox-input', '.ant-radio-input',
+        // Material UI
+        '.MuiButton-root', '.MuiTextField-root input', '.MuiSelect-root',
+        // Element UI / Plus
+        '.el-button', '.el-input__inner', '.el-select',
+        // Bootstrap
+        '.btn:not(button)', '.form-control', '.form-select',
+        // jwork
+        '[class*="jbtn"]', '[class*="j-btn"]',
       ].join(',');
       document.querySelectorAll(sel).forEach(el => {
         try {

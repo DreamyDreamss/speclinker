@@ -112,11 +112,38 @@ Read 도구로 `{entryFile}` 읽기.
 - 이벤트: `window.fnName = function()` + JSDoc
 - 권한: `SessionUtils.getAuthYn('BTN_X')` / `userAuth`
 
-> ⚠️ **api_hints 추출 금지 (JSP/jwork)**:  
-> Spring MVC JSP 프로젝트에서 실제 API 엔드포인트는 JSP 파일이 아닌 **Java 컨트롤러(@RequestMapping)**에 정의된다.  
-> JSP 안의 `J.ajax({url:...})` 패턴은 jwork 내부 그리드 직렬화 호출이므로 신뢰할 수 없다.  
-> **spec.md frontmatter의 `api_hints`를 `[]`(빈 배열)로 두면** STEP 7의 INF-agent가 Java 컨트롤러에서 올바르게 추출한다.  
-> JSP에서 URL 패턴을 억지로 파싱하면 오답이 생성되고 후속 INF 명세가 오염된다.
+**[Django Templates / Jinja2]**
+- 진입: `{% block content %}` / `{% extends "base.html" %}`
+- 폼: `{{ form.field_name }}` / `{% csrf_token %}`
+- 이벤트: `data-url="{{ url 'view-name' }}"` / HTMX `hx-post`
+- 권한: `{% if user.has_perm %}` / `@login_required`
+
+**[Thymeleaf (Spring Boot)]**
+- 진입: `th:fragment` / `layout:decorate`
+- 폼: `th:field="*{fieldName}"` / `th:action="@{/path}"`
+- 이벤트: `th:href="@{/path}"` / `th:onclick`
+- 권한: `sec:authorize="hasRole('ADMIN')"`
+
+**[Blade (Laravel) / ERB (Rails)]**
+- 진입: `@extends('layout')` / `<%= yield %>` / `@section`
+- 폼: `{{ old('field') }}` / `<%= form_with %>`
+- 이벤트: `route('name')` / `link_to_path`
+- 권한: `@can('permission')` / `before_action :authenticate_user!`
+
+> ⚠️ **서버 렌더링 템플릿 공통 원칙 — api_hints 추출 금지**:  
+> JSP·Django Template·Thymeleaf·Blade·ERB 등 **서버 렌더링 템플릿** 파일에는  
+> 실제 API 엔드포인트 URL이 없다. URL은 서버 측 라우터/컨트롤러에 정의된다.  
+>  
+> | 프레임워크 | URL 위치 |
+> |-----------|---------|
+> | Spring MVC (JSP/Thymeleaf) | Java `@RequestMapping/@GetMapping` |
+> | Django | `urls.py`의 `path()` / `re_path()` |
+> | Laravel | `routes/web.php`, `routes/api.php` |
+> | Rails | `config/routes.rb` |
+> | Flask | `app.py` / `blueprint.py` 의 `@app.route` |
+>  
+> **spec.md frontmatter의 `api_hints`를 `[]`로 두면** STEP 7의 INF-agent가 서버 라우터에서 올바르게 추출한다.  
+> 템플릿에서 URL 패턴을 억지로 파싱하면 오답이 생성되어 후속 INF 명세가 오염된다.
 
 ---
 

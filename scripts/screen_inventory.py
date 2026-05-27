@@ -88,8 +88,27 @@ def _convert_confirmed(confirmed_doc, plan_doc, wdir):
         if domain not in uis_ctr:
             continue
 
-        uis_id = uis_ctr[domain]
-        uis_ctr[domain] += 1
+        # confirmed.json에 uisId가 있으면 우선 사용 (숫자 또는 "UIS-F-NNN" 형식 모두 지원)
+        raw_uis = scr.get('uisId') or scr.get('uis_id') or scr.get('UIS_ID')
+        if raw_uis is not None:
+            if isinstance(raw_uis, int):
+                uis_id = raw_uis
+            else:
+                m = re.search(r'(\d+)', str(raw_uis))
+                uis_id = int(m.group(1)) if m else uis_ctr[domain]
+        else:
+            uis_id = uis_ctr[domain]
+            uis_ctr[domain] += 1
+
+        # screenId: confirmed.json의 screen_id / screenId 우선
+        screen_id = (scr.get('screenId') or scr.get('screen_id') or
+                     os.path.splitext(os.path.basename(entry_abs))[0])
+        # PascalCase 보정 (pr201Form → Pr201Form)
+        if screen_id and screen_id[0].islower():
+            screen_id = screen_id[0].upper() + screen_id[1:]
+
+        # screenName: confirmed.json의 screenName 또는 screen_id
+        screen_name = scr.get('screenName') or scr.get('screen_name') or screen_id
 
         out.append({
             'route':          route,
@@ -97,6 +116,8 @@ def _convert_confirmed(confirmed_doc, plan_doc, wdir):
             'entryFile':      entry_abs,
             'componentFiles': [_abs(c) for c in scr.get('component_files', []) if c],
             'uisId':          uis_id,
+            'screenId':       screen_id,
+            'screenName':     screen_name,
             'infDir':         '../../INF/',
             'source':         scr.get('source', 'confirmed'),
         })
