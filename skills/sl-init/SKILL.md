@@ -179,6 +179,74 @@ SOURCE_1_PATH=<현재 작업 디렉토리 절대경로>
 
 ---
 
+## Step 2-B — 화면 캡처 설정 (RECON 모드 한정)
+
+> GENESIS 모드이면 이 단계를 건너뛴다.
+
+사용자에게 아래를 출력하여 질문한다:
+
+```
+실제 화면 스크린샷 캡처를 설정하시겠습니까?
+(개발/스테이징 서버에 Playwright로 자동 로그인 후 캡처)
+
+1) 예 — 지금 URL 입력 (나중에 로그인 1회 필요)
+2) 아니오 — 나중에 직접 project.env 수정
+```
+
+**아니오** 선택 시: 이 단계 건너뛴다. project.env의 PREVIEW 항목은 주석 상태 유지.
+
+**예** 선택 시 아래를 순서대로 진행한다:
+
+```
+개발/스테이징 서버 URL을 입력하세요.
+(예: http://localhost:3333  /  http://192.168.1.100:8080  /  https://dev.myapp.com)
+```
+
+URL 입력 후 추가 설정을 질문한다:
+
+```
+로그인 페이지 URL 패턴을 입력하세요. (만료 감지용 — 기본값: /login,/auth/signin)
+엔터를 치면 기본값 사용:
+```
+
+```
+뷰포트 크기를 입력하세요. (기본값: 1440x900)
+엔터를 치면 기본값 사용:
+```
+
+수집 완료 후 `project.env`의 PREVIEW 항목을 **주석 해제하고 실제 값으로** 업데이트한다:
+
+```
+PREVIEW_BASE_URL=<입력한 URL>
+PREVIEW_STORAGE_STATE=./.preview-storage.json
+PREVIEW_VIEWPORT=<입력한 뷰포트 or 1440x900>
+PREVIEW_WAIT_UNTIL=networkidle
+PREVIEW_TIMEOUT_MS=30000
+PREVIEW_LOGIN_URL_PATTERN=<입력한 패턴 or /login,/auth/signin>
+```
+
+그리고 사용자에게 아래를 출력한다:
+
+```
+캡처 설정 완료. /sl-recon 실행 전에 로그인 1회가 필요합니다.
+
+  [필수] 캡처 전 1회 수동 로그인:
+
+  node "%USERPROFILE%\.claude\plugins\speclinker\scripts\runtime_capture.js" --bootstrap "."
+
+  (Chrome 창이 열림 → 로그인 → 메뉴 1~2개 열어서 확인 → 터미널 Enter)
+  완료하면 .preview-storage.json 이 저장되고 이후 캡처는 자동화됩니다.
+
+  Playwright 미설치 시 먼저 실행:
+    npm install --save-dev playwright
+    npx playwright install chromium
+```
+
+> **Note**: bootstrap은 /sl-recon의 STEP 6-2 직전 어느 시점에서든 실행해도 된다.  
+> storageState(.preview-storage.json)가 있어야 STEP 6-2 자동 캡처가 작동한다.
+
+---
+
 ## Step 3 — 디렉토리 생성
 
 아래 PowerShell 명령으로 디렉토리를 생성한다:
@@ -717,12 +785,38 @@ linked_docs:
 
 ## Step 6 — 다음 단계 안내
 
-```
-초기화 완료. 상황에 따라 다음 커맨드를 실행하세요:
+Step 2-B에서 캡처 설정을 완료했는지 여부에 따라 다른 안내를 출력한다.
 
-- 새 프로젝트 (코드 없음)     → docs/00_입력자료/ 에 기획 문서를 넣고 /sl-genesis 실행
-- 기존 코드 있음 (문서 없음)  → /sl-recon 실행
-- 코드·문서 모두 있음 (변경)  → /sl-analyze 실행
+**캡처 설정 완료한 경우:**
+```
+초기화 완료.
+
+체크리스트:
+  [ ] bootstrap 로그인 완료 여부 확인:
+      node "%USERPROFILE%\.claude\plugins\speclinker\scripts\runtime_capture.js" --bootstrap "."
+  [ ] .preview-storage.json 파일 생성 확인
+
+다음 커맨드:
+  - 기존 코드 있음 (문서 없음)  → /sl-recon 실행
+  - 새 프로젝트 (코드 없음)     → docs/00_입력자료/ 에 기획 문서를 넣고 /sl-genesis 실행
+
+대시보드 실행:
+  Windows PowerShell : .\run-dashboard.ps1
+  Mac/Linux/Git Bash : bash run-dashboard.sh
+```
+
+**캡처 설정 건너뛴 경우:**
+```
+초기화 완료.
+
+캡처가 필요하면 나중에 project.env 에서 직접 설정하세요:
+  PREVIEW_BASE_URL=http://localhost:3333   ← 주석 해제 후 URL 입력
+  그 후: node "%USERPROFILE%\.claude\plugins\speclinker\scripts\runtime_capture.js" --bootstrap "."
+
+다음 커맨드:
+  - 기존 코드 있음 (문서 없음)  → /sl-recon 실행
+  - 새 프로젝트 (코드 없음)     → docs/00_입력자료/ 에 기획 문서를 넣고 /sl-genesis 실행
+  - 코드·문서 모두 있음 (변경)  → /sl-analyze 실행
 
 대시보드 실행:
   Windows PowerShell : .\run-dashboard.ps1
