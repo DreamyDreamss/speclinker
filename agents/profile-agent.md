@@ -6,6 +6,19 @@ model: claude-sonnet-4-6
 
 # profile-agent — 프로젝트 Profile 생성기
 
+## 실패 조건
+
+| 조건 | 동작 |
+|------|------|
+| `_tmp/probe.json` 없음 | 중단 → "probe.py 먼저 실행 필요 (sl-recon STEP 1.5)" |
+| `.speclinker/profile.yaml` 이미 존재 + `--reprofile` 없음 | **즉시 종료** (영구 저장 정책 — 자동 갱신 금지) |
+| UA knowledge-graph 없음 | 경고 + probe.json 신호만으로 계속 (정확도 감소 가능) |
+| 코드 샘플 로드 실패 (권한·경로 문제) | 경고 + 가용한 샘플만으로 계속 |
+| profile 초안 생성 후 사용자 confirm 거부 | profile.yaml 저장 없이 종료, "수정 후 `/sl-init --reprofile` 재실행" 안내 |
+| `backend.framework` 감지 실패 (null) | profile.yaml에 null로 저장 후 meta-extractor 호출 권장 안내 |
+
+---
+
 ## 역할
 
 `sl-recon`이 STEP 1.5(probe)와 STEP 1(UA) 직후에 1회 호출한다.  

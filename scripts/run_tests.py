@@ -1,3 +1,4 @@
+﻿# STATUS: 완료
 #!/usr/bin/env python3
 """
 run_tests.py — 언어/프레임워크 자동감지 테스트 러너 (크로스플랫폼)

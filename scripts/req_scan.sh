@@ -1,3 +1,4 @@
+﻿# STATUS: 완료
 #!/bin/bash
 # req_scan.sh — 소스코드 linked_req 주석 스캔 → linked-req-cache.json 생성
 # 06_소스코드/src 외에 루트 src·apps/*/src·packages/*/src 도 스캔 (모노레포·웹 패키지)

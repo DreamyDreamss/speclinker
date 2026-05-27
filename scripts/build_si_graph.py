@@ -1,3 +1,4 @@
+﻿# STATUS: 완료
 """
 build_si_graph.py — INF/UIS/SCH 스펙 파일 → si-graph.json 생성
 

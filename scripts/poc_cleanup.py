@@ -1,3 +1,4 @@
+﻿# STATUS: 완료
 """
 poc_cleanup.py — RECON 산출물 정리기 (POC 반복 개발용)
 

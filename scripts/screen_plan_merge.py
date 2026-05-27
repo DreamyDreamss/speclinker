@@ -1,3 +1,4 @@
+﻿# STATUS: 완료
 #!/usr/bin/env python3
 """
 screen_plan_merge.py — Phase 7.4 (Screen-first RECON)

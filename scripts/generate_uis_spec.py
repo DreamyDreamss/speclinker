@@ -1,3 +1,4 @@
+﻿# STATUS: 완료
 """
 generate_uis_spec.py — capture.js 결과(preview_*.png + preview_*_widgets.json) 로부터
                        Phase 6.1 형식 spec.md 자동 생성.

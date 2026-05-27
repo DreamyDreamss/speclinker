@@ -1,3 +1,4 @@
+﻿# STATUS: 완료
 #!/usr/bin/env python3
 """
 req_scan.py — 크로스플랫폼 소스 스캔 (Windows/Mac/Linux)

@@ -1,3 +1,4 @@
+﻿// STATUS: 완료
 #!/usr/bin/env node
 /**
  * UA 코어 자동 빌드 — SessionStart 훅에서 호출

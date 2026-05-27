@@ -1,3 +1,4 @@
+﻿// STATUS: 완료
 #!/usr/bin/env node
 // Cross-platform dashboard launcher. Sets GRAPH_DIR from project.env if present.
 const { execSync } = require("child_process");

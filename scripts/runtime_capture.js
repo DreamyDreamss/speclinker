@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// STATUS: deprecated — capture.js로 통합
 /**
  * runtime_capture.js — Playwright 기반 실제 dev/staging 서버 캡처
  *

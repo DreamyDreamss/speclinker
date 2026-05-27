@@ -1,3 +1,4 @@
+﻿# STATUS: 완료
 """
 build_funcs_index.py — RECON 모드 Phase-C 진입 직전에 실행되는 통합 인덱스 빌더
 

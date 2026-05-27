@@ -1,3 +1,4 @@
+﻿# STATUS: 완료
 """
 link_uis_inf.py — INF 생성 완료 후 UIS spec.md §5의 URL을 INF 링크로 교체
 

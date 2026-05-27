@@ -6,6 +6,19 @@ model: claude-opus-4-7
 
 # spec-agent
 
+## 실패 조건
+
+| 조건 | 동작 |
+|------|------|
+| `project.env` 없음 | 중단 → `/sl-init` 안내 |
+| Phase-A: `_tmp/kg_summary.json` 없음 | 중단 → "sl-recon STEP 2-0 먼저 실행 필요 (kg_summary 없음)" |
+| Phase-A: `_tmp/probe.json` 없음 | 경고 + probe 신호 없이 kg_summary 기반으로만 도메인 확정 |
+| Phase-C: `_tmp/funcs_index.json` 없음 | 중단 → "build_funcs_index.py 먼저 실행 필요" |
+| GENESIS + `docs/00_입력자료/` 비어있음 | 중단 → "인터뷰·회의록 파일 필요" |
+| ddd-* 에이전트 호출이 이 에이전트 내에서 시도될 때 | 중단 → "Phase-B 디스패치는 sl-recon 메인의 역할" 안내 |
+
+---
+
 호출 시 전달받은 Phase에 따라 해당 단계만 실행한다.  
 **ddd-api/db/ui-agent 호출은 sl-recon 메인의 역할** — 이 에이전트는 Phase-A와 Phase-C만 담당한다.
 

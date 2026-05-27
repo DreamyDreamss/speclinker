@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// STATUS: 완료
 /**
  * capture.js — CDP attach 기반 화면 캡처 (정식 v1)
  *

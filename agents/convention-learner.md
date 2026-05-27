@@ -6,6 +6,18 @@ model: claude-sonnet-4-6
 
 # convention-learner — 자체 컨벤션 학습기
 
+## 실패 조건
+
+| 조건 | 동작 |
+|------|------|
+| `.speclinker/profile.yaml` 없음 | 중단 → "profile-agent 먼저 실행 필요" |
+| UA knowledge-graph 없음 | 중단 → "`/understand` 먼저 실행 필요 (지식 그래프 필요)" |
+| 코드 샘플 20개 로드 실패 | 가용한 샘플만으로 분석 계속 (샘플 수 부족 경고) |
+| `profile.overrides` 섹션 이미 채워진 경우 | 기존 overrides 표시 후 "덮어쓸까요?" 사용자 확인 |
+| 학습된 컨벤션이 빌트인 strategy와 완전히 일치 | "표준 strategy로 충분, overrides 추가 불필요" 안내 후 종료 |
+
+---
+
 ## 역할
 
 `profile-agent`가 만든 표준 분석 결과로는 잡히지 않는 **회사·팀별 자체 명명·구조 컨벤션**을 코드 직접 분석으로 학습한다. 결과는 `profile.yaml`의 `overrides` 섹션에 채워져 strategy 합성 시 추가 적용된다.

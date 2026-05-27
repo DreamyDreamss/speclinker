@@ -1,3 +1,4 @@
+﻿# STATUS: 완료
 #!/usr/bin/env python3
 """
 inf_registry.py — Phase 7.2 (INF Registry)

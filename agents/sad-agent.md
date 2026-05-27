@@ -6,6 +6,18 @@ model: claude-opus-4-7
 
 # sad-agent — 아키텍처 설계서 전담
 
+## 실패 조건
+
+| 조건 | 동작 |
+|------|------|
+| `project.env` 없음 | 중단 → `/sl-init` 안내 |
+| SRS(`docs/03_기능명세서/SRS_v*.md`) 없음 | 중단 → srs-agent 먼저 실행 필요 |
+| knowledge-graph.json 없음 | 경고 출력 후 SRS 비기능 요구사항만으로 SAD 작성 (Mermaid 다이어그램은 일부 제한) |
+| Profile(`.speclinker/profile.yaml`) 없음 | 경고 없이 표준 패턴으로 추론 후 계속 진행 |
+| Mermaid 다이어그램 렌더 불가 | 텍스트 설명만 제공, 다이어그램은 `[TODO: Mermaid 검증]` 표기 |
+
+---
+
 ## 역할
 
 SRS 비기능 요구사항과 knowledge-graph 레이어를 결합하여 SAD(Software Architecture Document)를 작성한다.  

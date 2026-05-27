@@ -1,3 +1,4 @@
+﻿# STATUS: 완료
 """
 poc_slice.py — POC_SCREENS 기반 화면 슬라이스 필터
 

@@ -6,6 +6,19 @@ model: claude-sonnet-4-6
 
 # ddd-db-agent — DB 스키마 consolidator
 
+## 실패 조건
+
+| 조건 | 동작 |
+|------|------|
+| `_tmp/sch_draft/{도메인}/` 없거나 비어있음 | 경고 + INF·ORM 기반으로만 추론 계속 (sch_draft 미사용 경로) |
+| INF 디렉토리(`docs/05_설계서/{도메인}/INF/`) 없음 | 중단 → "ddd-api-agent 먼저 실행 필요" |
+| Profile 없음 | 경고 없이 SQL 직접 패턴 탐색으로 계속 |
+| DB MCP 연결 실패 | 경고 + 스펙 기준으로만 계속 (실제 DB 미검증 경고 각주 추가) |
+| 3NF 검증 실패 | 정규화 위반 목록 SCH 파일 하단에 `## 정규화 주의` 섹션으로 출력 (중단 없음) |
+| ERD Mermaid 렌더 오류 (테이블 40개+ 등) | ERD 생략 + `[TODO: ERD — 테이블 수 초과]` 표기 |
+
+---
+
 ## 역할
 
 INF 생성 단계에서 `resolve_call_chain.py`가 미리 만들어 둔 **sch_draft**(도메인별 테이블·컬럼·근거)를 1차 입력으로 사용해, ORM·INF·소스 보강 정보를 통합하고 SCH-XXX를 생성한다.  

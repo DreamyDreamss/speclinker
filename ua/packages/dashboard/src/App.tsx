@@ -672,7 +672,8 @@ function Dashboard({ accessToken }: { accessToken: string }) {
           )}
           <div className="flex-1 min-h-0 overflow-hidden">
             <Suspense fallback={<div className="flex items-center justify-center h-full text-sm text-text-muted">로딩 중...</div>}>
-              {extraPanel === "ia" ? <IAView />
+              {extraPanel === "ia"
+                  ? (infList?.length ? <IAView /> : <TabEmptyGuide cmd="/sl-recon" desc="화면-API 관계도가 없습니다. 역분석을 먼저 실행하세요." />)
                 : extraPanel === "apis"
                   ? (infList?.length ? <APIExplorer /> : <TabEmptyGuide cmd="/sl-recon" desc="API 명세(INF)가 없습니다. 역분석을 먼저 실행하세요." />)
                 : extraPanel === "srs"

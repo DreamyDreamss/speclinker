@@ -757,11 +757,10 @@ Phase 6.2의 spec.md는 §4 표를 자동 채우지만 `placeholder`/`default`/`
 - **소요**: 1일
 
 ### Phase 8 산출물 체크
-- [ ] Task 8.1: scripts/README.md + STATUS 주석
-- [x] Task 8.3 부분: APIs/SRS/AIDD 탭 TabEmptyGuide (2026-05-28)
-- [ ] Task 8.2: 에이전트 실패 조건 전수 추가
-- [ ] Task 8.3 완료: IA/Insights 탭 empty state
-- [ ] Task 8.4: check_docs_sync.py
+- [x] Task 8.1: scripts/README.md + STATUS 주석 (2026-05-28)
+- [x] Task 8.2: 에이전트 실패 조건 전수 추가 (2026-05-28) — 12개 에이전트 완료
+- [x] Task 8.3: IA/APIs/SRS/AIDD 탭 TabEmptyGuide 완성 (2026-05-28)
+- [x] Task 8.4: check_docs_sync.py 신설 (2026-05-28)
 
 ---
 

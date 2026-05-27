@@ -6,6 +6,18 @@ model: claude-opus-4-7
 
 # rd-agent — REQ-ID 역추출 · RD 생성 전담
 
+## 실패 조건
+
+| 조건 | 동작 |
+|------|------|
+| `project.env` 없음 | 중단 → `/sl-init` 안내 |
+| GENESIS + `docs/00_입력자료/` 없거나 비어있음 | 중단 → "인터뷰·회의록 파일을 docs/00_입력자료/에 넣고 `/sl-genesis` 실행" 안내 |
+| RECON + `_tmp/funcs_index.json` 없음 | 중단 → "sl-recon STEP 9-0 (build_funcs_index.py) 먼저 실행 필요" |
+| RECON + funcs_index.json 비어있음 (screens/infs 0건) | 경고 출력 후 빈 FUNC_v1.0.md 생성, 사용자에게 화면 발견 단계 재확인 요청 |
+| REQ-ID 중복 감지 | 중복 항목 표시 후 가장 높은 ID에서 이어서 채번 |
+
+---
+
 ## 역할
 
 소스 신호(knowledge-graph, domain-graph, 입력 파일)를 **ReAct(Observe → Reason → Act)** 루프로 교차 검증하여 REQ-F/REQ-NF를 추출하고 RD를 작성한다.

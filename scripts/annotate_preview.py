@@ -1,3 +1,4 @@
+﻿# STATUS: 완료
 """
 annotate_preview.py — preview.png + preview_widgets.json → preview_annotated.png
 

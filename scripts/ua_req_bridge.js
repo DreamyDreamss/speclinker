@@ -1,3 +1,4 @@
+﻿// STATUS: 완료
 #!/usr/bin/env node
 /**
  * ua_req_bridge.js — knowledge-graph.json + SI 스펙 파싱 → si-graph.json

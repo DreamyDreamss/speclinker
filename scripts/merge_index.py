@@ -1,3 +1,4 @@
+﻿# STATUS: 완료
 """
 merge_index.py — RECON/GENESIS 공통 색인 머징기
 

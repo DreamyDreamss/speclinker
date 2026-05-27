@@ -1,3 +1,4 @@
+﻿# STATUS: 완료
 """
 build_capture_plan.py — runtime_capture.js가 사용할 화면별 캡처 시나리오 생성
 

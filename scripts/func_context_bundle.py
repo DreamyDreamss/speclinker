@@ -1,3 +1,4 @@
+﻿# STATUS: 완료
 #!/usr/bin/env python3
 """
 func_context_bundle.py — FUNC-ID 기반 스펙 컨텍스트 번들러

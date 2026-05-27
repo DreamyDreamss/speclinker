@@ -1,3 +1,4 @@
+﻿# STATUS: 완료
 #!/usr/bin/env bash
 # UA 코어 자동 빌드 — package.json 변경 시에만 재빌드
 # SessionStart 훅에서 ${CLAUDE_PLUGIN_ROOT}/scripts/build-ua.sh 로 호출됨

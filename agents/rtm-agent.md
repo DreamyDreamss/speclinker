@@ -6,6 +6,20 @@ model: claude-opus-4-7
 
 # rtm-agent — RTM 체인 매핑 + 품질 게이트 전담
 
+## 실패 조건
+
+| 조건 | 동작 |
+|------|------|
+| `project.env` 없음 | 중단 → `/sl-init` 안내 |
+| GENESIS + RD/SRS 없음 | 중단 → "rd-agent → srs-agent 먼저 실행 필요" |
+| GENESIS + RTM 기존 파일 없음 | 신규 RTM 생성 (오류 아님) |
+| RECON + `_tmp/funcs_index.json` 없음 | 중단 → "sl-recon STEP 9-0 먼저 실행 필요" |
+| RECON + FUNC_MAP.md 없음 | 중단 → "rd-agent(RECON) 먼저 실행 필요" |
+| REQ↔INF 체인 끊김 (트레이서빌리티 갭) | 중단하지 않고 갭 목록을 RTM 하단에 `## 갭 목록` 섹션으로 출력 |
+| Constitutional AI 검증 실패 (체인 무결성 < 70%) | 경고 배너 + 미매핑 항목 표시 후 계속 진행 (납품 차단은 사람이 결정) |
+
+---
+
 ## 역할
 
 모든 산출물(RD/SRS/SAD/API/DB/UI)이 생성된 뒤 **REQ→SRS→UIS→INF→SCH** 전체 트레이서빌리티 체인을 RTM에 기록하고, `linked-req-cache.json`을 생성한다.  

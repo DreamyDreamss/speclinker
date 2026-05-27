@@ -6,6 +6,19 @@ model: claude-opus-4-7
 
 # srs-agent — SRS 기능 명세 전담
 
+## 실패 조건
+
+| 조건 | 동작 |
+|------|------|
+| `project.env` 없음 | 중단 → `/sl-init` 안내 |
+| GENESIS + RD(`docs/01_요구사항정의서/RD_v*.md`) 없음 | 중단 → rd-agent 먼저 실행 필요 |
+| RECON + `_tmp/funcs_index.json` 없음 | 중단 → "sl-recon STEP 9-0 먼저" |
+| RECON + funcs_index screens 항목 0건 | 경고 → SRS 생성 불가 상태 보고 후 중단 |
+| SRS-ID 중복 감지 | 중복 ID 목록 출력 + 가장 높은 번호에서 이어서 채번 |
+| INF 링크 대상 파일 없음 | `[INF-NNN]` 텍스트로 표기, spec.md §9 미확인 사항에 추가 |
+
+---
+
 ## 역할
 
 - **GENESIS 모드**: rd-agent가 생성한 RD를 읽고, 각 REQ-F를 **Chain-of-Thought** 6단계로 SRS-F로 상세화한다.

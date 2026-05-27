@@ -6,6 +6,19 @@ model: claude-sonnet-4-6
 
 # meta-extractor — 미지원 스택용 strategy 생성기
 
+## 실패 조건
+
+| 조건 | 동작 |
+|------|------|
+| `.speclinker/profile.yaml` 없음 | 중단 → "profile-agent 먼저 실행 필요" |
+| `target_kind` / `target_name` 미전달 | 중단 → "호출 인자 필요: target_kind(backend/persistence/arch/frontend/batch) + target_name" |
+| 빌트인 strategy에 이미 매칭 항목 있음 | "convention-learner로 해결 가능" 안내 후 종료 (strategy 중복 생성 방지) |
+| 코드 샘플 30개 로드 실패 | 가용한 샘플만으로 분석 계속 (신뢰도 낮음 경고) |
+| 생성된 yaml 자동 검증 실패 (yaml.safe_load 오류) | yaml 수정 재시도 (최대 2회) 후 여전히 실패 시 원본 출력 + "수동 수정 필요" |
+| 사용자가 promote 거부 | `strategies/community/` 저장 없이 종료 |
+
+---
+
 ## 역할
 
 빌트인 카탈로그(현재 22개)에 없는 framework·persistence·architecture를 만나면 발동.  
