@@ -115,7 +115,7 @@ def _convert_confirmed(confirmed_doc, plan_doc, wdir):
         # screenName: confirmed.json의 screenName 또는 screen_id
         screen_name = scr.get('screenName') or scr.get('screen_name') or screen_id
 
-        out.append({
+        item = {
             'route':          route,
             'domain':         domain,
             'entryFile':      entry_abs,
@@ -125,7 +125,12 @@ def _convert_confirmed(confirmed_doc, plan_doc, wdir):
             'screenName':     screen_name,
             'infDir':         '../../INF/',
             'source':         scr.get('source', 'confirmed'),
-        })
+        }
+        # BFS 메뉴 경로 메타 보존 (build_capture_plan.py에서 menu-click preActions 생성에 사용)
+        meta = scr.get('metadata', {})
+        if meta.get('menu_l1') or meta.get('menu_l2'):
+            item['menuMeta'] = {'menu_l1': meta.get('menu_l1', ''), 'menu_l2': meta.get('menu_l2', '')}
+        out.append(item)
     return out
 
 if os.path.exists(confirmed_path):

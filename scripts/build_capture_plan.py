@@ -91,6 +91,20 @@ def make_actions_standalone(route):
     ]
 
 
+def make_actions_menu_click(menu_l1, menu_l2):
+    """BFS 런타임 전용: 메뉴 클릭 경로로 화면 진입 (jwork 아이프레임 구조 대응)"""
+    actions = [
+        {'action': 'goto', 'url': '/', 'waitUntil': 'networkidle'},
+    ]
+    if menu_l1:
+        actions.append({'action': 'click', 'selector': f"a:has-text('{menu_l1}')", 'timeoutMs': 5000})
+        actions.append({'action': 'wait', 'ms': 400})
+    if menu_l2:
+        actions.append({'action': 'click', 'selector': f"a:has-text('{menu_l2}')", 'timeoutMs': 5000})
+        actions.append({'action': 'wait', 'ms': 800})
+    return actions
+
+
 def make_actions_dynamic(route):
     parent = list_parent_route(route)
     if not parent or parent == '/':
@@ -194,6 +208,14 @@ def main():
 
     inventory = json.load(open(INV_PATH, encoding='utf-8'))
 
+    # 정적 분석으로도 발견된 route 집합 — BFS 전용 화면 판별에 사용
+    # (runtime-bfs이지만 static KG도 같은 URL을 발견했다면 goto 모드로 처리)
+    static_routes = {
+        (item.get('route') or '').rstrip('/')
+        for item in inventory
+        if (item.get('source') or '') not in ('runtime-bfs',)
+    }
+
     # 기존 capture_plan 보존 (manualOverride 항목)
     existing = {}
     if os.path.exists(OUT_PATH):
@@ -203,7 +225,7 @@ def main():
             existing = {}
 
     plan = {}
-    counts = {'standalone': 0, 'dynamic-route': 0, 'search-result': 0, 'modal-only': 0, 'manual': 0}
+    counts = {'standalone': 0, 'dynamic-route': 0, 'search-result': 0, 'menu-click': 0, 'modal-only': 0, 'manual': 0}
 
     for item in inventory:
         uis_id = item.get('uisId') or str(item.get('id', ''))
@@ -225,7 +247,15 @@ def main():
             counts['manual'] += 1
             continue
 
-        rtype = classify_route(route)
+        source     = item.get('source', '')
+        menu_meta  = item.get('menuMeta', {})
+        is_bfs_only = (
+            source == 'runtime-bfs'
+            and route.rstrip('/') not in static_routes
+            and (menu_meta.get('menu_l1') or menu_meta.get('menu_l2'))
+        )
+
+        rtype = 'menu-click' if is_bfs_only else classify_route(route)
         entry = {
             'route':    route,
             'type':     rtype,
@@ -233,11 +263,16 @@ def main():
             'screen':   item.get('screen') or item.get('entryFile'),
         }
 
-        if rtype == 'standalone':
+        if is_bfs_only:
+            entry['preActions'] = make_actions_menu_click(
+                menu_meta.get('menu_l1', ''), menu_meta.get('menu_l2', '')
+            )
+            entry['hint'] = f"BFS 전용 — 메뉴 클릭 진입 ({menu_meta.get('menu_l1','')} > {menu_meta.get('menu_l2','')})"
+        elif rtype == 'standalone':
             entry['preActions'] = make_actions_standalone(route)
         elif rtype == 'dynamic-route':
             entry['preActions'] = make_actions_dynamic(route)
-            entry['fallback'] = route  # 사용자가 seed ID 직접 채워 넣을 위치
+            entry['fallback'] = route
             entry['hint'] = '동적 ID는 목록 첫 행 자동 클릭으로 추출. 실패 시 fallback URL을 실제 ID로 교체'
         elif rtype == 'search-result':
             entry['preActions'] = []
@@ -277,6 +312,9 @@ def main():
             print(f'  {k:<15} {v}건')
     print(f'\n저장: {OUT_PATH}')
 
+    if counts.get('menu-click', 0) > 0:
+        print(f'\n[BFS 메뉴 클릭] {counts["menu-click"]}개 화면 — 정적 분석 미발견, 메뉴 클릭으로 진입합니다.')
+        print('  (jwork 아이프레임 구조 대응 — goto 대신 L1>L2 메뉴 클릭 후 위젯 추출)')
     if counts.get('dynamic-route', 0) > 0:
         print('\n[힌트] 동적 라우트 화면은 목록 첫 행을 자동 클릭합니다.')
         print('       특정 ID로 캡처하려면 capture_plan.json의 fallback URL을 직접 수정하세요.')
