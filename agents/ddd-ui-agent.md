@@ -108,10 +108,15 @@ Read 도구로 `{entryFile}` 읽기.
 
 **[JSP/jwork]**
 - 진입: `window.XXXGrid` / `$('#tabArea').tabs()`
-- 데이터: `J.ajax({url: '/path'})` / `$.ajax({url: '/path'})`
 - 폼: `$('input[name="X"]')` / `$('select[name="X"]')`
 - 이벤트: `window.fnName = function()` + JSDoc
 - 권한: `SessionUtils.getAuthYn('BTN_X')` / `userAuth`
+
+> ⚠️ **api_hints 추출 금지 (JSP/jwork)**:  
+> Spring MVC JSP 프로젝트에서 실제 API 엔드포인트는 JSP 파일이 아닌 **Java 컨트롤러(@RequestMapping)**에 정의된다.  
+> JSP 안의 `J.ajax({url:...})` 패턴은 jwork 내부 그리드 직렬화 호출이므로 신뢰할 수 없다.  
+> **spec.md frontmatter의 `api_hints`를 `[]`(빈 배열)로 두면** STEP 7의 INF-agent가 Java 컨트롤러에서 올바르게 추출한다.  
+> JSP에서 URL 패턴을 억지로 파싱하면 오답이 생성되고 후속 INF 명세가 오염된다.
 
 ---
 

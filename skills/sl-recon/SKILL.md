@@ -950,26 +950,37 @@ for d in plan['domains']:
         poc_data = json.load(open(poc_url_file, encoding='utf-8'))
         target_urls = set(poc_data.get('targetUrls', []))
         if target_urls:
-            # 각 컨트롤러 파일을 읽어 정의된 URL이 target_urls와 교집합 있는지 확인
-            URL_DEFINE_RE = re.compile(r"""(?:@(?:Get|Post|Put|Delete|Patch|Request)Mapping|@RequestMapping)\s*\(\s*(?:value\s*=\s*)?['"]([^'"]+)['"]""")
+            # resolve_call_chain.extract_defined_urls 사용 — Java Spring + Python FastAPI 통합 처리
+            import sys as _sys
+            plugin = env.get('PLUGIN_PATH','')
+            if plugin and os.path.join(plugin, 'scripts') not in _sys.path:
+                _sys.path.insert(0, os.path.join(plugin, 'scripts'))
+            try:
+                from resolve_call_chain import extract_defined_urls as _edu
+            except ImportError:
+                _edu = None
             matched_files = []
             for fp in files:
                 abs_fp = fp if os.path.isabs(fp) else os.path.join(os.getcwd(), fp)
                 if not os.path.exists(abs_fp):
                     continue
-                try:
-                    body = open(abs_fp, encoding='utf-8', errors='ignore').read()
-                except Exception:
-                    continue
-                defined_urls = URL_DEFINE_RE.findall(body)
-                # 클래스 레벨 prefix 결합
-                class_prefix_m = re.search(r"@RequestMapping\s*\(\s*['\"](/[^'\"]+)['\"]", body)
-                prefix = class_prefix_m.group(1).rstrip('/') if class_prefix_m else ''
-                full_urls = set()
-                for u in defined_urls:
-                    full = (prefix + '/' + u.strip('/')) if prefix else u
-                    full_urls.add(full if full.startswith('/') else '/'+full)
-                # path-only 매칭 (쿼리스트링 무시는 이미 처리됨)
+                if _edu:
+                    full_urls = set(_edu(abs_fp))
+                else:
+                    # fallback: Java-only inline regex (이전 동작 보존)
+                    import re as _re
+                    try:
+                        body = open(abs_fp, encoding='utf-8', errors='ignore').read()
+                    except Exception:
+                        continue
+                    _URL_RE = _re.compile(r"""@(?:Get|Post|Put|Delete|Patch|Request)Mapping\s*\(\s*(?:value\s*=\s*)?['"]([^'"]+)['"]""")
+                    defined = _URL_RE.findall(body)
+                    pfx_m = _re.search(r"@RequestMapping\s*\(\s*['\"](/[^'\"]+)['\"]", body)
+                    pfx = pfx_m.group(1).rstrip('/') if pfx_m else ''
+                    full_urls = set()
+                    for u in defined:
+                        f = (pfx + '/' + u.strip('/')) if pfx else u
+                        full_urls.add(f if f.startswith('/') else '/'+f)
                 if any(any(t == fu or t.startswith(fu) or fu.startswith(t) for fu in full_urls) for t in target_urls):
                     matched_files.append(fp)
             if matched_files:
@@ -1196,6 +1207,34 @@ print(kg_path)
 " 2>/dev/null
 ```
 
+### STEP 6-0.5: UI 캡처 모드 결정 (capture-first / llm-first)
+
+`PREVIEW_STORAGE_STATE`(storageState.json)가 존재하면 **capture-first** 모드로 분기한다.  
+capture-first는 `runtime_capture.js --inspect`로 실제 DOM 위젯 + 네트워크 요청을 수집하고,  
+`generate_uis_spec.py`가 spec.md를 자동 생성한다 — **ddd-ui-agent LLM 호출 없음**.
+
+```bash
+!python3 -c "
+import os
+env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
+           if '=' in l and not l.startswith('#'))
+storage = env.get('PREVIEW_STORAGE_STATE', '.preview-storage.json')
+abs_storage = storage if os.path.isabs(storage) else os.path.join(os.getcwd(), storage)
+has_storage = os.path.exists(abs_storage)
+mode = 'capture-first' if has_storage else 'llm-first'
+print(f'storageState: {abs_storage}  ({\"존재\" if has_storage else \"없음\"})')
+print(f'UI_CAPTURE_MODE = {mode}')
+if mode == 'capture-first':
+    print('  → STEP 6-2: runtime_capture.js --inspect  (preview + widgets.json 자동 생성)')
+    print('  → STEP 6-3: generate_uis_spec.py 전체 실행 (ddd-ui-agent 건너뜀)')
+else:
+    print('  → STEP 6-2: ddd-ui-agent (LLM 기반 spec.md)')
+    print('  → STEP 6-3: widgets.json 있는 화면만 generate_uis_spec.py 실행')
+"
+```
+
+---
+
 ### STEP 6-1: 화면 인벤토리 생성
 
 화면 인벤토리를 생성한다. **Phase 7 경로**와 **KG 경로** 두 가지를 자동 분기한다:
@@ -1237,7 +1276,30 @@ else:
 "
 ```
 
-### STEP 6-2: ddd-ui-agent 화면별 병렬 실행 (배치 3개씩)
+### STEP 6-2: UIS 생성 — capture-first / llm-first 분기
+
+#### capture-first (`UI_CAPTURE_MODE=capture-first`)
+
+`runtime_capture.js --inspect`를 실행한다. preview.png + 탭별 위젯 JSON을 **한 번의 실행**으로 모든 화면에 생성한다.
+
+```bash
+# Linux/macOS:
+!node "$PLUGIN_PATH/scripts/runtime_capture.js" --inspect "$(pwd)" 2>&1 | tail -50
+```
+
+```powershell
+# Windows:
+!node "$env:PLUGIN_PATH\scripts\runtime_capture.js" --inspect "$pwd" 2>&1 | Select-Object -Last 50
+```
+
+> `--inspect`가 각 화면 디렉토리(`docs/05_설계서/{domain}/UI/{화면ID}/`)에 생성하는 파일:
+> - `preview.png` — 전체 화면 스크린샷
+> - `preview_tab{N}_{탭명}.png` + `preview_tab{N}_{탭명}_widgets.json` — 탭별 위젯 목록
+> - `network_requests.json` — XHR/fetch 인터셉트 기록 (버튼 api_hints 보완용)
+>
+> 완료 후 **STEP 6-3으로 바로 이동** (ddd-ui-agent 호출 불필요).
+
+#### llm-first (`UI_CAPTURE_MODE=llm-first`, storageState 없을 때)
 
 `_tmp/screen_inventory.json`을 읽어 배치 처리한다.  
 **이미 `docs/05_설계서/{domain}/UI/{uisId}/spec.md`가 존재하는 화면은 건너뛴다 (재시작 지원).**
@@ -1266,10 +1328,12 @@ _tmp/screen_inventory.json의 각 항목에 대해 Agent 도구 호출 (배치 3
 > **ddd-ui-agent는 spec.md만 생성한다.** preview는 STEP 6-6에서 캡처.  
 > 3개씩 배치 순차 실행 — 토큰 과소비 방지.
 
-### STEP 6-3: generate_uis_spec.py 실행 (widgets.json 있는 화면만)
+### STEP 6-3: generate_uis_spec.py 실행
 
-각 배치 완료 후, 해당 화면 디렉토리에 `widgets.json`이 있으면 generate_uis_spec.py를 실행한다  
-(attach 캡처를 수행한 화면에만 해당 — 없으면 건너뜀):
+- **capture-first**: `--inspect`가 생성한 `preview_tab*_widgets.json`(또는 `widgets.json`)이 있는 **모든 화면**에 실행한다.  
+- **llm-first**: 수동 attach 캡처 등으로 `widgets.json`이 있는 화면만 실행한다 (기존 동작).
+
+각 배치 완료 후(capture-first는 runtime_capture 완료 후), 해당 화면 디렉토리에 위젯 JSON이 있으면 실행한다:
 
 ```bash
 # 배치 완료 후 각 화면에 대해:

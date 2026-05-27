@@ -339,6 +339,70 @@ def extract_imports(file_path, workspace_root, follow_layers=None, skip_layers=N
     return []
 
 
+# ──────────────────────────────────────────────
+# 컨트롤러 파일에서 정의된 URL 추출 (Java Spring + Python FastAPI)
+# STEP 5-1 POC URL 매칭, RTM 등에서 사용
+# ──────────────────────────────────────────────
+
+# Java Spring: @GetMapping("/path") / @RequestMapping(value="/path") / @PostMapping("/p")
+_JAVA_MAPPING_RE = re.compile(
+    r'@(?:Get|Post|Put|Delete|Patch|Request)Mapping\s*\(\s*(?:value\s*=\s*)?["\']([^"\']+)["\']',
+    re.I,
+)
+# Python FastAPI: @router.get("/path") / @app.post("/path") / @router.put("/items/{id}")
+_FASTAPI_ROUTE_RE = re.compile(
+    r'@\w+\.(?:get|post|put|delete|patch|head|options)\s*\(\s*["\']([^"\']+)["\']',
+    re.I,
+)
+
+
+def extract_defined_urls(file_path):
+    """컨트롤러 파일에서 정의된 모든 엔드포인트 URL 목록 반환.
+
+    Java Spring (@GetMapping / @PostMapping / @RequestMapping) 와
+    Python FastAPI (@router.get / @router.post / @app.get 등) 를 모두 처리한다.
+    클래스 레벨 @RequestMapping prefix가 있으면 각 메서드 URL과 결합해 반환한다.
+
+    Returns:
+        list[str] — '/product/list', '/api/items/{id}' 같은 경로 문자열 목록 (중복 제거)
+    """
+    if not os.path.exists(file_path):
+        return []
+    try:
+        body = open(file_path, encoding='utf-8', errors='ignore').read()
+    except Exception:
+        return []
+
+    lang = detect_language(file_path)
+    urls = []
+
+    if lang == 'java':
+        # 클래스 레벨 prefix (@RequestMapping("/product"))
+        prefix_m = re.search(
+            r'@RequestMapping\s*\(\s*(?:value\s*=\s*)?["\']([^"\']+)["\']', body, re.I
+        )
+        prefix = prefix_m.group(1).rstrip('/') if prefix_m else ''
+        for m in _JAVA_MAPPING_RE.finditer(body):
+            url = m.group(1)
+            if prefix and not url.startswith(prefix):
+                url = prefix + '/' + url.lstrip('/')
+            urls.append(url if url.startswith('/') else '/' + url)
+
+    elif lang == 'python':
+        # FastAPI prefix: APIRouter(prefix="/api/v1")
+        router_prefix_m = re.search(
+            r'APIRouter\s*\([^)]*prefix\s*=\s*["\']([^"\']+)["\']', body, re.I
+        )
+        prefix = router_prefix_m.group(1).rstrip('/') if router_prefix_m else ''
+        for m in _FASTAPI_ROUTE_RE.finditer(body):
+            url = m.group(1)
+            if prefix and not url.startswith(prefix):
+                url = prefix + url
+            urls.append(url if url.startswith('/') else '/' + url)
+
+    return list(dict.fromkeys(urls))  # 순서 보존 중복 제거
+
+
 def find_query_files(dao_file, workspace_root):
     """DAO 파일명 기반으로 연관 쿼리/매퍼 파일 검색"""
     base_name = os.path.splitext(os.path.basename(dao_file))[0]

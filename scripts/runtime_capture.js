@@ -52,6 +52,7 @@ try {
 // ── 인자 파싱 ──
 const args = process.argv.slice(2);
 const isBootstrap = args.includes('--bootstrap');
+const INSPECT     = args.includes('--inspect');
 const wsArg = args.find(a => !a.startsWith('--')) || '.';
 const WS = path.resolve(wsArg);
 
@@ -246,6 +247,98 @@ async function bootstrap() {
   console.error('Bootstrap 완료. 이제 인자 없이 실행하면 자동 캡처됩니다.');
 }
 
+// ── INSPECT 헬퍼: 탭 셀렉터 탐지 ──
+async function findTabSelector(frame) {
+  const candidates = [
+    '#tabArea a', '.tab-menu a', '.tabs a',
+    '.tabArea a', '[role=tab]', '.tab-header a',
+    '.tab > ul > li > a', 'ul.tab > li > a',
+  ];
+  for (const sel of candidates) {
+    try {
+      const cnt = await frame.locator(sel).count();
+      if (cnt > 1) return { selector: sel, count: cnt };
+    } catch (_) {}
+  }
+  return null;
+}
+
+// ── INSPECT 헬퍼: DOM 위젯 추출 ──
+async function extractWidgetsFromFrame(frame, tabName) {
+  try {
+    return await frame.evaluate((tabName) => {
+      const widgets = [];
+      let counter = 1;
+      const sel = [
+        'input:not([type=hidden])', 'select', 'textarea',
+        'button', 'input[type=button]', 'input[type=submit]',
+        'a.btn', 'a.button', 'a[onclick]',
+      ].join(',');
+      document.querySelectorAll(sel).forEach(el => {
+        try {
+          const rect = el.getBoundingClientRect();
+          if (rect.width === 0 && rect.height === 0) return;
+          let label = '';
+          if (el.labels && el.labels[0]) label = el.labels[0].textContent.trim();
+          if (!label) {
+            const row = el.closest('tr,li,dd,div');
+            if (row) label = (row.querySelector('label,th') || {}).textContent || '';
+            label = label.trim();
+          }
+          if (!label) label = (el.placeholder || el.textContent || el.value || '').trim();
+          label = label.slice(0, 50);
+          const tagLc = el.tagName.toLowerCase();
+          let typeHint = 'text';
+          if (tagLc === 'select') typeHint = 'select';
+          else if (tagLc === 'textarea') typeHint = 'textarea';
+          else if (tagLc === 'button' || tagLc === 'a') typeHint = 'button';
+          else if (['button', 'submit', 'image', 'reset'].includes(el.type)) typeHint = 'button';
+          else if (el.type === 'checkbox') typeHint = 'checkbox';
+          else if (el.type === 'radio') typeHint = 'radio';
+          else if (el.type === 'date') typeHint = 'date';
+          else if (el.type === 'number') typeHint = 'number';
+          else if (el.type === 'file') typeHint = 'file';
+          const apiHints = [];
+          if (typeHint === 'button') {
+            const oc = el.getAttribute('onclick') || '';
+            const urlRe = /['"](\/[^'"]*(?:list|save|delete|update|get|post|info|do|json|api)[^'"]*)['"]/gi;
+            for (const m of oc.matchAll(urlRe)) apiHints.push(m[1]);
+            const da = el.getAttribute('data-url') || el.getAttribute('data-action') || '';
+            if (da) apiHints.push(da);
+          }
+          widgets.push({
+            id: `WG-${String(counter).padStart(2, '0')}`,
+            number: String(counter),
+            tag: tagLc,
+            type_hint: typeHint,
+            type: el.type || '',
+            name: el.name || '',
+            dom_id: el.id || '',
+            label,
+            placeholder: el.placeholder || '',
+            default_value: el.defaultValue || '',
+            required: el.required || false,
+            readonly: el.readOnly || false,
+            disabled: el.disabled || false,
+            pattern: el.pattern || '',
+            maxlength: el.maxLength > 0 ? el.maxLength : null,
+            bbox: [Math.round(rect.left), Math.round(rect.top), Math.round(rect.right), Math.round(rect.bottom)],
+            api_hints: apiHints,
+            form_method: ((el.form && el.form.method) || '').toUpperCase(),
+            condition_hints: [],
+            tab: tabName,
+          });
+          counter++;
+        } catch (_) {}
+      });
+      return widgets;
+    }, tabName);
+  } catch (e) {
+    console.error(`  [inspect] extractWidgets 실패 (${tabName}): ${e.message.slice(0, 100)}`);
+    return [];
+  }
+}
+
 // ── CAPTURE 모드 ──
 async function captureAll() {
   if (!fs.existsSync(STORAGE_STATE)) {
@@ -316,6 +409,18 @@ async function captureAll() {
     console.error(`[${i + 1}/${inventory.length}] ${modeTag} ${url} → ${path.relative(WS, outPng)}`);
 
     const page = await ctx.newPage();
+    const interceptedUrls = [];
+    if (INSPECT) {
+      page.on('request', req => {
+        try {
+          const rt = req.resourceType();
+          if (rt === 'xhr' || rt === 'fetch') {
+            const pu = new URL(req.url());
+            interceptedUrls.push({ method: req.method(), path: pu.pathname + pu.search });
+          }
+        } catch (_) {}
+      });
+    }
     let finalUrl = '';
     let captureOk = false;
     let isExpired = false;
@@ -369,6 +474,69 @@ async function captureAll() {
           await page.screenshot({ path: outPng, fullPage: true });
         }
         captureOk = true;
+      }
+      // ── INSPECT 모드: 탭 탐색 + 위젯 추출 + 네트워크 기록 ──
+      if (INSPECT && captureOk) {
+        try {
+          const cf = await pickContentFrame(page, 'auto', item.route);
+          const fi = cf || page.mainFrame();
+          const tabSel = await findTabSelector(fi);
+          const tabData = [];
+
+          if (tabSel) {
+            for (let ti = 0; ti < tabSel.count; ti++) {
+              let tabName = `tab${ti + 1}`;
+              try {
+                tabName = (await fi.locator(tabSel.selector).nth(ti).textContent({ timeout: 1000 }))
+                  .trim().slice(0, 20).replace(/[/\\:*?"<>|\s]+/g, '_') || `tab${ti + 1}`;
+              } catch (_) {}
+              const tabPng  = path.join(outDir, `preview_tab${ti + 1}_${tabName}.png`);
+              const tabJson = path.join(outDir, `preview_tab${ti + 1}_${tabName}_widgets.json`);
+              try {
+                await fi.locator(tabSel.selector).nth(ti).click({ force: true, timeout: 3000 });
+                await page.waitForTimeout(600);
+                if (cf) await cf.locator('body').screenshot({ path: tabPng });
+                else await page.screenshot({ path: tabPng, fullPage: true });
+              } catch (te) {
+                console.error(`  [inspect] tab${ti + 1} 클릭/캡처 실패: ${te.message.slice(0, 80)}`);
+              }
+              const widgets = await extractWidgetsFromFrame(fi, tabName);
+              tabData.push({ tabName, widgets, tabJson });
+            }
+          } else {
+            const widgets = await extractWidgetsFromFrame(fi, 'main');
+            tabData.push({ tabName: 'main', widgets, tabJson: path.join(outDir, 'widgets.json') });
+          }
+
+          // 네트워크 인터셉트 URL → 버튼 위젯 api_hints 보완
+          const apiPaths = [...new Set(interceptedUrls.map(r => r.path))];
+          if (apiPaths.length > 0) {
+            for (const { widgets } of tabData) {
+              for (const w of widgets) {
+                if (w.type_hint === 'button' && w.api_hints.length === 0) {
+                  w.api_hints = apiPaths;
+                }
+              }
+            }
+          }
+
+          // 탭별 JSON 저장
+          for (const { tabName, widgets, tabJson } of tabData) {
+            fs.writeFileSync(tabJson, JSON.stringify(widgets, null, 2));
+            console.error(`  [inspect] tab '${tabName}': ${widgets.length}위젯 → ${path.basename(tabJson)}`);
+          }
+
+          // 네트워크 로그 저장
+          if (interceptedUrls.length > 0) {
+            fs.writeFileSync(
+              path.join(outDir, 'network_requests.json'),
+              JSON.stringify(interceptedUrls, null, 2)
+            );
+            console.error(`  [inspect] network: ${interceptedUrls.length}건 → network_requests.json`);
+          }
+        } catch (ie) {
+          console.error(`  [inspect] 위젯 추출 오류: ${ie.message.slice(0, 150)}`);
+        }
       }
       // 옛 트릭 코드 보존 (불사용) — Phase 6.2 휴리스틱
       if (false) {
