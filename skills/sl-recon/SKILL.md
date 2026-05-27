@@ -2025,6 +2025,26 @@ else:
 생성된 `_tmp/funcs_index.json`은 9-2(rd-agent), 9-3(srs-agent), 9-4(rtm-agent) 세 에이전트가 공유한다.  
 **동일한 spec.md/INF/*.md를 3번 cat하지 않도록 각 에이전트는 이 인덱스를 1차 입력으로 사용한다.**
 
+**9-0-1. SI 트레이싱 그래프 빌드 (LLM 호출 없음)** — `scripts/build_si_graph.py` 실행:
+
+```bash
+!python3 -c "
+import os, sys, subprocess
+env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8') if '=' in l and not l.startswith('#'))
+plugin = env.get('PLUGIN_PATH','')
+script = os.path.join(plugin, 'scripts', 'build_si_graph.py') if plugin else ''
+if script and os.path.exists(script):
+    subprocess.run([sys.executable, script, '.'], check=False)
+else:
+    print('build_si_graph.py 없음 — PLUGIN_PATH 확인')
+"
+```
+
+INF/UIS/SCH 파일을 스캔하여 스펙 노드 + `traces_to` 엣지 생성 →  
+`.understand-anything/si-graph.json` (대시보드 SI 탭에서 스펙↔코드 매핑 시각화).
+
+---
+
 **9-1. 전체 색인 생성 (스크립트, LLM 호출 없음)** — `scripts/merge_index.py` 실행:
 
 ```bash

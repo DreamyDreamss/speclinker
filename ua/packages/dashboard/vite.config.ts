@@ -385,11 +385,16 @@ export default defineConfig({
                 const infSubFiles = fs.existsSync(infSubDir)
                   ? fs.readdirSync(infSubDir).filter(f => f.endsWith(".md"))
                   : [];
+                const uiSubDir2 = path.join(domainPath, "UI");
+                const uiSubCount = fs.existsSync(uiSubDir2)
+                  ? fs.readdirSync(uiSubDir2, { withFileTypes: true })
+                      .filter(e => e.isDirectory() && fs.existsSync(path.join(uiSubDir2, e.name, "spec.md"))).length
+                  : 0;
                 result.push({
                   domain,
                   infCount: topFiles.filter(f => /^INF-\d+/.test(f)).length + infSubFiles.filter(f => /^INF-\d+/.test(f)).length,
                   schCount: topFiles.filter(f => /^SCH-\d+/.test(f) || /^DB_/.test(f)).length,
-                  uiCount:  topFiles.filter(f => /^UIS-F-\d+/.test(f) || /^UI_/.test(f)).length,
+                  uiCount:  topFiles.filter(f => /^UIS-F-\d+/.test(f) || /^UI_/.test(f)).length + uiSubCount,
                 });
               }
             }
@@ -474,6 +479,28 @@ export default defineConfig({
                   if (uiFiles.some(u => u.uisId === `UIS-${d.name}` && u.domain === d.name)) continue;
                   uiFiles.push({ uisId: `UIS-${d.name}`, domain: d.name, path: `docs/05_설계서/${d.name}/${e.name}` });
                 }
+
+                // RECON 서브 디렉터리: UI/{screenId}/spec.md
+                const uiSubDir = path.join(domainDir, "UI");
+                if (fs.existsSync(uiSubDir)) {
+                  for (const e of fs.readdirSync(uiSubDir, { withFileTypes: true }).filter(e => e.isDirectory())) {
+                    const screenId = e.name;
+                    if (uiFiles.some(u => u.uisId === screenId && u.domain === d.name)) continue;
+                    const specPath = path.join(uiSubDir, screenId, "spec.md");
+                    if (!fs.existsSync(specPath)) continue;
+                    const previewHtmlPath = fs.existsSync(path.join(uiSubDir, screenId, "preview.html"))
+                      ? `docs/05_설계서/${d.name}/UI/${screenId}/preview.html` : undefined;
+                    const previewPngPath = fs.existsSync(path.join(uiSubDir, screenId, "preview.png"))
+                      ? `docs/05_설계서/${d.name}/UI/${screenId}/preview.png` : undefined;
+                    uiFiles.push({
+                      uisId: screenId,
+                      domain: d.name,
+                      path: `docs/05_설계서/${d.name}/UI/${screenId}/spec.md`,
+                      ...(previewHtmlPath ? { previewHtmlPath } : {}),
+                      ...(previewPngPath ? { previewPngPath } : {}),
+                    });
+                  }
+                }
               }
             }
             res.setHeader("Content-Type", "application/json");
@@ -502,6 +529,16 @@ export default defineConfig({
                   // 통합 API_Design.md (Phase C 집계 파일)
                   if (f === "API_Design.md") {
                     infFiles.push({ infId: `INF-${d.name}-design`, domain: d.name, path: `docs/05_설계서/${d.name}/${f}` });
+                  }
+                }
+                // RECON 서브 디렉터리: docs/05_설계서/{domain}/INF/INF-NNN.md
+                const infSubDir2 = path.join(designDir, d.name, "INF");
+                if (fs.existsSync(infSubDir2)) {
+                  for (const f of fs.readdirSync(infSubDir2).filter(f => f.endsWith(".md"))) {
+                    const mInd = f.match(/^INF-(\d+)/);
+                    if (mInd) {
+                      infFiles.push({ infId: `INF-${mInd[1]}`, domain: d.name, path: `docs/05_설계서/${d.name}/INF/${f}` });
+                    }
                   }
                 }
               }
