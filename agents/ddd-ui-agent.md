@@ -158,18 +158,33 @@ JSP 화면의 버튼은 HTML에 `id=` 만 있고, 실제 클릭 핸들러와 API
   $("#mainForm").ajaxSubmit({ url: ctx + "/app/.../saveXxx" })
   또는 form의 action에서 URL 추출
 
-패턴 5 (팝업 오픈):
+패턴 5 (팝업 오픈 — fn.openPopup):
   fn.openPopup("/product/popup/mdPop", ...)
-  → type="popup", target route 추출
+  fn.openLayer("/product/popup/mdPop", ...)
+  → type="popup", popupUrl="/product/popup/mdPop"
+  → _inf_required에 type:"popup" 항목 추가
+
+패턴 6 (팝업 오픈 — window.open):
+  window.open(ctx + "/product/prdreg/popup/mdSearchPop.do", ...)
+  window.open("/product/prdreg/popup/pr201t01Pop.do", "popupName", "width=800,height=600")
+  → type="popup", popupUrl 추출 (ctx + "..." → ctx 제거, 실제 경로만)
+  → 버튼 ID·레이블과 함께 _inf_required에 기록 (팝업 컨트롤러 트리거 위치 추적)
 ```
-클릭 바인딩(`on("click")` / `bind("click")` / `.click(`)과 인접 Ajax 블록을 함께 파싱해  
-`{ buttonId, label, tab, apiPath, method, type }` 매핑 테이블 완성
+
+> **팝업 URL 추출 주의사항:**  
+> `window.open(ctx + "/popup/path.do", ...)` 형식에서 ctx 변수 제거 후 `/popup/path.do` 추출.  
+> 팝업 URL은 INF로 생성된 팝업 컨트롤러와 직접 매핑된다.  
+> 트리거 버튼 ID와 팝업 URL의 쌍을 반드시 기록해야 "어느 버튼이 어느 팝업을 여는지" 역추적 가능.
+
+클릭 바인딩(`on("click")` / `bind("click")` / `.click(`)과 인접 Ajax/팝업 블록을 함께 파싱해  
+`{ buttonId, label, tab, apiPath, method, type, popupUrl }` 매핑 테이블 완성
 
 **Step D. interaction_map 완성 예시**
 ```json
 [
   { "buttonId": "#btnSave",    "label": "저장",     "tab": "기초정보", "api": "/app/product/prdreg/saveProductDetailInterface", "method": "POST" },
-  { "buttonId": "#mdPop",      "label": "모델검색", "tab": "기초정보", "api": null, "type": "popup" },
+  { "buttonId": "#btnMdPop",   "label": "모델검색", "tab": "기초정보", "api": null, "type": "popup", "popupUrl": "/product/prdreg/popup/mdSearchPop.do" },
+  { "buttonId": "#btnOemPop",  "label": "OEM검색",  "tab": "기초정보", "api": null, "type": "popup", "popupUrl": "/product/prdreg/popup/oemSearchPop.do" },
   { "buttonId": "#btnPrdChgHis","label": "변경이력", "tab": "기초정보", "api": "/app/product/prdreg/findChangeHistory", "method": "GET" }
 ]
 ```
@@ -359,6 +374,7 @@ revision_history:
 |--------|-----------|---------|---------|----------|---------|----------|----------|---------|
 | | WG-03 [5] | ST-02 | [INF-XXX]({infDir}INF-XXX.md) | ST-03 | 400 | VALIDATION | "필수 입력값이 누락됐습니다" | 첫 누락 필드 포커스 |
 | | WG-03 [5] | ST-02 | [INF-XXX]({infDir}INF-XXX.md) | ST-03 | 401 | AUTH_FAILED | "로그인이 필요합니다" | 로그인 화면 이동 |
+| 팝업 오픈 | WG-0N [N] | - | — (팝업) | [INF-NNN 팝업명]({infDir}INF-NNN.md) 오픈 | - | - | - | 팝업 창 열림 |
 
 ## §6 화면 상태 정의
 
@@ -403,6 +419,8 @@ flowchart LR
 [ ] §5 API 엔드포인트가 진입파일+컴포넌트 파일 전체에서 수집됐는가?
 [ ] **JSP 화면인 경우**: `<script src=...>` 포함 JS 파일을 실제로 읽었는가? (JSP만 읽고 끝내면 §5 채울 수 없음)
 [ ] **JSP 화면인 경우**: `$.ajax({url:...})` / `fn.ajax(url,...)` 패턴을 JS 파일에서 추출했는가?
+[ ] **JSP 팝업**: `window.open(ctx + '...')` / `fn.openPopup(...)` / `fn.openLayer(...)` 패턴을 추출하여 트리거 버튼 ID — 팝업 URL 쌍을 완성했는가?
+[ ] 팝업 URL이 `_inf_required.json`에 `"type": "popup"` 항목으로 기록됐는가? (팝업 INF 트리거 위치 역추적용)
 [ ] INF 파일이 없는 URL은 `_tmp/{화면ID}_inf_required.json`에 기록했는가?
 [ ] spec.md만 생성했는가? (preview.html / preview.png 직접 생성 시도 금지 — sl-recon STEP 5-C 책임)
 [ ] RECON 모드: REQ-F 값이 [TBD]인가? (REQ-F-NNN 형식 금지)
@@ -438,10 +456,16 @@ INF 생성 완료 후 `scripts/link_uis_inf.py`가 spec.md §5의 URL을 `[INF-N
   "uis_id": "UIS-F-001",
   "inf_required": [
     { "url": "/app/product/prdreg/saveProductDetailInterface", "method": "POST", "triggered_by": "#btnSave", "label": "저장" },
-    { "url": "/app/product/prdreg/findInfoPrvs", "method": "GET", "triggered_by": "page_load", "label": "화면 진입 조회" }
+    { "url": "/app/product/prdreg/findInfoPrvs", "method": "GET", "triggered_by": "page_load", "label": "화면 진입 조회" },
+    { "url": "/product/prdreg/popup/mdSearchPop.do", "method": "GET", "triggered_by": "#btnMdPop", "label": "모델검색", "type": "popup" },
+    { "url": "/product/prdreg/popup/oemSearchPop.do", "method": "GET", "triggered_by": "#btnOemPop", "label": "OEM검색", "type": "popup" }
   ]
 }
 ```
+
+> **`type: "popup"` 항목**: 팝업 컨트롤러 INF가 이미 생성돼 있어도 "어느 버튼이 어느 팝업을 트리거하는지"가  
+> spec.md §5에 기록돼야 INF-팝업과 부모 화면 간 역추적이 가능하다.  
+> `link_uis_inf.py`는 popup 타입도 처리하여 §5 팝업 행의 INF 링크를 자동 교체한다.
 
 `inf_required`가 비어있으면 파일 저장 생략.
 

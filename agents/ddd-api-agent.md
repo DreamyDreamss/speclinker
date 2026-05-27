@@ -77,6 +77,22 @@ Profile이 없거나 `framework: unknown`이면 기존 fallback 패턴(아래 Ph
 
 `DAO:` 목록이 비어있으면 서비스 파일에서 import된 DAO/Repository/Mapper 클래스를 찾아 워크스페이스에서 Glob으로 직접 찾는다.
 
+### Step 3-A — 서비스 위임 체인 추적 (다단계 위임 감지 시)
+
+**Step 2 서비스 분석 후 아래 조건에 해당하면 반드시 실행한다:**
+
+> 감지 조건: 서비스 메서드 내에 DAO/Mapper/Repository 직접 호출이 없고,  
+> 다른 서비스 메서드(`XxxService.yyy()` / `xxxService.yyy()`)만 호출되는 경우.
+
+1. 피위임 서비스 파일을 Glob으로 찾아 Read한다.
+   - 예: `PrPrdBaseService.findBaseInfo()` → `Glob("**/PrPrdBaseService*.java")` → Read
+2. 피위임 서비스에서 DAO/Mapper 호출을 추출한다.
+3. 위임이 2단계 이상 중첩된 경우 최대 **2단계**까지만 추적한다 (무한 루프 방지).
+4. 추출된 DAO/Mapper를 Step 3의 `DAO:` 목록에 합산한다.
+
+> **왜 필요한가**: Spring 프로젝트에서 공통 로직 재사용 목적으로 `XxxCommonService`에 DB 접근을  
+> 위임하는 패턴이 많다. 이때 컨트롤러 기준 1단계 서비스만 보면 테이블 분석이 불가능하다.
+
 ### Step 4 — 쿼리 / 데이터 모델 파일 읽기 (프롬프트의 "쿼리:" 목록)
 
 > **사전추출 스키마 우선 사용:**  
@@ -103,6 +119,28 @@ Profile이 없거나 `framework: unknown`이면 기존 fallback 패턴(아래 Ph
 - nullable 여부 (LEFT JOIN, CASE WHEN, Optional, 조건부 set 등)
 - 단건 vs 목록 vs 페이징
 - 중첩 객체·배열 (조인, 연관관계, include)
+
+### Step 4-A — MyBatis Mapper XML 스캔 (MyBatis 프로젝트 한정)
+
+**Step 3~4에서 Mapper 인터페이스(`XxxMapper.java`)는 확인됐으나 쿼리 파일이 없거나 테이블명이 비어있는 경우 반드시 실행한다.**
+
+1. Mapper 인터페이스명으로 XML 파일을 탐색한다:
+   ```
+   Glob("**/mapper/**/{XxxMapper}.xml")
+   Glob("**/mappers/**/{XxxMapper}.xml")
+   Glob("**/{XxxMapper}.xml")
+   ```
+2. XML을 Read하여 각 `<select>` / `<insert>` / `<update>` / `<delete>` 에서 테이블명을 추출한다:
+   - `FROM TABLE_NAME` / `FROM TABLE_A A, TABLE_B B`
+   - `JOIN TABLE_NAME` / `LEFT JOIN TABLE_NAME`
+   - `INTO TABLE_NAME` / `UPDATE TABLE_NAME`
+   - `<resultMap type="com.xxx.XxxVO">` → VO 클래스명으로 테이블 역추적 가능
+3. 추출된 테이블명을 `tables:` frontmatter와 `## 참조 테이블`에 반영한다.
+4. 동적 SQL(`<if>`, `<choose>`, `<foreach>`) 내부 테이블도 포함한다.
+
+> **실패 허용 범위**: XML을 찾지 못하거나 동적 SQL이라 테이블 추출이 불가능한 경우  
+> `## 참조 테이블`에 `"(MyBatis XML 위치 불명 — 수동 확인 필요)"` 주석을 추가한다.  
+> 빈 테이블 표를 그대로 남기는 것보다 미확인 표시가 리뷰 시 명확하다.
 
 ---
 
@@ -262,6 +300,10 @@ print('_tmp/INF-{NNN}_sch_required.json 저장')
 [ ] Phase 1 Step 3~4에서 확인된 테이블명이 `tables:` frontmatter와 `## 참조 테이블` 표에 기록됐는가?
     → 테이블이 있는 엔드포인트에서 두 곳 모두 비어있으면 재확인
 [ ] 테이블이 있는 INF마다 `_tmp/INF-{NNN}_sch_required.json`이 생성됐는가?
+[ ] 서비스에서 DAO 직접 호출 없이 다른 서비스로 위임하는 패턴이 있는가?
+    → 있으면 Step 3-A(피위임 서비스 추적)를 실행했는가?
+[ ] MyBatis Mapper 인터페이스가 있는데 `## 참조 테이블`이 비어있는 경우, Step 4-A(Mapper XML 스캔)를 실행했는가?
+    → XML을 찾지 못한 경우 "(MyBatis XML 위치 불명 — 수동 확인 필요)" 표시 추가
 ```
 
 ---
