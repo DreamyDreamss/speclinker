@@ -278,26 +278,19 @@ Write-Output "디렉토리 생성 완료"
 
 ---
 
-### Step 3-A — UA 코어 빌드 확인
+### Step 3-A — UA 코어 빌드 상태 확인
 
-대시보드가 동작하려면 `@understand-anything/core`가 빌드되어 있어야 한다.
+> **Note**: UA 코어 빌드는 Claude Code 세션 시작 시 `SessionStart` 훅(`build-ua.js`)이 자동 처리한다.
+> 여기서는 빌드 결과만 확인한다 — 직접 빌드 시도하지 않는다.
 
 ```powershell
-# PLUGIN_PATH는 project.env에서 읽거나 Step 2에서 감지한 값 사용
 $PLUGIN_PATH = (Get-Content "project.env" -Encoding UTF8 | Where-Object {$_ -match "^PLUGIN_PATH="} | ForEach-Object {$_ -replace "^PLUGIN_PATH=",""}).Trim()
 $coreIndex = "$PLUGIN_PATH/ua/packages/core/dist/index.js"
 if (Test-Path $coreIndex) {
     Write-Host "[OK] UA core 빌드 확인됨" -ForegroundColor Green
 } else {
-    Write-Host "[빌드 필요] UA core 빌드 시작..." -ForegroundColor Yellow
-    Push-Location "$PLUGIN_PATH/ua"
-    pnpm --filter @understand-anything/core build 2>&1
-    Pop-Location
-    if (Test-Path $coreIndex) {
-        Write-Host "[OK] UA core 빌드 완료" -ForegroundColor Green
-    } else {
-        Write-Host "[경고] 빌드 실패 — 수동 실행 필요: cd $PLUGIN_PATH/ua && pnpm --filter @understand-anything/core build" -ForegroundColor Red
-    }
+    Write-Host "[경고] UA core 빌드 없음 — Claude Code를 재시작하면 자동 빌드됩니다." -ForegroundColor Yellow
+    Write-Host "  수동 빌드: cd '$PLUGIN_PATH/ua' && pnpm --filter @understand-anything/core build" -ForegroundColor Gray
 }
 ```
 
@@ -375,19 +368,46 @@ cd "$PLUGIN_PATH/ua/packages/dashboard" && pnpm dev
 
 ### 4-0. MCP 런타임 환경 검사
 
-NETWORK=open인 경우, project.env의 PLUGIN_PATH를 사용하여 환경 검사 스크립트를 실행한다:
+> **주의**: `install.py`는 대화형(interactive) 스크립트이므로 Claude Code 내부에서 직접 실행하면
+> 모든 입력이 빈 값으로 처리되어 패키지가 설치되지 않는다.
+> 아래처럼 **현재 설치 상태만 스캔**하고, 누락 항목은 사용자에게 직접 실행 명령을 안내한다.
 
 ```powershell
 $PLUGIN_PATH = (Get-Content "project.env" -Encoding UTF8 | Where-Object {$_ -match "^PLUGIN_PATH="} | ForEach-Object {$_ -replace "^PLUGIN_PATH=",""}).Trim()
-$INSTALL_PY  = "$PLUGIN_PATH/mcp-servers/install.py"
-if (Test-Path $INSTALL_PY) {
-    $py = if (Get-Command python3 -ErrorAction SilentlyContinue) { "python3" } else { "python" }
-    & $py $INSTALL_PY
-} else { Write-Output "환경 검사 스크립트 없음 — 건너뜀" }
-```
+$py = if (Get-Command python3 -ErrorAction SilentlyContinue) { "python3" } else { "python" }
 
-> 스크립트가 현재 환경을 스캔하여 설치 상태를 출력하고, 누락된 항목만 선택 설치한다.
-> 실행 실패 시 오류를 노출하지 말고 조용히 건너뛰어 다음 단계로 진행한다.
+# 필수 패키지 설치 여부만 조용히 확인 (설치 시도 없음)
+$checks = @(
+    @{ name="mcp";            label="mcp (FastMCP 서버)" },
+    @{ name="sqlalchemy";     label="SQLAlchemy (DB 엔진)" },
+    @{ name="pandas";         label="pandas (쿼리 결과 변환)" },
+    @{ name="dotenv";         label="python-dotenv (.env 로드)" },
+    @{ name="pymysql";        label="PyMySQL (MariaDB/MySQL)" },
+    @{ name="oracledb";       label="python-oracledb (Oracle)" }
+)
+$missing = @()
+foreach ($c in $checks) {
+    $r = & $py -c "import $($c.name)" 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "  [OK] $($c.label)" -ForegroundColor Green
+    } else {
+        Write-Host "  [!!] $($c.label) — 미설치" -ForegroundColor Yellow
+        $missing += $c.name
+    }
+}
+$uvxOk = (Get-Command uvx -ErrorAction SilentlyContinue) -ne $null
+Write-Host "  $(if ($uvxOk) {'[OK]'} else {'[!!]'}) uv/uvx (mcp-atlassian 실행)$(if (-not $uvxOk) {' — 미설치'})" -ForegroundColor $(if ($uvxOk) {'Green'} else {'Yellow'})
+if (-not $uvxOk) { $missing += "uv" }
+
+if ($missing.Count -gt 0) {
+    Write-Host ""
+    Write-Host "누락 패키지가 있습니다. 터미널에서 아래 명령을 직접 실행하세요:" -ForegroundColor Yellow
+    Write-Host "  ! $py $PLUGIN_PATH/mcp-servers/install.py" -ForegroundColor Cyan
+    Write-Host "  (Claude Code 밖 일반 터미널에서 실행해야 대화형 입력이 됩니다)" -ForegroundColor Gray
+} else {
+    Write-Host "  모든 MCP 런타임 패키지 설치 확인됨" -ForegroundColor Green
+}
+```
 
 ---
 
@@ -460,7 +480,9 @@ Jira 또는 Wiki(Confluence)에 연결하시겠습니까?
 
 ```powershell
 $installJson = Get-Content "$env:USERPROFILE\.claude\plugins\installed_plugins.json" -Encoding UTF8 | ConvertFrom-Json
-$entry = $installJson.plugins.'speclinker@local'
+# speclinker@local / speclinker@speclinker 등 설치 방식 무관하게 탐색
+$pluginKey = $installJson.plugins.PSObject.Properties.Name | Where-Object { $_ -like 'speclinker@*' } | Select-Object -First 1
+$entry = if ($pluginKey) { $installJson.plugins.$pluginKey } else { $null }
 if ($entry -and $entry.Count -gt 0) {
     $PLUGIN_PATH = ($entry[0].installPath -replace '\\', '/')
 } else {
