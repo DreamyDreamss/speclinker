@@ -1207,10 +1207,10 @@ print(kg_path)
 " 2>/dev/null
 ```
 
-### STEP 6-0.5: 캡처 가능 여부 확인
+### STEP 6-0.5: 캡처 가능 여부 확인 + bootstrap 자동 실행
 
-`PREVIEW_STORAGE_STATE`(storageState.json) 존재 여부를 확인한다.  
-**캡처(visual)와 소스 분석(interaction)은 보완 관계** — storageState 유무와 무관하게 둘 다 실행한다.
+`PREVIEW_BASE_URL`과 `PREVIEW_STORAGE_STATE`(storageState) 상태를 확인하고,  
+필요 시 bootstrap을 **이 단계에서 자동으로 실행**한다.
 
 | 단계 | 역할 | 항상 실행? |
 |------|------|---------|
@@ -1223,13 +1223,66 @@ print(kg_path)
 import os
 env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
            if '=' in l and not l.startswith('#'))
+base_url   = env.get('PREVIEW_BASE_URL', '')
+storage    = env.get('PREVIEW_STORAGE_STATE', '.preview-storage.json')
+abs_storage = storage if os.path.isabs(storage) else os.path.join(os.getcwd(), storage)
+has_base    = bool(base_url)
+has_storage = os.path.exists(abs_storage)
+
+print(f'PREVIEW_BASE_URL : {base_url if base_url else \"미설정\"}')
+print(f'storageState     : {abs_storage}  ({\"존재\" if has_storage else \"없음\"})')
+
+if not has_base:
+    print()
+    print('[캡처 스킵] PREVIEW_BASE_URL 미설정')
+    print('  → project.env에 PREVIEW_BASE_URL=http://... 추가 후 재실행하면 캡처 활성화')
+elif has_storage:
+    print()
+    print('[캡처 준비 완료] STEP 6-2에서 자동 캡처 실행')
+else:
+    print()
+    print('[bootstrap 필요] storageState 없음 → STEP 6-2 전에 bootstrap 실행 필요')
+    print('NEED_BOOTSTRAP=true')
+"
+```
+
+**위 출력에 `NEED_BOOTSTRAP=true`가 있으면 즉시 아래를 실행한다:**
+
+```bash
+# PLUGIN_PATH를 project.env에서 읽어 bootstrap 실행
+!python3 -c "
+import os, subprocess, sys
+env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
+           if '=' in l and not l.startswith('#'))
+plugin = env.get('PLUGIN_PATH', '')
+script = os.path.join(plugin, 'scripts', 'runtime_capture.js') if plugin else ''
+if not script or not os.path.exists(script):
+    print('runtime_capture.js를 찾을 수 없습니다. PLUGIN_PATH를 확인하세요.')
+    sys.exit(1)
+print(f'bootstrap 실행: node {script} --bootstrap .')
+" && node "$(python3 -c "import os; env=dict(l.strip().split('=',1) for l in open('project.env') if '=' in l and not l.startswith('#')); print(os.path.join(env.get('PLUGIN_PATH',''), 'scripts', 'runtime_capture.js'))")" --bootstrap "."
+```
+
+> **사용자 액션 필요 (1회):**  
+> 위 명령이 실행되면 Chrome 창이 자동으로 열립니다.  
+> 1. 열린 Chrome에서 로그인 (2FA·SSO·CAPTCHA 포함)  
+> 2. 메인 화면 확인 후 **이 터미널에서 Enter**  
+> → `.preview-storage.json` 저장 완료 → STEP 6-2 자동 캡처로 진행
+
+bootstrap 완료 후 storageState 재확인:
+
+```bash
+!python3 -c "
+import os
+env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
+           if '=' in l and not l.startswith('#'))
 storage = env.get('PREVIEW_STORAGE_STATE', '.preview-storage.json')
 abs_storage = storage if os.path.isabs(storage) else os.path.join(os.getcwd(), storage)
-has_storage = os.path.exists(abs_storage)
-print(f'storageState: {abs_storage}  ({\"존재\" if has_storage else \"없음\"})')
-print(f'STEP 6-2 런타임 캡처: {\"실행\" if has_storage else \"스킵 (storageState 없음)\"}')
-print('STEP 6-3 generate_uis_spec.py: widgets.json 있는 화면만 실행')
-print('STEP 6-4 ddd-ui-agent: 항상 실행 (§5 소스 분석)')
+if os.path.exists(abs_storage):
+    print(f'[OK] storageState 확인: {abs_storage}')
+    print('[캡처 준비 완료] STEP 6-2 진행')
+else:
+    print('[WARN] storageState 생성 안 됨 — bootstrap이 완료됐는지 확인')
 "
 ```
 
