@@ -30,6 +30,7 @@
 
 const fs   = require('fs');
 const path = require('path');
+const { spawnSync } = require('child_process');
 
 // ── Playwright 의존성 체크 ──
 let chromium;
@@ -286,6 +287,22 @@ async function findTabSelector(frame) {
     } catch (_) {}
   }
   return null;
+}
+
+// ── auto-annotate 헬퍼 ──
+function runAnnotatePreview(pngPath, widgetsPath, outPath) {
+  const script = path.join(path.dirname(__filename), 'annotate_preview.py');
+  if (!fs.existsSync(script) || !fs.existsSync(pngPath) || !fs.existsSync(widgetsPath)) return;
+  const py = process.platform === 'win32' ? 'python' : 'python3';
+  const r = spawnSync(py, [
+    script, path.dirname(pngPath),
+    '--png', pngPath, '--widgets', widgetsPath, '--out', outPath,
+  ], { encoding: 'utf-8', env: { ...process.env, PYTHONIOENCODING: 'utf-8' } });
+  if (r.status !== 0) {
+    console.error(`  [annotate] 마커 생성 실패: ${(r.stderr || r.stdout || '').slice(0, 120)}`);
+  } else {
+    console.error(`  [annotate] → ${path.relative(WS, outPath)}`);
+  }
 }
 
 // ── INSPECT 헬퍼: DOM 위젯 추출 ──
@@ -559,10 +576,21 @@ async function captureAll() {
             }
           }
 
-          // 탭별 JSON 저장
+          // 탭별 JSON 저장 + auto-annotate
           for (const { tabName, widgets, tabJson } of tabData) {
             fs.writeFileSync(tabJson, JSON.stringify(widgets, null, 2));
             console.error(`  [inspect] tab '${tabName}': ${widgets.length}위젯 → ${path.basename(tabJson)}`);
+
+            if (widgets.length > 0) {
+              const isMain = tabName === 'main';
+              const pngForTab = isMain
+                ? path.join(outDir, 'preview.png')
+                : tabJson.replace(/_widgets\.json$/, '.png');
+              const annotatedOut = pngForTab.replace(/\.png$/i, '_annotated.png');
+              if (fs.existsSync(pngForTab)) {
+                runAnnotatePreview(pngForTab, tabJson, annotatedOut);
+              }
+            }
           }
 
           // 네트워크 로그 저장

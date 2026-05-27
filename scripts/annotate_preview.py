@@ -45,21 +45,31 @@ def _check_pillow():
         return False
 
 
-def annotate(screen_dir: str, dry_run: bool = False) -> dict:
+def annotate(screen_dir: str, dry_run: bool = False,
+             png_path: str = None, widgets_path: str = None, out_path: str = None) -> dict:
     """
     화면 디렉토리에서 preview.png + preview_widgets.json 을 읽어
     preview_annotated.png 를 생성한다.
 
+    png_path/widgets_path/out_path 를 명시하면 해당 경로를 직접 사용한다.
     Returns: {ok, annotated_path, marker_count, message}
     """
-    png_path     = os.path.join(screen_dir, 'preview.png')
-    widgets_path = os.path.join(screen_dir, 'preview_widgets.json')
-    out_path     = os.path.join(screen_dir, 'preview_annotated.png')
+    if png_path is None:
+        png_path = os.path.join(screen_dir, 'preview.png')
+    if widgets_path is None:
+        widgets_path = os.path.join(screen_dir, 'preview_widgets.json')
+        # widgets.json fallback (runtime_capture --inspect 가 생성하는 파일명)
+        if not os.path.exists(widgets_path):
+            fallback = os.path.join(screen_dir, 'widgets.json')
+            if os.path.exists(fallback):
+                widgets_path = fallback
+    if out_path is None:
+        out_path = os.path.join(screen_dir, 'preview_annotated.png')
 
     if not os.path.exists(png_path):
-        return {'ok': False, 'message': f'preview.png 없음: {screen_dir}'}
+        return {'ok': False, 'message': f'preview.png 없음: {png_path}'}
     if not os.path.exists(widgets_path):
-        return {'ok': False, 'message': f'preview_widgets.json 없음: {screen_dir}'}
+        return {'ok': False, 'message': f'widgets JSON 없음: {widgets_path}'}
 
     try:
         widgets = json.load(open(widgets_path, encoding='utf-8'))
@@ -142,6 +152,9 @@ def main():
     p.add_argument('path', help='화면 디렉토리 또는 (--batch 시) 도메인 UI 디렉토리')
     p.add_argument('--batch', action='store_true', help='도메인 단위 일괄 처리')
     p.add_argument('--dry-run', action='store_true', help='실제 생성 없이 점검만')
+    p.add_argument('--png', default=None, help='PNG 파일 경로 (기본: <path>/preview.png)')
+    p.add_argument('--widgets', default=None, help='widgets JSON 경로 (기본: <path>/preview_widgets.json)')
+    p.add_argument('--out', default=None, help='출력 PNG 경로 (기본: <path>/preview_annotated.png)')
     args = p.parse_args()
 
     if args.batch:
@@ -155,7 +168,8 @@ def main():
             print(f'  [{status}] {x["screen"]:30s} markers={x.get("marker_count", 0)}  {x.get("message", "")}')
         print(f'\n총 {len(r["results"])}개 화면 중 {ok}개 어노테이션 생성')
     else:
-        r = annotate(args.path, dry_run=args.dry_run)
+        r = annotate(args.path, dry_run=args.dry_run,
+                     png_path=args.png, widgets_path=args.widgets, out_path=args.out)
         if r.get('ok'):
             print(f'OK — {r["annotated_path"]}  (markers: {r["marker_count"]})')
         else:
