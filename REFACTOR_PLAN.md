@@ -804,25 +804,55 @@ Phase 6.2의 spec.md는 §4 표를 자동 채우지만 `placeholder`/`default`/`
 - [x] SKILL.md STEP 5-C: INF 역주입 루프 절차 추가
   - gaps.json 확인 → ddd-api-agent 호출 → INF 생성 → spec.md 재생성 (INF 링크 갱신)
 
-**7.5 — STEP 4 (INF) 흐름 reshape**
-- [ ] router_inventory.json 생성 로직을 screen 루프로 변경
-  - 화면 1개 → entry 파일 + capture api_hints + handler_calls trace → INF 후보 URL 목록
-  - inf_registry에 lookup → 신규만 ddd-api-agent로 처리
-  - registry에 used_by_screens 추가
-- [ ] 화면 처리 후 잔여 router 파일이 있으면 **API-residual 보완** 단계
-  - 어떤 화면에서도 호출 안 된 endpoint를 모두 INF로 등록 (used_by_screens=[])
+**7.5 — STEP 순서 재구성 (Screen-first) — 완료 2026-05-26**
+- [x] SKILL.md 전면 재구성: 중복 제거 + 단계 번호 재배정
+  - OLD: STEP 4(INF) → STEP 5(SCH+UIS) → STEP 6(FUNC)
+  - NEW: STEP 6(UIS) → STEP 7(INF from api_hints) → STEP 8(SCH) → STEP 9(FUNC)
+- [x] STEP 7: api_hints 기반 INF 생성 + API-residual(used_by_screens=[]) 절차 추가
+- [x] STEP 6-4: api_hints 수집 → `_tmp/uis_api_hints.json` 생성
+- [x] STEP 7-0: router_inventory_with_chain.json cross-match → `_tmp/inf_generation_plan.json`
+- [x] 화면 처리 후 잔여 router 파일 → STEP 7-3 API-residual 보완 단계
 
-**7.6 — STEP 5 (SCH·UIS) 흐름 변경**
+**7.6 — RECON 프로세스 정리 — 완료 2026-05-26**
+- [x] `screen_inventory.py`: confirmed.json 존재 시 KG 미사용 Phase 7 패스 추가
+  - `_convert_confirmed()` 함수: domain 배정 + uisId 채번 → screen_inventory.json 형식 변환
+  - confirmed.json 없을 때만 기존 KG 패스 실행 (하위 호환)
+- [x] SKILL.md STEP 5: confirmed.json 우선 사용 분기표 추가
+- [x] SKILL.md STEP 5-C INF 역주입: 무한루프 → 최대 1회, 미해결 `_tmp/_unresolved_gaps.json` 누적
+- [x] `screenshot.js`: @deprecated 마커 추가
+
+**7.6 (계속) — STEP 5 (SCH·UIS) 흐름 변경**
 - [ ] ddd-db-agent: 도메인의 INF가 결정된 후 → sch_draft 기반 + URL 기준 합성
 - [ ] ddd-ui-agent: screen_plan + inf_registry로 §5 INF 매핑 자동 (capture.js generate_uis_spec.py와 정합)
 
-**7.7 — STEP 6 (SRS·FUNC_MAP) 변경**
-- [ ] SRS-F-XXX를 화면+호출 INF 단위로 합성 (현재 도메인별 → 화면별)
-- [ ] FUNC_MAP을 화면 → SRS → INF → SCH 매트릭스로 (이미 형태 비슷, 정합화)
+**7.7 — STEP 9 (SRS·FUNC_MAP) + build_funcs_index 변경 — 완료 2026-05-26**
+- [x] SKILL.md STEP 9-3 srs-agent 프롬프트: 화면별 use-case로 재작성
+  - "SRS-F 생성 단위: 각 화면(UIS-F-XXX) = use-case 1개 (도메인 집계 아님)"
+  - 필수 항목: 전제조건·기본흐름(api_hints)·예외흐름·§5 INF 링크
+  - 출력 색인표: `| SRS-F-XXX | 화면명 | UIS-ID | 호출 INF | FUNC-ID |` (5열)
+- [x] SKILL.md STEP 9-2 rd-agent 프롬프트: Screen-first 신호 (api_hints·used_by_screens) 활용
+- [x] SKILL.md STEP 9-4 rtm-agent 프롬프트: 화면 1개 = 1행, used_by_screens 최우선
+- [x] `build_funcs_index.py` v1.1: api_hints 파싱 + INF used_by_screens 역인덱스
+  - spec.md 프론트매터의 `api_hints:` 블록 파싱 (인라인/블록 2가지 YAML 형식)
+  - INF 파일 `used_by_screens:` 필드 파싱 (인라인 배열 / 블록 목록 2가지)
+  - top-level `screens` 섹션 (UIS-ID → screen 메타 + api_hints)
+  - top-level `infs` 섹션 (INF-ID → INF 메타 + used_by_screens)
+  - 각 func에 `api_hints` 필드 추가
+- [x] `srs-agent.md` 업데이트
+  - STEP 참조 "STEP 6-0" → "STEP 9-0" 수정
+  - Phase 1-R RECON 원칙: "화면 1개 = SRS-F 1건" 명확화 (묶기 제거)
+  - RECON Reflexion 점검표: 5열 색인표·api_hints·INF used_by_screens 체크 추가
+  - Phase 2 색인표 포맷: 3열 → 5열
+  - Phase 3: RECON/GENESIS 전용 점검 분리
+  - Phase 4 완료 보고: 5열 포맷 명시
 
-**7.8 — 회귀 + tag**
+**7.8 — 회귀 + tag (환경 의존 — 실서비스 검증 필요)**
 - [ ] 7 fixture가 Screen-first 흐름에서도 통과하는지 검증
+  - `build_funcs_index.py`: api_hints 없는 레거시 fixture는 empty list로 안전 처리 확인
+  - `srs-agent.md` RECON Reflexion: screen-map.json 참조 제거 확인
 - [ ] nkshop-bos-admin Pr201Form 실서비스로 end-to-end 검증
+  - STEP 6 → 7 → 8 → 9 전체 흐름 (Screen-first)
+  - spec.md의 api_hints → funcs_index.json → srs-agent 색인표 5열 확인
 - [ ] git tag `phase-7-done`
 
 ### 위험 관리
@@ -885,4 +915,6 @@ Phase 6.2의 spec.md는 §4 표를 자동 채우지만 `placeholder`/`default`/`
 | 2026-05-26 | Phase 7.1 완료 ★. `scripts/screen_plan_discover.py` 신설. 6종 framework 분석기 (next/react/vue/angular/spring-mvc/files-fallback) + profile.yaml 연동 + manual_screens 지원 + BFS component import 추적 (directory→index.* 해석 포함) + `_tmp/screen_plan_static.json` 출력. 검증: vue-fsd 1화면+3컴포넌트, 7 fixture 회귀 0. 다음: 7.2 INF Registry 신설 | Claude |
 | 2026-05-26 | Phase 7.2 완료 ★. `scripts/inf_registry.py` 신설. URL+method SSoT + O(1) _index lookup + upsert dedup + used_by_screens 역인덱스 + import_from_widgets_json() API + CLI (upsert/lookup/list/import). 검증: 동일 URL 2회 upsert → INF-001 1개 + used_by_screens 누적 | Claude |
 | 2026-05-26 | Phase 7.3 완료 ★. sl-recon SKILL.md에 STEP 2.5 신설 (도메인 confirm 직전). 화면 plan 표 출력 + a/b/c 3옵션 confirm + .speclinker/screen_plan.confirmed.json 영구 저장. 기존 confirmed.json 있으면 자동 스킵 | Claude |
+| 2026-05-26 | Phase 7.6 RECON 전면 정리 ★★. (1) screen_inventory.py에 Phase 7 패스 추가 — confirmed.json 존재 시 KG 미사용으로 직접 변환(domain 배정·uisId 채번 포함), KG 없어도 동작. (2) SKILL.md STEP 5 화면 발견 섹션 — confirmed.json 우선 사용 분기표 추가. (3) SKILL.md STEP 5-C INF 역주입 루프 — 무한루프 → 최대 1회 실행. 미해결 gaps는 `_tmp/_unresolved_gaps.json`에 누적, 재시도 없음. (4) screenshot.js @deprecated 마커 추가. | Claude |
 | 2026-05-26 | UIS capture 품질 개선 ★★★. (1) 멀티탭 위젯 번호 전역 연속화(WG-01~N) — capture.js globalWidgetSeq + generate_uis_spec.py 레거시 보정. (2) spec.md 레이아웃 개선 — §0 annotated만 인라인, §4 이미지→테이블 인터리빙(원본 제거). (3) 위젯 감지 CSS클래스→HTML 의미/구조 기반 재설계 ★: 날짜범위(id/name 패턴), 코드검색(검색트리거 의미 감지), 데이터그리드(행수 vs input수 비율), jwork 버튼(span.btn-basic>a), 체크박스/라디오 그룹화, type_hint 필드 추가. 모든 프레임워크 동일 로직 적용 가능. v2.5.0 버전 업. 다음: Phase 7.4 capture.js --traverse-menu 모드 | Claude |
+| 2026-05-26 | Phase 7.5·7.7 완료 ★★. Screen-first RECON 핵심 흐름 완성. (1) SKILL.md 전면 재구성: 중복 ~180행 제거 + 단계 번호 재배정 + STEP 6(UIS) → STEP 7(INF, api_hints 기반) → STEP 8(SCH) 순서 확정. (2) STEP 9 agent 프롬프트: 9-3 srs-agent 화면별 use-case·9-4 rtm-agent 5열 FUNC_MAP 매트릭스. (3) build_funcs_index.py v1.1: api_hints 파싱·used_by_screens 역인덱스·screens/infs top-level 섹션 신설. (4) srs-agent.md: RECON 점검표·색인표·원칙 Phase 7.7 정합화. 다음: Phase 7.8 실서비스 회귀 검증 | Claude |

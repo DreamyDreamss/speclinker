@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @deprecated — preview.html → preview.png 단순 변환 전용. 런타임 캡처는 capture.js 사용.
 // screenshot.js — preview.html → preview.png (Chrome headless, 추가 설치 불필요)
 
 'use strict';

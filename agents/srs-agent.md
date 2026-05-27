@@ -35,16 +35,20 @@ model: claude-opus-4-7
 import json, os
 path = '_tmp/funcs_index.json'
 if not os.path.exists(path):
-    print('[ERROR] _tmp/funcs_index.json 없음 — sl-recon STEP 6-0 (build_funcs_index.py) 먼저 실행 필요')
+    print('[ERROR] _tmp/funcs_index.json 없음 — sl-recon STEP 9-0 (build_funcs_index.py) 먼저 실행 필요')
 else:
     idx = json.load(open(path, encoding='utf-8'))
-    print(f'기능 {len(idx[\"funcs\"])}개 / 도메인 {len(idx[\"domains\"])}개')
+    print(f'기능 {len(idx[\"funcs\"])}개 / 화면 {len(idx.get(\"screens\",{}))}개 / INF {len(idx.get(\"infs\",{}))}개')
     for f in idx['funcs'][:5]:
-        print(f'  {f[\"id\"]}: {f[\"screen\"]} (INF {len(f[\"inf\"])}건, DB {len(f[\"dbTables\"])}건, rules {len(f[\"rules\"])}건)')
+        hints = len(f.get('api_hints', []))
+        print(f'  {f[\"id\"]}: {f[\"screen\"]} (api_hints {hints}건, INF {len(f[\"inf\"])}건, DB {len(f[\"dbTables\"])}건)')
 "
 ```
 
-> 인덱스의 각 func에는 `screen`, `screenName`, `route`, `inf[].method/path/summary`, `dbTables`, `rules`, `srs` 가 이미 추출되어 있다.  
+> **Phase 7.7 — funcs_index 구조:**
+> - `screens` 섹션: 각 UIS-ID의 screen_name·route·api_hints 목록
+> - `infs` 섹션: 각 INF의 used_by_screens 필드 (어느 화면이 이 INF를 호출하는지)
+> - 각 func에는 `api_hints` (spec.md 프론트매터) + `inf[]` (INF 파일 역참조) 포함  
 > SRS 집약에 필요한 화면 시퀀스·API 체인·비즈니스 규칙 신호가 인덱스에 모두 포함됨.  
 > FUNC_v1.0.md 색인 표 정도만 보조로 cat (전체 본문 cat 금지).
 
@@ -86,10 +90,11 @@ sys.exit(0 if env.get('MODE','GENESIS') == 'GENESIS' else 1)
 
 ## Phase 1-R: RECON 모드 — 화면·API → SRS 집약
 
-> **RECON SRS 원칙:**  
+> **RECON SRS 원칙 (Phase 7.7):**  
 > - 소스에서 관측된 사실만 기술한다 (추측 금지)  
-> - 화면 1개 = SRS-F 1건을 기본으로 하되, 동일 플로우의 화면은 묶어서 1건으로 처리  
-> - REQ-F 대신 FUNC-ID로 역방향 연결
+> - **화면 1개 = SRS-F 1건** (도메인 집계 아님 — 복잡한 다탭 화면만 최대 2~3개 허용)  
+> - REQ-F 없음. FUNC-ID로 역방향 연결  
+> - api_hints 목록이 기본흐름의 핵심 — funcs_index의 `api_hints` 필드 우선 참조
 
 ### RECON SRS-F 포맷
 
@@ -100,12 +105,19 @@ sys.exit(0 if env.get('MODE','GENESIS') == 'GENESIS' else 1)
 
 **목적**: {이 기능이 하는 일 한 줄 — 구현 사실로 서술}
 
-**화면 시퀀스**:
-1. {화면ID} 진입 → {초기화 함수/이벤트}
-2. {사용자 액션} → {처리 결과}
-3. {최종 상태/이동}
+**전제조건**: {로그인 여부, 권한, 이전 화면}
 
-**API 체인**:
+**기본흐름**:
+1. {화면ID} 진입 → {초기화 함수/이벤트}
+2. API 호출: {api_hints 목록 — method + url}
+3. 결과 렌더링 → {최종 상태/이동}
+
+**예외흐름**:
+- API 오류 (5xx): {처리 방식}
+- 권한 없음 (403): {처리 방식}
+- 데이터 없음: {처리 방식}
+
+**API 체인 (§5 인터페이스)**:
 | 순서 | INF | Method | Path | 역할 |
 |------|-----|--------|------|------|
 | 1 | [INF-001](../../05_설계서/{도메인}/INF/INF-001.md) | GET | /api/... | 초기 데이터 로드 |
@@ -122,15 +134,17 @@ sys.exit(0 if env.get('MODE','GENESIS') == 'GENESIS' else 1)
 **연결 INF**: [INF-001](../../05_설계서/{도메인}/INF/INF-001.md), ...
 ```
 
-### RECON Reflexion 점검표
+### RECON Reflexion 점검표 (Phase 7.7)
 
 ```
-[ ] 화면 시퀀스: 진입 → 핵심 액션 → 결과 3단계 이상 존재?
-[ ] API 체인: INF 파일 링크가 모두 유효한가? (../../INF/INF-XXX.md)
-[ ] 비즈니스 규칙: spec.md에서 근거 확인된 내용만인가? (추측 없음)
-[ ] 예외 처리: 최소 1개 이상 기술되었는가?
+[ ] 화면 1:1 대응: funcs_index.json의 모든 화면(screens 섹션)에 SRS-F가 존재?
+    실패 시: 누락 화면에 대해 즉시 SRS-F 신규 작성
+[ ] 기본흐름: 진입 → API 호출(api_hints) → 렌더링 3단계 이상 존재?
+[ ] 예외흐름: API 오류·권한 없음·데이터 없음 최소 3개 케이스 존재?
+[ ] INF 링크: §5 인터페이스의 INF-XXX 링크가 실제 파일과 일치? (used_by_screens 역참조 확인)
+[ ] 비즈니스 규칙: spec.md/funcs_index 근거 확인된 내용만인가? (추측 없음)
 [ ] FUNC-ID 연결: 모든 SRS-F에 FUNC-ID 역방향 링크 존재?
-[ ] SRS 누락 화면 없음: screen-map.json의 모든 화면이 SRS에 포함?
+[ ] 색인표 형식: SRS_v1.0.md가 5열 표인가? (SRS-F-XXX | 화면명 | UIS-ID | 호출 INF | FUNC-ID)
 ```
 
 Reflexion 루프 최대 2회. 실패 항목 발견 시 즉시 보완 후 재점검.
@@ -218,8 +232,8 @@ Step 6 — What are the non-functional constraints?
 
 | 파일 | 역할 |
 |------|------|
-| `docs/03_기능명세서/SRS_v1.0.md` | 문서 범위 + **파싱용 색인표** (`\| SRS-F-XXX \| 기능명 \| FUNC-ID \|`) |
-| `docs/03_기능명세서/domains/SRS_{도메인}.md` | 도메인별 SRS 상세 (RECON 포맷: 화면 시퀀스·API 체인·비즈니스 규칙) |
+| `docs/03_기능명세서/SRS_v1.0.md` | 문서 범위 + **파싱용 5열 색인표** (`\| SRS-F-XXX \| 화면명 \| UIS-ID \| 호출 INF \| FUNC-ID \|`) |
+| `docs/03_기능명세서/domains/SRS_{도메인}.md` | 도메인별 SRS 상세 (RECON 포맷: 전제조건·기본흐름·예외흐름·INF 링크) |
 
 ### GENESIS 모드 출력
 
@@ -238,6 +252,27 @@ Step 6 — What are the non-functional constraints?
 
 ### Reflexion 점검표
 
+> **모드별 분기**: RECON이면 RECON 전용 항목만, GENESIS이면 GENESIS 전용 항목만 실행.
+
+**RECON 전용 점검:**
+```
+[ ] 화면 1:1 대응: funcs_index.json의 모든 화면에 SRS-F가 존재?
+    실패 시: 누락 화면에 대해 즉시 SRS-F 신규 작성
+
+[ ] 기본흐름: 진입 → API 호출(api_hints) → 렌더링 3단계 이상?
+    실패 시: api_hints 목록 기반으로 흐름 보완
+
+[ ] 예외흐름: API 오류·권한 없음·데이터 없음 케이스 모두 존재?
+
+[ ] INF 링크: §5 인터페이스의 INF-XXX 링크가 실제 used_by_screens와 일치?
+
+[ ] 색인 표 형식: SRS_v1.0.md가 5열 파이프 표인가?
+    (| SRS-F-001 | 화면명 | UIS-F-001 | INF-001,INF-002 | FUNC-order-001 |)
+
+[ ] FUNC-ID 연결: 모든 SRS-F에 FUNC-ID 역방향 링크 존재?
+```
+
+**GENESIS 전용 점검:**
 ```
 [ ] 4요소 완결: 모든 SRS-F에 입력·처리·출력·예외 각각 최소 1문장?
     실패 시: 해당 SRS-F Step 누락 항목 보완
@@ -248,8 +283,7 @@ Step 6 — What are the non-functional constraints?
 [ ] 역방향 검사: SRS-F-XXX에 없는 REQ-F-XXX가 RD에 있는가?
     실패 시: 해당 SRS-F를 추가하거나 RD에서 제거 결정
 
-[ ] 처리 흐름 번호 목록: Step 3(처리)가 "~한다" 단문 1개뿐이면 부족.
-    최소 3단계 흐름(조회/비즈니스/저장)이 있어야 함
+[ ] 처리 흐름 번호 목록: 최소 3단계 흐름(조회/비즈니스/저장)이 있어야 함
 
 [ ] 예외 표: 모든 SRS-F에 최소 2개 예외 케이스가 코드와 함께 있는가?
 
@@ -285,8 +319,8 @@ SRS-F: {N}건
 도메인: {도메인 목록}
 
 파일:
-- docs/03_기능명세서/SRS_v1.0.md (색인표: SRS-F / 기능명 / FUNC-ID)
-- docs/03_기능명세서/domains/SRS_{도메인}.md × {N}개 (RECON 포맷)
+- docs/03_기능명세서/SRS_v1.0.md (5열 색인표: SRS-F-XXX | 화면명 | UIS-ID | 호출 INF | FUNC-ID)
+- docs/03_기능명세서/domains/SRS_{도메인}.md × {N}개 (RECON 포맷: 전제조건·기본흐름·예외흐름·INF 링크)
 
 Reflexion 루프: {횟수}회
 보완 항목: {내용 요약}

@@ -186,11 +186,13 @@ SOURCE_1_PATH=<현재 작업 디렉토리 절대경로>
 ```powershell
 New-Item -ItemType Directory -Force -Path @(
   "docs/00_입력자료",
+  "docs/00_FUNC",
+  "docs/00_FUNC/domains",
   "docs/01_요구사항정의서",
   "docs/01_요구사항정의서/req",
   "docs/02_추적표",
   "docs/03_기능명세서",
-  "docs/03_기능명세서/srs",
+  "docs/03_기능명세서/domains",
   "docs/04_아키텍처설계서",
   "docs/05_설계서",
   "docs/07_테스트케이스",
@@ -198,7 +200,8 @@ New-Item -ItemType Directory -Force -Path @(
   "docs/변경관리",
   "06_소스코드/src",
   "06_소스코드/tests",
-  "06_소스코드/reviews"
+  "06_소스코드/reviews",
+  ".speclinker"
 ) | Out-Null
 Write-Output "디렉토리 생성 완료"
 ```
@@ -280,8 +283,10 @@ cd "$PLUGIN_PATH/ua/packages/dashboard" && pnpm dev
 | docs/01_요구사항정의서/ | 요구사항 정의서 (RD_v1.0.md) |
 | docs/01_요구사항정의서/req/ | 대형 프로젝트 시 REQ 개별 파일 분리 |
 | docs/02_추적표/ | 요구사항 추적 매트릭스 |
+| docs/00_FUNC/ | 구현 기능 목록 (FUNC_v1.0.md) — RECON rd-agent 출력 |
+| docs/00_FUNC/domains/ | 도메인별 FUNC 분리 파일 |
 | docs/03_기능명세서/ | 기능 명세서 (SRS_v1.0.md) |
-| docs/03_기능명세서/srs/ | 도메인별 SRS 분리 파일 |
+| docs/03_기능명세서/domains/ | 도메인별 SRS 분리 파일 |
 | docs/04_아키텍처설계서/ | 시스템 아키텍처 설계서 |
 | docs/05_설계서/ | 상세 설계서 (API_Design.md, DB_Schema.md, UI_Spec.md) |
 | docs/07_테스트케이스/ | 테스트 케이스 명세서 |

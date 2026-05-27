@@ -39,9 +39,95 @@ def resolve_kg_path(arg, wdir):
         pass
     return os.path.join(wdir, '.understand-anything/knowledge-graph.json')
 
-kg_path   = resolve_kg_path(kg_path_arg, workspace_dir)
-plan_path = os.path.join(workspace_dir, 'docs/05_설계서/_domain_plan.json')
+kg_path        = resolve_kg_path(kg_path_arg, workspace_dir)
+plan_path      = os.path.join(workspace_dir, 'docs/05_설계서/_domain_plan.json')
+confirmed_path = os.path.join(workspace_dir, '.speclinker', 'screen_plan.confirmed.json')
 
+# ── Phase 7 패스: confirmed.json → screen_inventory 변환 ──────────────────────
+def _convert_confirmed(confirmed_doc, plan_doc, wdir):
+    domains = plan_doc.get('domains', [])
+    uis_ctr = {d['name']: d['uis']['start'] for d in domains}
+
+    def _n(p): return p.replace('\\', '/')
+    def _abs(rel): return os.path.join(wdir, rel) if rel else ''
+
+    def _assign(entry, route, hint=''):
+        if hint:
+            for d in domains:
+                if d['name'].lower() == hint.lower():
+                    return d['name']
+        np = _n(entry)
+        for d in domains:
+            if any(np.startswith(_n(r).rstrip('/')) for r in d.get('rootPaths', [])):
+                return d['name']
+        if route:
+            seg0 = next((s.lower() for s in route.lstrip('/').split('/') if s), '')
+            for d in domains:
+                dn = d['name'].lower()
+                if dn == seg0 or seg0 in dn or dn in seg0:
+                    return d['name']
+        for d in domains:
+            if d['name'].lower() in np.lower():
+                return d['name']
+        return domains[0]['name'] if domains else ''
+
+    out = []
+    seen = set()
+    for scr in confirmed_doc.get('screens', []):
+        entry_rel = scr.get('entry', '') or scr.get('entry_file', '')
+        if not entry_rel:
+            continue
+        entry_abs = _abs(entry_rel)
+        key = _n(entry_abs)
+        if key in seen:
+            continue
+        seen.add(key)
+
+        route  = scr.get('route', '')
+        domain = _assign(entry_abs, route, scr.get('domain', ''))
+        if domain not in uis_ctr:
+            continue
+
+        uis_id = uis_ctr[domain]
+        uis_ctr[domain] += 1
+
+        out.append({
+            'route':          route,
+            'domain':         domain,
+            'entryFile':      entry_abs,
+            'componentFiles': [_abs(c) for c in scr.get('component_files', []) if c],
+            'uisId':          uis_id,
+            'infDir':         '../../INF/',
+            'source':         scr.get('source', 'confirmed'),
+        })
+    return out
+
+if os.path.exists(confirmed_path):
+    if not os.path.exists(plan_path):
+        print(f'[ERROR] _domain_plan.json 없음: {plan_path}', file=sys.stderr)
+        sys.exit(1)
+    confirmed_doc = json.load(open(confirmed_path, encoding='utf-8'))
+    plan_doc      = json.load(open(plan_path, encoding='utf-8'))
+    result = _convert_confirmed(confirmed_doc, plan_doc, workspace_dir)
+    out_path = os.path.join(workspace_dir, '_tmp', 'screen_inventory.json')
+    with open(out_path, 'w', encoding='utf-8') as f:
+        json.dump(result, f, ensure_ascii=False, indent=2)
+    sources = {}
+    for r in result:
+        sources.setdefault(r['source'], 0)
+        sources[r['source']] += 1
+    print(f'[screen_inventory] screen_plan.confirmed.json 사용 (Phase 7 패스)')
+    print(f'감지 화면: {len(result)}개')
+    print(f'탐지 방식: {dict(sources)}')
+    for r in result[:5]:
+        nf = len(r.get('componentFiles', []))
+        print(f'  {r["route"]:40} → {os.path.basename(r["entryFile"])} (+참조 {nf}개)')
+    if len(result) > 5:
+        print(f'  ... 외 {len(result)-5}개')
+    print(f'저장: {out_path}')
+    sys.exit(0)
+
+# ── KG 패스 (confirmed.json 없을 때 fallback) ─────────────────────────────────
 if not os.path.exists(kg_path):
     print(f'[ERROR] knowledge-graph 없음: {kg_path}', file=sys.stderr)
     sys.exit(1)
