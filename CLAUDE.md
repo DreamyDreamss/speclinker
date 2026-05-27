@@ -17,7 +17,7 @@
 | `/sl-recon-doc` | `skills/sl-recon-doc/SKILL.md` | docs/05_설계서/ INF 존재, _tmp/recon_checkpoint.json | RECON |
 | `/sl-aidd [FUNC-ID]` | `skills/sl-aidd/SKILL.md` | docs/00_FUNC/FUNC_MAP.md 존재 | GENESIS, RECON |
 | `/sl-analyze` | `skills/sl-analyze/SKILL.md` | project.env, docs/05_설계서/ | DELTA |
-| `/sl-change <SR-ID>` | `skills/sl-change/SKILL.md` | project.env, docs/05_설계서/, docs/00_FUNC/FUNC_MAP.md | DELTA |
+| `/sl-change <SR-ID>` | `skills/sl-change/SKILL.md` | project.env, docs/05_설계서/ (로컬 파일 또는 NETWORK=open) | DELTA |
 | `/sl-rtm` | `skills/sl-rtm/SKILL.md` | docs/02_추적표/ 또는 docs/00_FUNC/ | 전체 |
 | `/sl-dev` | `skills/sl-dev/SKILL.md` | docs/05_설계서/ 존재 | 전체 |
 | `/sl-test` | `skills/sl-test/SKILL.md` | 06_소스코드/ 존재 | 전체 |
@@ -122,7 +122,8 @@
 | 새 프로젝트 (수동) | sl-init → sl-genesis → sl-dev → sl-test |
 | 기존 코드 (RECON + AIDD) | sl-init → sl-recon → **sl-aidd** → 납품 |
 | 기존 코드 (RECON 분석만) | sl-init → sl-recon → 납품 |
-| 변경·유지보수 | sl-analyze → sl-change → **sl-aidd** |
+| 변경·유지보수 (Jira) | sl-analyze → sl-change → **sl-aidd** |
+| 변경·유지보수 (로컬) | sl-change --new SR-001 → (요구사항 작성) → sl-change SR-001 → **sl-aidd** |
 
 ### AIDD 핵심 루프 (sl-aidd 내부)
 

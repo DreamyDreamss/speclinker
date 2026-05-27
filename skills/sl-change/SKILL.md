@@ -1,8 +1,9 @@
 ---
 name: sl-change
 description: >
-  DELTA 핵심 커맨드 — Jira SR 한 건을 받아 유형 분류·정보검증·AS-IS조회·영향분석·
+  DELTA 핵심 커맨드 — SR 한 건을 받아 유형 분류·정보검증·AS-IS조회·영향분석·
   TO-BE설계·SR산출물 생성·프로젝트스펙 현행화·RTM갱신까지 전 주기를 처리한다.
+  로컬 요구사항 파일(docs/변경관리/{SR-ID}/00_요구사항.md)과 Jira 양쪽을 지원.
 triggers:
   - /sl-change
 ---
@@ -16,9 +17,11 @@ triggers:
 ```
 
 - `project.env` 존재
-- `NETWORK=open` (mcp-atlassian 필요)
 - `docs/05_설계서/` 존재 (GENESIS 또는 RECON으로 생성된 AS-IS 스펙)
 - `docs/02_추적표/RTM_v*.md` 존재
+- SR 인풋 소스 (둘 중 하나):
+  - **로컬 파일**: `docs/변경관리/{SR-ID}/00_요구사항.md` 존재 (NETWORK=closed 가능)
+  - **Jira**: `NETWORK=open` 설정 (mcp-atlassian 연결)
 
 조건 미충족 시 해당 커맨드를 안내하고 중단한다.
 
@@ -27,15 +30,53 @@ triggers:
 ## 호출 형식
 
 ```
-/sl-change <SR-ID>          예: /sl-change SR-1234
+/sl-change <SR-ID>          예: /sl-change SR-001
 /sl-change <Jira-KEY>       예: /sl-change PROJ-456
+/sl-change --new SR-001     로컬 요구사항 파일 템플릿 생성 후 중단
 ```
 
 ---
 
 ## Step 1 — SR 수집
 
-### 1-1. Jira에서 SR 전체 데이터 가져오기
+### 1-0. 로컬 파일 우선 확인
+
+```python
+!python3 -c "
+import os, sys
+sr_id = sys.argv[1] if len(sys.argv) > 1 else ''
+local_path = f'docs/변경관리/{sr_id}/00_요구사항.md'
+if os.path.exists(local_path):
+    print('LOCAL:' + local_path)
+else:
+    print('JIRA')
+" "<SR-ID>"
+```
+
+- **LOCAL** → 1-A 로컬 파일 읽기로 진행
+- **JIRA** + `NETWORK=open` → 1-B Jira로 진행
+- **JIRA** + `NETWORK=closed` → 로컬 파일 생성 안내 후 중단:
+
+```
+[안내] docs/변경관리/{SR-ID}/00_요구사항.md 파일이 없습니다.
+
+  방법 1: /sl-change --new {SR-ID}
+           → 요구사항 템플릿 파일을 생성합니다. 내용을 채운 뒤 다시 실행하세요.
+
+  방법 2: NETWORK=open 환경에서 Jira 연동 후 실행
+```
+
+---
+
+### 1-A. 로컬 요구사항 파일 읽기
+
+`docs/변경관리/{SR-ID}/00_요구사항.md` 내용을 전체 읽어 SR 컨텍스트로 사용한다.
+
+파일 내 `## 첨부/참고 파일` 섹션에 나열된 파일 경로가 있으면 추가로 읽어 분석에 포함한다.
+
+---
+
+### 1-B. Jira에서 SR 전체 데이터 가져오기 (NETWORK=open)
 
 ```
 mcp-atlassian 호출:
@@ -46,7 +87,9 @@ mcp-atlassian 호출:
           comment, status, fixVersions
 ```
 
-### 1-2. 첨부파일 목록 확인
+Jira에서 가져온 내용을 `docs/변경관리/{SR-ID}/00_요구사항.md`에 자동 저장한다 (이후 로컬 파일 기준 추적 가능).
+
+### 1-C. 첨부파일 목록 확인 (Jira 경유인 경우)
 
 첨부파일이 있으면 목록을 사용자에게 출력한다:
 
@@ -62,6 +105,54 @@ mcp-atlassian 호출:
 
 파싱 가능한 첨부파일(pdf, xlsx, docx, txt, md, png/jpg)은 내용을 추출하여 분석에 활용한다.  
 HWP 등 파싱 불가 파일은 사용자에게 주요 내용 텍스트 입력을 요청한다.
+
+---
+
+## `/sl-change --new` — 요구사항 파일 템플릿 생성
+
+`/sl-change --new SR-001` 실행 시 `docs/변경관리/SR-001/00_요구사항.md`를 아래 템플릿으로 생성하고 중단한다:
+
+```markdown
+# SR-001 요구사항
+
+## 개요
+- **SR 제목**: (변경 내용을 한 줄로)
+- **요청자**: 
+- **우선순위**: High / Medium / Low
+- **목표 일정**: 
+
+## 변경 배경 및 목적
+(왜 이 변경이 필요한지 비즈니스 맥락 설명)
+
+## 요구사항 상세
+
+### 기능 요구사항
+- (변경 또는 신규 기능 목록)
+
+### 비기능 요구사항
+- (성능, 보안, UI 제약 등)
+
+## AS-IS 현황
+(현재 동작 방식 / 스크린샷 경로 또는 설명)
+
+## TO-BE 목표
+(변경 후 기대 동작 방식 / 와이어프레임 경로 또는 설명)
+
+## 영향 예상 범위 (선택)
+- 화면: 
+- API: 
+- DB: 
+
+## 첨부/참고 파일 (선택)
+- (파일 경로 또는 URL 나열)
+```
+
+생성 후 출력:
+```
+[생성] docs/변경관리/SR-001/00_요구사항.md
+
+내용을 채운 뒤 /sl-change SR-001 을 실행하세요.
+```
 
 ---
 
