@@ -1965,6 +1965,36 @@ else:
     - knowledge-graph는 자기 도메인 rootPaths 범위로 필터링
 ```
 
+### STEP 8-1: INF → SCH 링크 패치 (link_inf_sch.py)
+
+ddd-db-agent 전체 완료 후 INF 파일의 `## 참조 테이블` 셀 `[TBD]`를 SCH 링크로 교체한다.  
+LLM 재호출 없이 스크립트가 처리 — 토큰 절약.
+
+```bash
+!python3 -c "
+import os, sys, subprocess
+env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8') if '=' in l and not l.startswith('#'))
+plugin = env.get('PLUGIN_PATH','')
+script = os.path.join(plugin, 'scripts', 'link_inf_sch.py') if plugin else ''
+if script and os.path.exists(script):
+    subprocess.run([sys.executable, script, '.'], check=False)
+else:
+    print('link_inf_sch.py 없음 — PLUGIN_PATH 확인')
+"
+```
+
+출력 예시:
+```
+[OK] INF-205: 2개 테이블 → SCH 링크 교체 ['SCH-001', 'SCH-002']
+[OK] INF-206: 1개 테이블 → SCH 링크 교체 ['SCH-001']
+  남은 미매칭 테이블 1건 → _tmp/INF-207_sch_required.json
+
+총 15개 INF 처리 완료
+```
+
+미매칭이 남으면: `_tmp/INF-{NNN}_sch_required.json`의 `tables` 배열에 남은 테이블명 확인 후  
+해당 테이블의 SCH가 생성됐는지 점검한다.
+
 ---
 
 ## STEP 9 — Phase-C: 색인 + FUNC 생성 + FUNC_MAP

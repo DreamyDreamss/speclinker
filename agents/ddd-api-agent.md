@@ -165,6 +165,9 @@ domain: {도메인}
 req-f: {FUNC-DOMAIN-NNN | REQ-F-NNN | [TBD]}
 srs-f: {SRS-F-NNN | [TBD]}
 screens: []
+tables:
+  - TABLE_NAME_A
+  - TABLE_NAME_B
 ---
 
 # INF-{NNN}: {METHOD} {path} — {기능명}
@@ -195,6 +198,13 @@ screens: []
 | 401 | 인증 실패 | 토큰 없음/만료 |
 | 404 | 리소스 없음 | ID 조회 실패 |
 
+## 참조 테이블
+
+| 테이블 | SCH |
+|--------|-----|
+| TABLE_NAME_A | [TBD] |
+| TABLE_NAME_B | [TBD] |
+
 ## curl 예시
 
 ```bash
@@ -202,6 +212,34 @@ curl -X {METHOD} {path} \
   -H "Content-Type: application/json" \
   -d '{...}'
 ```
+```
+
+**`## 참조 테이블` 작성 규칙:**
+- Phase 1 Step 3~4에서 확인된 실제 테이블명만 기록한다. 추측·관례로 채우지 않는다.
+- `tables:` frontmatter와 `## 참조 테이블` 표는 동일한 테이블 목록을 가져야 한다.
+- SCH 컬럼은 `[TBD]`로 남긴다 — `link_inf_sch.py`가 SCH 생성 후 자동 교체한다.
+- 테이블이 없는 엔드포인트(외부 API 프록시, 캐시 전용 등)는 섹션 자체를 생략한다.
+
+**`_tmp/{inf_id}_sch_required.json` 출력 (INF 파일 생성 직후):**
+
+각 INF 파일 생성 후 아래 JSON을 `_tmp/` 에 저장한다. 테이블이 없으면 출력 생략.
+
+```json
+{
+  "inf_id": "INF-{NNN}",
+  "domain": "{도메인}",
+  "tables": ["TABLE_NAME_A", "TABLE_NAME_B"]
+}
+```
+
+```bash
+!python3 -c "
+import json, os
+os.makedirs('_tmp', exist_ok=True)
+data = {'inf_id': 'INF-{NNN}', 'domain': '{도메인}', 'tables': ['{TABLE_NAME_A}', '{TABLE_NAME_B}']}
+json.dump(data, open('_tmp/INF-{NNN}_sch_required.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
+print('_tmp/INF-{NNN}_sch_required.json 저장')
+"
 ```
 
 ---
@@ -221,6 +259,9 @@ curl -X {METHOD} {path} \
 [ ] 응답 필드가 Controller → Service → DAO → 쿼리/스키마 체인에서 실제로 확인된 필드인가?
     → 추측·관례·프레임워크 기본값으로 채운 필드는 금지
 [ ] nullable 여부가 코드/쿼리에서 확인됐는가? (LEFT JOIN, Optional, CASE WHEN 등)
+[ ] Phase 1 Step 3~4에서 확인된 테이블명이 `tables:` frontmatter와 `## 참조 테이블` 표에 기록됐는가?
+    → 테이블이 있는 엔드포인트에서 두 곳 모두 비어있으면 재확인
+[ ] 테이블이 있는 INF마다 `_tmp/INF-{NNN}_sch_required.json`이 생성됐는가?
 ```
 
 ---
@@ -232,4 +273,5 @@ curl -X {METHOD} {path} \
 - {filePath_1}: INF {N}건 생성 (INF-{infStart_1:03d}~INF-{actual_end_1:03d})
 - {filePath_2}: INF {N}건 생성 (INF-{infStart_2:03d}~INF-{actual_end_2:03d})
 총 엔드포인트: {총 N}개
+_sch_required.json 출력: {M}개 (테이블 있는 INF만)
 ```
