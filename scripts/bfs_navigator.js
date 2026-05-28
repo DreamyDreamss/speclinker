@@ -61,6 +61,13 @@ const NAV_SELECTORS = [
   '.nav-menu', '.menu-wrap', '#menu-wrap', '.main-nav',
   '.aside-menu', '#asideMenu', '.left-nav', '.leftNav',
   '.navigation-menu', '#navigationMenu',
+  // 한국 어드민 공통
+  '#leftMenu', '#leftmenu', '#left-menu', '.left-menu-area',
+  '#leftArea', '#left_area', '.lnb-wrap', '#lnbWrap',
+  '#menuArea', '#menu_area', '.menu-area', '.menuArea',
+  '#menuList', '#menu_list', '.menuList', '.menu-list',
+  '#menuBox', '#menu_box', '#navArea', '#nav_area',
+  'ul.menu', 'ul#menu', '#sideMenu', '#side_menu',
   'nav[role="navigation"]', 'aside nav',
   '[role="navigation"]', 'aside',
 ];
@@ -169,10 +176,28 @@ async function findContentFrame(page) {
 
 // ── nav 컨테이너 탐색 ─────────────────────────────────────────────────────────
 async function findNavContainer(page, contentFrame) {
+  // 1순위: main frame
   for (const sel of NAV_SELECTORS) {
     if ((await page.locator(sel).count()) > 0) return { frame: page, sel };
-    if (contentFrame && (await contentFrame.locator(sel).count()) > 0)
-      return { frame: contentFrame, sel };
+  }
+  // 2순위: content frame (가장 넓은 iframe)
+  if (contentFrame) {
+    for (const sel of NAV_SELECTORS) {
+      if ((await contentFrame.locator(sel).count()) > 0) return { frame: contentFrame, sel };
+    }
+  }
+  // 3순위: 나머지 모든 frame 순회 (nav가 별도 iframe인 split-frame 레이아웃)
+  for (const frame of page.frames()) {
+    if (frame === page.mainFrame()) continue;
+    if (contentFrame && frame === contentFrame) continue;
+    for (const sel of NAV_SELECTORS) {
+      try {
+        if ((await frame.locator(sel).count()) > 0) {
+          console.error(`[bfs] nav frame 발견: ${frame.url()} (${sel})`);
+          return { frame, sel };
+        }
+      } catch (_) {}
+    }
   }
   return null;
 }
