@@ -15,3 +15,6 @@ _tmp/
 
 # 백신 스캔 파일 (Alyac)
 *.alyac
+
+# 삭제된 파일 — OS/AV 잠금으로 남은 0-byte 아티팩트
+scripts/screenshot.js

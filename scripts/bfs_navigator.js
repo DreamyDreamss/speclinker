@@ -1,0 +1,668 @@
+#!/usr/bin/env node
+// STATUS: 완료
+/**
+ * bfs_navigator.js — N-depth 메뉴 BFS 탐색 + 선택적 캡처
+ *
+ * 기능:
+ *   - N뎁스 메뉴 계층 자동 탐색 (iframe / SPA / MPA 모두 지원)
+ *   - 각 화면 내 탭 자동 감지 + 순회
+ *   - 스코프 제한 (특정 L1/L2/... 경로만 탐색)
+ *   - 선택적 스크린샷 캡처 + 위젯 어노테이션
+ *
+ * Usage:
+ *   node bfs_navigator.js [options]
+ *
+ * Options:
+ *   --port=9222          CDP 포트 (기본: 9222)
+ *   --out=<dir>          출력 디렉토리 (기본: _tmp)
+ *   --scope=<path>       탐색 범위, '/' 구분 (예: "상품관리" 또는 "상품관리/상품등록")
+ *   --max-depth=<n>      최대 메뉴 뎁스 (기본: 6)
+ *   --capture            탐색과 동시에 각 화면 캡처
+ *   --workspace=<dir>    워크스페이스 루트 (기본: cwd)
+ *   --frame-url=<key>    content iframe URL 키워드 (iframe 앱 자동 감지 실패 시)
+ *
+ * Output:
+ *   {out}/screen_hierarchy.json   계층 트리 + flat 목록
+ *   (--capture 시) docs/05_설계서/{domain}/UI/{screenId}/preview_*.png
+ */
+'use strict';
+
+const fs   = require('fs');
+const path = require('path');
+const { chromium } = require('playwright');
+const { execSync }  = require('child_process');
+
+// ── CLI 파싱 ──────────────────────────────────────────────────────────────────
+const args = process.argv.slice(2);
+function arg(n, d) {
+  const f = args.find(a => a.startsWith('--' + n + '='));
+  return f ? f.split('=').slice(1).join('=') : d;
+}
+function flag(n) { return args.includes('--' + n); }
+
+const PORT       = arg('port', '9222');
+const OUT_DIR    = path.resolve(arg('out', '_tmp'));
+const SCOPE_RAW  = arg('scope', '');
+const MAX_DEPTH  = parseInt(arg('max-depth', '6'), 10);
+const DO_CAPTURE = flag('capture');
+const TREE_ONLY  = flag('tree-only');   // 정적 트리 추출만, 클릭/탐색 없음
+const WORKSPACE  = path.resolve(arg('workspace', process.cwd()));
+const FRAME_URL  = arg('frame-url', '');
+
+fs.mkdirSync(OUT_DIR, { recursive: true });
+
+// ── 상수 ─────────────────────────────────────────────────────────────────────
+
+// nav 컨테이너 후보 (우선순위 순)
+const NAV_SELECTORS = [
+  '.lnb', '#lnb', '.snb', '#snb', '.gnb', '#gnb',
+  '.sidebar', '#sidebar', '.left-menu', '.side-menu',
+  '.nav-menu', '.menu-wrap', '#menu-wrap', '.main-nav',
+  '.aside-menu', '#asideMenu', '.left-nav', '.leftNav',
+  '.navigation-menu', '#navigationMenu',
+  'nav[role="navigation"]', 'aside nav',
+  '[role="navigation"]', 'aside',
+];
+
+// 탭 후보 셀렉터 (우선순위 순)
+const TAB_SELECTORS = [
+  '[role="tab"]',
+  'a[href^="#tab"]', 'a[href^="#Tab"]', 'a[href^="#TAB"]',
+  '.tab-item > a', '.tab-menu > li > a', '.tabmenu > li > a',
+  '.nav-tabs > li > a', '.tab-nav > li > a',
+  'ul.tabs > li > a', '.tab-list > li > a',
+  '.tabbable .nav a', '.tab-content-nav a',
+  '[data-toggle="tab"]', '[data-bs-toggle="tab"]',
+];
+
+// 무시할 URL/이벤트 패턴
+const SKIP_PATTERNS = [
+  /^javascript:/i, /^#$/, /^mailto:/, /^tel:/,
+  /logout/i, /signout/i, /log-out/i, /sign-out/i,
+  /popup/i, /window\.open/i,
+  /^https?:\/\/(?!.*localhost|.*127\.0\.0\.1)/,  // 외부 URL
+];
+
+// ── scope 파싱 ────────────────────────────────────────────────────────────────
+// "상품관리/상품등록" → ['상품관리', '상품등록']
+const SCOPE_PATH = SCOPE_RAW
+  ? SCOPE_RAW.split('/').map(s => s.trim()).filter(Boolean)
+  : [];
+
+// ── 유틸 ─────────────────────────────────────────────────────────────────────
+let _idSeq = 0;
+function nextId() { return `N${String(++_idSeq).padStart(4, '0')}`; }
+
+function normRoute(url) {
+  try {
+    const u = new URL(url);
+    return u.pathname + (u.search ? u.search : '');
+  } catch (_) { return url; }
+}
+
+function escRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+function indent(depth) { return '  '.repeat(Math.max(0, depth - 1)); }
+
+function shouldSkip(href, onclick) {
+  const combined = (href || '') + '|' + (onclick || '');
+  return SKIP_PATTERNS.some(p => p.test(combined));
+}
+
+function parseProjectEnv() {
+  const p = path.join(WORKSPACE, 'project.env');
+  if (!fs.existsSync(p)) return {};
+  return Object.fromEntries(
+    fs.readFileSync(p, 'utf-8').split('\n')
+      .filter(l => l.includes('=') && !l.startsWith('#'))
+      .map(l => { const [k, ...v] = l.split('='); return [k.trim(), v.join('=').trim()]; })
+  );
+}
+
+// ── 앱 타입 감지 ──────────────────────────────────────────────────────────────
+async function detectAppType(page) {
+  return page.evaluate(() => {
+    const iframes = Array.from(document.querySelectorAll('iframe')).filter(f => {
+      const r = f.getBoundingClientRect();
+      return r.width > 400 && r.height > 300;
+    });
+    return {
+      iframeCount: iframes.length,
+      iframeSrcs: iframes.slice(0, 3).map(f => f.src || f.getAttribute('src') || ''),
+      hasReact:   !!(window.__REACT_DEVTOOLS_GLOBAL_HOOK__ || document.querySelector('[data-reactroot]')),
+      hasVue:     !!(window.__vue_devtools_global_hook__   || document.querySelector('[data-v-app]')),
+      hasAngular: !!(window.ng || document.querySelector('[ng-version]')),
+    };
+  }).then(info => {
+    let type = 'mpa';
+    if (info.iframeCount > 0) type = 'iframe';
+    else if (info.hasReact || info.hasVue || info.hasAngular) type = 'spa';
+    return { type, ...info };
+  });
+}
+
+// ── content frame 탐색 ────────────────────────────────────────────────────────
+async function findContentFrame(page) {
+  const frames = page.frames();
+  if (FRAME_URL) {
+    return frames.find(f => f.url().includes(FRAME_URL)) || null;
+  }
+  // 가장 넓은 iframe을 content frame으로 판정
+  const iframes = await page.locator('iframe').all();
+  if (iframes.length === 0) return null;
+
+  let best = null, bestArea = 0;
+  for (const ifEl of iframes) {
+    const box  = await ifEl.boundingBox().catch(() => null);
+    if (!box) continue;
+    const area = box.width * box.height;
+    if (area > bestArea) {
+      bestArea = area;
+      const src = (await ifEl.getAttribute('src').catch(() => '')) || '';
+      const key = src.split('/').pop().split('?')[0];
+      best = frames.find(f => key ? f.url().includes(key) : f !== page.mainFrame()) || null;
+    }
+  }
+  return best;
+}
+
+// ── nav 컨테이너 탐색 ─────────────────────────────────────────────────────────
+async function findNavContainer(page, contentFrame) {
+  for (const sel of NAV_SELECTORS) {
+    if ((await page.locator(sel).count()) > 0) return { frame: page, sel };
+    if (contentFrame && (await contentFrame.locator(sel).count()) > 0)
+      return { frame: contentFrame, sel };
+  }
+  return null;
+}
+
+// ── 현재 상태 스냅샷 (URL 변화 감지용) ────────────────────────────────────────
+async function getState(page, cf) {
+  const pu = page.url();
+  const fu = cf ? cf.url() : '';
+  return `${pu}|${fu}`;
+}
+
+// ── DOM에서 메뉴 트리 정적 추출 (클릭 없이) ────────────────────────────────────
+// nav 컨테이너의 ul > li 계층을 재귀 분석
+async function extractMenuTree(navFrame, navSel, maxD) {
+  return navFrame.evaluate(({ sel, maxD }) => {
+    function extractLinks(el, depth) {
+      if (depth > maxD) return [];
+      const items = [];
+
+      // 직계 li, 또는 직계 a (flat nav 대응)
+      const candidates = el.querySelectorAll(
+        ':scope > li, :scope > ul > li, :scope > ol > li, :scope > a'
+      );
+
+      for (const child of candidates) {
+        const isAnchor = child.tagName === 'A';
+        const link = isAnchor
+          ? child
+          : (child.querySelector(':scope > a')
+             || child.querySelector(':scope > span > a')
+             || child.querySelector(':scope > div > a'));
+
+        const text = ((link || child).textContent || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+        if (!text || text.length < 1) continue;
+
+        const href    = link ? (link.getAttribute('href')    || '') : '';
+        const onclick = link ? (link.getAttribute('onclick') || '') : '';
+
+        // 서브메뉴: ul, ol, div[class*=sub|child|depth]
+        const subMenuEl = isAnchor ? null : (
+          child.querySelector(':scope > ul')
+          || child.querySelector(':scope > ol')
+          || child.querySelector(':scope > div > ul')
+          || child.querySelector(':scope > div[class*="sub"]')
+          || child.querySelector(':scope > div[class*="child"]')
+          || child.querySelector(':scope > div[class*="depth"]')
+        );
+
+        const children = subMenuEl ? extractLinks(subMenuEl, depth + 1) : [];
+
+        // aria / class 힌트
+        const expanded = (child.getAttribute('aria-expanded')
+          || (link && link.getAttribute('aria-expanded'))
+          || '') === 'true';
+        const active = /\bactive\b|\bon\b|\bcurrent\b/i.test(child.className || '');
+
+        items.push({ text, href, onclick, children, expanded, active, depth });
+      }
+      return items;
+    }
+
+    const nav = document.querySelector(sel);
+    if (!nav) return [];
+    return extractLinks(nav, 1);
+  }, { sel: navSel, maxD });
+}
+
+// ── scope 필터 ────────────────────────────────────────────────────────────────
+function filterByScope(nodes, scopePath, depthOffset = 0) {
+  if (scopePath.length === 0) return nodes;
+
+  const want = scopePath[depthOffset]?.toLowerCase();
+  if (!want) return nodes;
+
+  return nodes.reduce((acc, node) => {
+    const label = node.text.toLowerCase();
+    const match = label.includes(want) || want.includes(label);
+
+    if (!match) return acc;
+
+    // 더 깊은 scope가 있으면 children도 필터
+    const children = filterByScope(node.children || [], scopePath, depthOffset + 1);
+    acc.push({ ...node, children });
+    return acc;
+  }, []);
+}
+
+// ── 탭 감지 ──────────────────────────────────────────────────────────────────
+async function detectTabs(frame) {
+  for (const sel of TAB_SELECTORS) {
+    const items = await frame.locator(sel).all();
+    if (items.length < 2) continue;
+
+    const tabs = [];
+    for (const item of items) {
+      const text = ((await item.textContent().catch(() => '')) || '').trim();
+      const href  = await item.getAttribute('href').catch(() => '');
+      if (text && text.length < 40) tabs.push({ label: text, selector: sel, href: href || '' });
+    }
+    if (tabs.length >= 2) return tabs;
+  }
+  return [];
+}
+
+// ── 메뉴 클릭 경로 네비게이션 ─────────────────────────────────────────────────
+// pathStack 에 따라 L1→L2→... 순서로 클릭해서 화면에 도달
+async function navigateByPath(navFrame, navSel, pathStack, page) {
+  for (let i = 0; i < pathStack.length; i++) {
+    const label = pathStack[i];
+    try {
+      const loc = navFrame
+        .locator(`${navSel} a, ${navSel} span, ${navSel} li`)
+        .filter({ hasText: new RegExp(`^\\s*${escRe(label)}\\s*$`) })
+        .first();
+      await loc.click({ force: true, timeout: 4000 });
+      await page.waitForTimeout(i < pathStack.length - 1 ? 500 : 2000);
+    } catch (_) {
+      // text-is 실패 시 contains fallback
+      try {
+        const loc2 = navFrame
+          .locator(`${navSel} a`)
+          .filter({ hasText: label })
+          .first();
+        await loc2.click({ force: true, timeout: 3000 });
+        await page.waitForTimeout(i < pathStack.length - 1 ? 500 : 2000);
+      } catch (_2) {}
+    }
+  }
+}
+
+// ── 단일 화면 캡처 ────────────────────────────────────────────────────────────
+async function captureScreen(page, cf, screenNode, cdpSession) {
+  const capFrame   = cf || page;
+  const ifrHandle  = cf ? await cf.frameElement().catch(() => null) : null;
+  const env        = parseProjectEnv();
+  const plugin     = env.PLUGIN_PATH || '';
+
+  // 출력 폴더: 나중에 domain_plan 으로 domain 배정되므로 일단 _tmp/captures/{screenId}
+  const outDir = path.join(OUT_DIR, 'captures', screenNode.screenId);
+  fs.mkdirSync(outDir, { recursive: true });
+
+  const tabs = (screenNode.tabs || []).length > 1
+    ? screenNode.tabs.map((t, i) => ({ ...t, suffix: `_tab${i + 1}_${t.label}`, skipClick: false }))
+    : [{ label: 'main', suffix: '', skipClick: true }];
+
+  let globalSeq  = 0;
+  const captured = [];
+
+  for (const tab of tabs) {
+    // 탭 클릭
+    if (!tab.skipClick) {
+      try {
+        await capFrame.locator(tab.selector)
+          .filter({ hasText: new RegExp(`^\\s*${escRe(tab.label)}\\s*$`) })
+          .first()
+          .click({ force: true, timeout: 3000 });
+        await page.waitForTimeout(1200);
+      } catch (_) {}
+    }
+
+    // 스크롤 높이 측정
+    const { scrollH } = await capFrame.evaluate(() => {
+      let best = document.body.scrollHeight;
+      for (const el of document.body.querySelectorAll('*')) {
+        if (el.scrollHeight > best && el.clientHeight > 100 && el.clientWidth > 200)
+          best = el.scrollHeight;
+      }
+      return { scrollH: best };
+    }).catch(() => ({ scrollH: 900 }));
+
+    const targetH = scrollH + 220;
+
+    if (ifrHandle) {
+      await ifrHandle.evaluate((el, h) => { el.style.height = h + 'px'; }, targetH).catch(() => {});
+    }
+    if (cdpSession) {
+      await cdpSession.send('Emulation.setDeviceMetricsOverride',
+        { width: 1920, height: targetH, deviceScaleFactor: 1, mobile: false }
+      ).catch(() => {});
+      await page.waitForTimeout(700);
+    }
+
+    const outPng = path.join(outDir, `preview${tab.suffix}.png`);
+
+    // 스크린샷
+    let imgBuf;
+    if (cdpSession) {
+      const r = await cdpSession.send('Page.captureScreenshot', { format: 'png' }).catch(() => null);
+      imgBuf = r ? Buffer.from(r.data, 'base64') : null;
+    }
+    if (!imgBuf) {
+      imgBuf = await page.screenshot({ fullPage: false }).catch(() => null);
+    }
+    if (!imgBuf) continue;
+    fs.writeFileSync(outPng, imgBuf);
+
+    // 위젯 자동 마킹
+    const { widgets, nextSeq } = await capFrame.evaluate((startSeq) => {
+      const SELS = [
+        'button:not([disabled])', 'a[href]', 'input', 'select', 'textarea',
+        '[role="button"]', '[role="link"]', '[role="menuitem"]',
+        '[onclick]', '.btn', '.button',
+      ];
+      const seen = new Set();
+      const results = [];
+      let seq = startSeq + 1;
+      for (const sel of SELS) {
+        for (const el of document.querySelectorAll(sel)) {
+          const r = el.getBoundingClientRect();
+          if (r.width < 5 || r.height < 5 || r.top < 0) continue;
+          const key = `${Math.round(r.left)},${Math.round(r.top)},${el.tagName}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          const label = (
+            el.textContent || el.getAttribute('aria-label') ||
+            el.getAttribute('placeholder') || el.getAttribute('title') || el.getAttribute('value') || ''
+          ).replace(/\s+/g, ' ').trim().slice(0, 50);
+          results.push({
+            number: seq++,
+            bbox: { x: Math.round(r.left), y: Math.round(r.top),
+                    w: Math.round(r.width), h: Math.round(r.height) },
+            tag: el.tagName.toLowerCase(),
+            type: el.getAttribute('type') || '',
+            label,
+          });
+        }
+      }
+      return { widgets: results, nextSeq: seq };
+    }, globalSeq).catch(() => ({ widgets: [], nextSeq: globalSeq }));
+
+    globalSeq = nextSeq;
+
+    const widgetsPath = outPng.replace('.png', '_widgets.json');
+    fs.writeFileSync(widgetsPath, JSON.stringify(widgets, null, 2));
+
+    // annotate_preview.py 호출
+    const annotate = path.join(plugin, 'scripts', 'annotate_preview.py');
+    if (fs.existsSync(annotate)) {
+      try {
+        execSync(
+          `python "${annotate}" "${outPng}" "${widgetsPath}"`,
+          { stdio: 'pipe', cwd: WORKSPACE }
+        );
+      } catch (_) {}
+    }
+
+    captured.push({
+      tab: tab.label,
+      png: path.relative(WORKSPACE, outPng).replace(/\\/g, '/'),
+      widgets: widgets.length,
+    });
+  }
+
+  return captured;
+}
+
+// ── 트리 순회 (재귀) ──────────────────────────────────────────────────────────
+// navTree: extractMenuTree + filterByScope 결과 (정적)
+// 실제 클릭은 navigateByPath 로 수행
+async function traverseTree(nodes, page, cf, navFrame, navSel, ctx) {
+  const { seenRoutes, flat, cdpSession } = ctx;
+  const results = [];
+
+  for (const node of nodes) {
+    const pathStack = [...ctx.pathStack, node.text];
+    const id = nextId();
+
+    if (node.children && node.children.length > 0) {
+      // ── 메뉴 그룹 (펼칠 수 있는 노드) ────────────────────────────────
+      console.error(`${indent(pathStack.length)}▷ [${node.text}] (하위 ${node.children.length}개)`);
+
+      // L1 클릭 (서브메뉴 펼치기)
+      try {
+        const loc = navFrame
+          .locator(`${navSel} a, ${navSel} span`)
+          .filter({ hasText: new RegExp(`^\\s*${escRe(node.text)}\\s*$`) })
+          .first();
+        await loc.click({ force: true, timeout: 3000 }).catch(() => {});
+        await page.waitForTimeout(400);
+      } catch (_) {}
+
+      const children = await traverseTree(node.children, page, cf, navFrame, navSel, {
+        ...ctx, pathStack,
+      });
+
+      results.push({ id, label: node.text, type: 'menu-group',
+                     depth: pathStack.length, path: pathStack, children });
+
+    } else {
+      // ── 리프 노드 (실제 화면) ─────────────────────────────────────────
+      // href/onclick 무시 대상
+      if (shouldSkip(node.href, node.onclick)) {
+        console.error(`${indent(pathStack.length)}⊘ [${node.text}] 스킵 (외부/로그아웃 패턴)`);
+        continue;
+      }
+
+      const stateBefore = await getState(page, cf);
+
+      // 전체 경로 클릭 (L1 재펼침 포함)
+      await navigateByPath(navFrame, navSel, pathStack, page);
+
+      const stateAfter = await getState(page, cf);
+      const didNavigate = stateAfter !== stateBefore;
+
+      const currentUrl  = cf ? cf.url() : page.url();
+      const route       = normRoute(currentUrl);
+      const isDuplicate = seenRoutes.has(route);
+
+      if (didNavigate && !isDuplicate) {
+        seenRoutes.add(route);
+
+        // 탭 감지
+        const capFrame = cf || page;
+        const tabs = await detectTabs(capFrame);
+
+        const rawName  = route.split('/').pop().split('.')[0].replace(/[^a-zA-Z0-9]/g, '_') || id;
+        const screenId = `${rawName}_${id}`;
+
+        console.error(
+          `${indent(pathStack.length)}✓ [${node.text}] ${route}` +
+          (tabs.length > 0 ? ` (탭 ${tabs.length}개: ${tabs.map(t => t.label).join(', ')})` : '')
+        );
+
+        const screenNode = {
+          id,
+          screenId,
+          label: node.text,
+          type: 'screen',
+          depth: pathStack.length,
+          path: pathStack,
+          route,
+          fullUrl: currentUrl,
+          tabs: tabs.map((t, i) => ({ index: i, label: t.label, selector: t.selector, captureFile: null })),
+          captureStatus: 'none',
+          domain: '',   // screen_inventory.py 에서 _domain_plan.json 보고 배정
+        };
+
+        if (DO_CAPTURE) {
+          const captured = await captureScreen(page, cf, screenNode, cdpSession);
+          screenNode.captureStatus = captured.length > 0 ? 'done' : 'fail';
+          screenNode.tabs = screenNode.tabs.map((t, i) => ({
+            ...t, captureFile: captured[i]?.png || null,
+          }));
+          console.error(`${indent(pathStack.length)}  → 캡처 ${captured.length}개 파일`);
+        }
+
+        flat.push(screenNode);
+        results.push(screenNode);
+
+      } else if (isDuplicate) {
+        console.error(`${indent(pathStack.length)}↩ [${node.text}] 중복 (${route})`);
+        results.push({ id, label: node.text, type: 'screen-duplicate',
+                       depth: pathStack.length, path: pathStack, route });
+      } else {
+        // 이동 없음 — onclick 분기, 팝업 등
+        console.error(`${indent(pathStack.length)}− [${node.text}] 이동 없음 (href: ${node.href || '없음'})`);
+        results.push({ id, label: node.text, type: 'no-navigation',
+                       depth: pathStack.length, path: pathStack,
+                       href: node.href, onclick: node.onclick });
+      }
+    }
+  }
+
+  return results;
+}
+
+// ── 메인 ─────────────────────────────────────────────────────────────────────
+(async () => {
+  console.error(
+    `[bfs_navigator] port=${PORT}  scope="${SCOPE_RAW || '(전체)'}"` +
+    `  maxDepth=${MAX_DEPTH}  capture=${DO_CAPTURE}`
+  );
+
+  let browser;
+  try {
+    browser = await chromium.connectOverCDP(`http://localhost:${PORT}`);
+  } catch (e) {
+    console.error(`[ERROR] CDP 연결 실패: ${e.message}`);
+    console.error(`  Chrome을 --remote-debugging-port=${PORT} 옵션으로 실행하고 로그인 후 재시도하세요.`);
+    process.exit(1);
+  }
+
+  const context = browser.contexts()[0];
+  const page    = context.pages()[0];
+  console.error(`[bfs] 현재 탭: ${page.url()}`);
+
+  const appInfo = await detectAppType(page);
+  console.error(`[bfs] 앱 타입: ${appInfo.type}  iframe 수: ${appInfo.iframeCount}`);
+
+  const cdpSession = await context.newCDPSession(page).catch(() => null);
+  const cf         = await findContentFrame(page);
+  console.error(`[bfs] content frame: ${cf ? cf.url() : '(없음 — main frame 사용)'}`);
+
+  const navContainer = await findNavContainer(page, cf);
+  if (!navContainer) {
+    console.error('[ERROR] nav 컨테이너를 찾을 수 없습니다.');
+    console.error('  --frame-url 옵션으로 content iframe URL 키워드를 지정해 보세요.');
+    await browser.close();
+    process.exit(1);
+  }
+
+  const { frame: navFrame, sel: navSel } = navContainer;
+  console.error(`[bfs] nav: ${navSel}  (${navFrame === page ? 'main frame' : 'content frame'})`);
+
+  // 1. 정적 메뉴 트리 추출
+  const rawTree = await extractMenuTree(navFrame, navSel, MAX_DEPTH);
+  console.error(`[bfs] L1 메뉴 ${rawTree.length}개 추출 완료`);
+
+  // 2. scope 필터
+  const filteredTree = filterByScope(rawTree, SCOPE_PATH);
+  const scopeMsg = SCOPE_PATH.length > 0
+    ? `${SCOPE_PATH.join(' > ')} 범위로 필터됨`
+    : '전체 탐색';
+  console.error(`[bfs] ${scopeMsg}`);
+
+  // 3. TREE_ONLY 모드: 정적 트리만 저장하고 종료 (클릭·탐색 없음)
+  if (TREE_ONLY) {
+    function countNodes(nodes) {
+      return nodes.reduce((s, n) => s + 1 + countNodes(n.children || []), 0);
+    }
+    const output = {
+      version: 2,
+      generatedAt: new Date().toISOString(),
+      rootUrl: page.url(),
+      appType: appInfo.type,
+      scope: SCOPE_RAW || null,
+      maxDepth: MAX_DEPTH,
+      captureMode: false,
+      treeOnly: true,
+      stats: {
+        l1Count: rawTree.length,
+        filteredL1Count: filteredTree.length,
+        totalNodes: countNodes(filteredTree),
+        screens: 0,
+        captured: 0,
+        noNavigation: 0,
+        duplicate: 0,
+      },
+      tree: filteredTree,
+      flat: [],
+    };
+    const outPath = path.join(OUT_DIR, 'screen_hierarchy.json');
+    fs.writeFileSync(outPath, JSON.stringify(output, null, 2));
+    console.error(`\n[bfs 트리 추출 완료] L1 ${rawTree.length}개 / 노드 ${output.stats.totalNodes}개`);
+    console.error(`  저장: ${outPath}`);
+    await browser.close();
+    process.exit(0);
+  }
+
+  // 4. 트리 순회 (클릭 + 선택적 캡처)
+  const seenRoutes = new Set();
+  const flat       = [];
+
+  const tree = await traverseTree(filteredTree, page, cf, navFrame, navSel, {
+    pathStack: [], seenRoutes, flat, cdpSession,
+  });
+
+  // 5. 결과 저장
+  const screens   = flat.filter(n => n.type === 'screen');
+  const captured  = flat.filter(n => n.captureStatus === 'done');
+  const noNav     = flat.filter(n => n.type === 'no-navigation');
+  const duplicate = flat.filter(n => n.type === 'screen-duplicate');
+
+  const output = {
+    version: 2,
+    generatedAt: new Date().toISOString(),
+    rootUrl: page.url(),
+    appType: appInfo.type,
+    scope: SCOPE_RAW || null,
+    maxDepth: MAX_DEPTH,
+    captureMode: DO_CAPTURE,
+    stats: {
+      screens: screens.length,
+      captured: captured.length,
+      noNavigation: noNav.length,
+      duplicate: duplicate.length,
+    },
+    tree,
+    flat,
+  };
+
+  const outPath = path.join(OUT_DIR, 'screen_hierarchy.json');
+  fs.writeFileSync(outPath, JSON.stringify(output, null, 2));
+
+  console.error('\n[bfs 완료] ─────────────────────────────');
+  console.error(`  화면:     ${screens.length}개`);
+  console.error(`  캡처:     ${captured.length}개`);
+  console.error(`  이동없음: ${noNav.length}개`);
+  console.error(`  중복:     ${duplicate.length}개`);
+  console.error(`  저장:     ${outPath}`);
+
+  await browser.close();
+  process.exit(0);
+})();
