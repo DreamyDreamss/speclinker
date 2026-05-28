@@ -351,68 +351,13 @@ process.stdout.write('uis_capture_map 저장: ' + map.length + '개\n');
 ```
 → `activeRoute`가 예상 route와 일치하면 capture, 빈 화면/리다이렉트면 스킵.
 
-### STEP 6-2-3: uis_capture_map ↔ screen_inventory 매칭
+### STEP 6-2-3: uis_capture_map 완성 (BFS 주축 — 정적분석은 보조)
 
-BFS 완료 후, 두 데이터를 결합해 `uis_capture_map.json`을 최종화한다.
-
-```bash
-!python -c "
-import json, os, re
-
-try:
-    import sys
-    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
-except AttributeError:
-    pass
-
-cap_map = json.load(open('_tmp/uis_capture_map.json', encoding='utf-8')) if os.path.exists('_tmp/uis_capture_map.json') else []
-inv     = json.load(open('_tmp/screen_inventory.json', encoding='utf-8'))
-
-# route 정규화 (끝 / 제거, 대소문자 통일)
-def norm(r): return (r or '').rstrip('/').lower()
-
-inv_by_route = {norm(s.get('route','')): s for s in inv}
-
-matched = 0
-for entry in cap_map:
-    ar = norm(entry.get('activeRoute',''))
-    inv_item = inv_by_route.get(ar)
-    if inv_item:
-        entry['inventoryMatch'] = {
-            'screenId':   inv_item.get('screenId',''),
-            'uisId':      inv_item.get('uisId', 0),
-            'entryFile':  inv_item.get('entryFile',''),
-            'domain':     inv_item.get('domain',''),
-            'route':      inv_item.get('route',''),
-        }
-        matched += 1
-    else:
-        # BFS에서 발견했지만 정적분석 미포함 화면
-        entry.setdefault('inventoryMatch', None)
-
-json.dump(cap_map, open('_tmp/uis_capture_map.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
-
-# 정적분석엔 있지만 BFS에서 못 찾은 화면 → goto 재시도 목록
-captured_routes = {norm(e.get('activeRoute','')) for e in cap_map}
-goto_fallback = [s for s in inv if norm(s.get('route','')) not in captured_routes]
-if goto_fallback:
-    json.dump(goto_fallback, open('_tmp/uis_goto_fallback.json','w',encoding='utf-8'), ensure_ascii=False, indent=2)
-
-print('BFS 캡처: ' + str(len(cap_map)) + '개  매칭: ' + str(matched) + '개')
-print('goto 재시도 대상: ' + str(len(goto_fallback)) + '개' + (' -> _tmp/uis_goto_fallback.json' if goto_fallback else ''))
-for e in cap_map:
-    m = e.get('inventoryMatch')
-    tag = '[매칭O ' + (m['screenId'] if m else '') + ']' if m else '[매칭X — BFS신규]'
-    print('  ' + tag.ljust(30) + ' ' + e.get('activeRoute',''))
-"
-```
-
----
-
-## STEP 6-3: UIS 스펙 생성 (ddd-ui-agent 배치)
-
-**Phase 2 — 브라우저 불필요. `_tmp/uis_capture_map.json` 기준으로 실행.**
-캡처가 있는 화면은 실제 스크린샷+위젯 기반으로, 없는 화면은 소스 기반 와이어프레임으로 생성한다.
+> **설계 원칙**: `uis_capture_map.json`이 UIS 생성의 유일한 주축이다.
+> - 도메인: `menuPath[0]` (실제 GNB 카테고리) 기준 → `_domain_plan.json`으로 매핑
+> - 화면명: 메뉴 라벨 (menuPath 마지막 항목)
+> - `screen_inventory.json`은 `entryFile`/`componentFiles` 경로 보조 조회용만
+> - BFS에서 못 찾은 화면 = 메뉴에 없는 화면 → 강제 편입 금지, 별도 리스트로 분리
 
 ```bash
 !python -c "
@@ -426,88 +371,142 @@ except AttributeError:
 
 cap_map = json.load(open('_tmp/uis_capture_map.json', encoding='utf-8')) if os.path.exists('_tmp/uis_capture_map.json') else []
 inv     = json.load(open('_tmp/screen_inventory.json', encoding='utf-8'))
+plan    = json.load(open('docs/05_설계서/_domain_plan.json', encoding='utf-8'))
 
-# uis_capture_map 항목 — 캡처 있음
-pending = []
+def norm(r): return (r or '').rstrip('/').lower()
+
+# 정적분석: route → {entryFile, componentFiles} 보조 조회용
+inv_by_route = {norm(s.get('route','')): s for s in inv}
+
+# GNB 카테고리 → domain plan 매핑
+# menuPath[0] 라벨을 도메인 plan rootPaths 또는 name으로 매핑
+def gnb_to_domain(gnb_label):
+    label_lower = gnb_label.lower().replace(' ','').replace('/','')
+    for d in plan['domains']:
+        name_lower = d['name'].lower().replace(' ','').replace('/','')
+        if label_lower in name_lower or name_lower in label_lower:
+            return d['name']
+    # 매핑 실패 시 첫 번째 도메인 반환
+    return plan['domains'][0]['name'] if plan['domains'] else ''
+
+# UIS ID 카운터 (도메인별)
+uis_counter = {d['name']: d['uis']['start'] for d in plan['domains']}
 for e in cap_map:
-    m = e.get('inventoryMatch') or {}
-    pending.append({
-        'source':      'bfs',
-        'menuPath':    e.get('menuPath', []),
-        'screenLabel': e.get('screenLabel', ''),
-        'activeRoute': e.get('activeRoute', ''),
-        'captureDir':  e.get('captureDir', ''),
-        'captureFile': e.get('captureFile', ''),
-        'widgetCount': e.get('widgetCount', 0),
-        'screenId':    m.get('screenId', '') or e.get('screenLabel','').replace(' ','_'),
-        'uisId':       m.get('uisId', 0),
-        'domain':      m.get('domain', ''),
-        'entryFile':   m.get('entryFile', ''),
-        'route':       m.get('route', '') or e.get('activeRoute',''),
-        '_hasCapture': True,
-    })
+    if e.get('uisId'): # 이미 할당됨
+        dom = e.get('domain','')
+        if dom and e['uisId'] >= uis_counter.get(dom, 0):
+            uis_counter[dom] = e['uisId'] + 1
 
-# screen_inventory 항목 — BFS 미발견 (와이어프레임)
-captured_routes = {e.get('activeRoute','').rstrip('/').lower() for e in cap_map}
-for s in inv:
-    if s.get('route','').rstrip('/').lower() in captured_routes:
-        continue
-    sid = s.get('screenId') or os.path.splitext(os.path.basename(s.get('entryFile','')))[0]
-    pending.append({
-        'source':      'inventory',
-        'menuPath':    [],
-        'screenLabel': s.get('screenName', sid),
-        'activeRoute': s.get('route',''),
-        'captureDir':  '',
-        'captureFile': '',
-        'widgetCount': 0,
-        'screenId':    sid,
-        'uisId':       s.get('uisId', 0),
-        'domain':      s.get('domain', ''),
-        'entryFile':   s.get('entryFile', ''),
-        'route':       s.get('route', ''),
-        '_hasCapture': False,
-    })
+enriched = 0
+for entry in cap_map:
+    # 도메인: menuPath[0] 기반 (정적분석 덮어쓰기 금지)
+    menu_path = entry.get('menuPath', [])
+    gnb = menu_path[0] if menu_path else ''
+    domain = gnb_to_domain(gnb) if gnb else ''
+    entry['domain'] = domain
 
-cap_cnt  = sum(1 for p in pending if p['_hasCapture'])
-wire_cnt = sum(1 for p in pending if not p['_hasCapture'])
-print('전체 ' + str(len(pending)) + '개  캡처: ' + str(cap_cnt) + '  와이어프레임: ' + str(wire_cnt))
+    # UIS-F ID 할당 (미할당 항목만)
+    if not entry.get('uisId') and domain:
+        entry['uisId'] = uis_counter.get(domain, 0)
+        uis_counter[domain] = entry['uisId'] + 1
+
+    # screenId: activeRoute 마지막 세그먼트
+    ar = entry.get('activeRoute', '')
+    if not entry.get('screenId'):
+        seg = [s for s in ar.rstrip('/').split('/') if s]
+        entry['screenId'] = seg[-1] if seg else entry.get('screenLabel','screen')
+
+    # 보조 조회: entryFile / componentFiles (있으면 추가, 없어도 무방)
+    inv_item = inv_by_route.get(norm(ar))
+    if inv_item:
+        entry.setdefault('entryFile', inv_item.get('entryFile', ''))
+        entry.setdefault('componentFiles', inv_item.get('componentFiles', []))
+        enriched += 1
+
+json.dump(cap_map, open('_tmp/uis_capture_map.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
+
+# 정적분석엔 있지만 BFS에서 못 찾은 화면 → 메뉴에 없는 화면 (강제 편입 금지)
+captured_routes = {norm(e.get('activeRoute','')) for e in cap_map}
+not_in_menu = [s for s in inv if norm(s.get('route','')) not in captured_routes]
+if not_in_menu:
+    json.dump(not_in_menu, open('_tmp/uis_not_in_menu.json','w',encoding='utf-8'), ensure_ascii=False, indent=2)
+
+print('BFS 캡처: ' + str(len(cap_map)) + '개  entryFile 보강: ' + str(enriched) + '개')
+if not_in_menu:
+    print('메뉴에 없는 화면 (정적분석만): ' + str(len(not_in_menu)) + '개 → _tmp/uis_not_in_menu.json')
+    print('  (별도 판단 필요 — 권한 제한 화면, API 전용 URL 등)')
 print()
-for i, p in enumerate(pending, 1):
-    tag = '[캡처]  ' if p['_hasCapture'] else '[와이어]'
-    path_str = ' > '.join(p['menuPath']) if p['menuPath'] else p['route']
-    print(str(i).rjust(3) + '. ' + tag + ' ' + p['screenId'].ljust(30) + ' ' + path_str)
+print('도메인별 UIS 배분:')
+from collections import Counter
+dc = Counter(e.get('domain','?') for e in cap_map)
+for dom, cnt in sorted(dc.items()): print('  ' + dom.ljust(20) + str(cnt) + '개')
+"
+```
+
+---
+
+## STEP 6-3: UIS 스펙 생성 (ddd-ui-agent 배치)
+
+**Phase 2 — 브라우저 불필요. `_tmp/uis_capture_map.json` 단독 입력.**
+BFS로 발견된 화면만 UIS로 생성한다. `uis_not_in_menu.json` 항목은 여기서 처리하지 않는다.
+
+```bash
+!python -c "
+import json, os
+
+try:
+    import sys
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+except AttributeError:
+    pass
+
+cap_map = json.load(open('_tmp/uis_capture_map.json', encoding='utf-8'))
+
+# 도메인별 그룹핑
+from collections import defaultdict
+by_domain = defaultdict(list)
+for e in cap_map:
+    by_domain[e.get('domain','unknown')].append(e)
+
+print('UIS 생성 대상: ' + str(len(cap_map)) + '개')
+print()
+for dom, items in sorted(by_domain.items()):
+    batches = (len(items) + 2) // 3
+    print('  ' + dom.ljust(20) + str(len(items)) + '개  →  ' + str(batches) + '배치')
+    for e in items:
+        path_str = ' > '.join(e.get('menuPath', [])) or e.get('activeRoute','')
+        print('    UIS-F-' + str(e.get('uisId',0)).zfill(3) + '  ' + e.get('screenId','').ljust(25) + '  ' + path_str)
 "
 ```
 
 위 목록을 **도메인별로 3개씩 묶어** `ddd-ui-agent`를 병렬 호출한다:
 
 ```
-각 배치(도메인 동일 3개씩) → Agent 도구 호출:
+각 배치(같은 도메인 3개씩) → Agent 도구 호출:
   subagent_type: "speclinker:ddd-ui-agent"
-  description: "{domain} UIS 생성 ({screenId1}, {screenId2}, {screenId3})"
+  description: "{domain} UIS 생성 ({screenId1}, ...)"
   prompt: |
     처리 대상:
 
     [화면 1]
-    메뉴경로: {menuPath.join(' > ')}
+    메뉴경로: {menuPath.join(' > ')}   ← 화면명/도메인의 실제 근거
     라우트: {activeRoute}
-    진입 파일: {entryFile}
+    진입 파일: {entryFile or "정적분석 미매칭"}
     도메인: {domain}
     UIS-F ID: UIS-F-{uisId:03d}
     INF 디렉토리: docs/05_설계서/{domain}/INF/
-    캡처 디렉토리: {captureDir or "없음 (소스 기반 와이어프레임)"}
+    캡처 디렉토리: {captureDir}   ← 항상 존재 (BFS 캡처 완료된 화면만 여기 있음)
     MODE: RECON
     워크스페이스: {현재 작업 디렉토리 절대경로}
 
     [화면 2] ...
     [화면 3] ...
 
-    캡처 디렉토리가 있는 화면:
-    - {captureDir}/preview.png  : 원본 스크린샷 (1920x900px)
-    - {captureDir}/preview_annotated.png : 마커 스크린샷 (있으면 우선 사용)
-    - {captureDir}/preview_widgets.json : 감지된 위젯 목록
-    spec.md 미리보기에 이미지 경로(상대경로)를 삽입하고
+    캡처 디렉토리 파일:
+    - {captureDir}/preview.png         : 실제 스크린샷 (1920x900px)
+    - {captureDir}/preview_annotated.png : 마커 스크린샷 (있으면 우선)
+    - {captureDir}/preview_widgets.json  : 감지된 위젯 목록
+    화면명은 menuPath 마지막 항목 사용. spec.md에 이미지 상대경로 삽입.
     widgets.json 기반으로 UI 컴포넌트 목록 작성.
 
 각 배치 완료 후 다음 배치 시작.
