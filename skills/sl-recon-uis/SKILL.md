@@ -266,13 +266,15 @@ for s in inv:
 
 **매 iteration 판단 순서:**
 
-1. 반환된 JSON의 `route`를 `screen_inventory.json`과 비교:
+1. 반환된 JSON의 **`activeRoute`** 값으로 `screen_inventory.json`과 비교:
+   - `isIframeApp: true` 이면 `contentRoute`가 실제 화면 route이므로 `activeRoute`를 사용
+   - `isIframeApp: false` 이면 `route`(메인 URL)를 사용
    - **매핑 O + 미캡처** → 즉시 캡처 (스크린샷 + 마커 자동 생성):
      ```
      !node {AI_NAV} --port={CDP_PORT} --workspace={CWD} capture {screenId}
      ```
-   - **매핑 X** → `new_screens`에 `{route, title, url}` 기록
-   - 현재 route를 `visited_routes`에 추가
+   - **매핑 X** → `new_screens`에 `{route: activeRoute, title, url: contentUrl or url}` 기록
+   - `activeRoute`를 `visited_routes`에 추가
 
 2. `navigables` 중 **클릭하지 않은 nav-link** 선택:
    - `hasChildren: true` 항목 우선 (서브메뉴 존재 가능) → 클릭 후 snapshot 재확인

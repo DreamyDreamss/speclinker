@@ -1,7 +1,7 @@
 {
   "name": "speclinker",
-  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 REQ-ID 체이닝, UA 대시보드 통합. v2.25: 브라우저 메뉴BFS 탐색 1단계/goto보완 2단계 명시, goto 직접접근 금지",
-  "version": "2.25.0",
+  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 REQ-ID 체이닝, UA 대시보드 통합. v2.26: iframe 앱 대응 - contentRoute/activeRoute 반환, 콘텐츠iframe 스크린샷 캡처",
+  "version": "2.26.0",
   "author": {
     "name": "DreamyDreamss"
   },

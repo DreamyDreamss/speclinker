@@ -61,23 +61,40 @@ function parseProjectEnv() {
 function escRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 
 // ── content frame 탐색 ────────────────────────────────────────────────────────
+// iframe 기반 앱(메인 shell + 콘텐츠 iframe 구조)에서 실제 화면이 로드된 iframe 반환.
+// 메인 프레임은 절대 반환하지 않는다.
 async function findContentFrame(page) {
   const iframes = await page.locator('iframe').all();
   if (iframes.length === 0) return null;
-  let best = null, bestArea = 0;
+
+  const mainUrl  = page.mainFrame().url();
+  const vpW      = await page.evaluate(() => window.innerWidth  || 1200).catch(() => 1200);
+  const vpH      = await page.evaluate(() => window.innerHeight || 900).catch(() => 900);
+
+  let best = null, bestScore = 0;
   for (const ifEl of iframes) {
     const box = await ifEl.boundingBox().catch(() => null);
     if (!box) continue;
     const area = box.width * box.height;
-    if (area > bestArea) {
-      bestArea = area;
-      const src  = (await ifEl.getAttribute('src').catch(() => '')) || '';
-      const key  = src.split('/').pop().split('?')[0];
-      const found = page.frames().find(f =>
-        key ? f.url().includes(key) : f !== page.mainFrame()
-      ) || null;
-      if (found) best = found;
-    }
+
+    // 너무 작은 iframe (광고/숨김) 제외
+    if (box.width < 200 || box.height < 100) continue;
+
+    const src = (await ifEl.getAttribute('src').catch(() => '')) || '';
+    const key = src.split('/').pop().split('?')[0];
+    const frame = page.frames().find(f =>
+      f !== page.mainFrame() && (key ? f.url().includes(key) : true)
+    ) || null;
+    if (!frame) continue;
+
+    // 콘텐츠 영역 점수: 크고, 오른쪽/중앙에 있고, URL이 실제 라우트인 것 우선
+    const isCenterOrRight = box.left > vpW * 0.20;
+    const hasRealUrl = frame.url() && frame.url() !== mainUrl && !frame.url().endsWith('blank');
+    const score = area
+      + (isCenterOrRight ? vpW * vpH * 0.3 : 0)
+      + (hasRealUrl ? vpW * vpH * 0.5 : 0);
+
+    if (score > bestScore) { bestScore = score; best = frame; }
   }
   return best;
 }
@@ -186,16 +203,30 @@ async function extractNavigables(page) {
 
 // ── snapshot ─────────────────────────────────────────────────────────────────
 async function doSnapshot(page) {
-  const url       = page.url();
-  const route     = normRoute(url);
-  const title     = await page.title().catch(() => '');
+  const url        = page.url();
+  const route      = normRoute(url);
+  const title      = await page.title().catch(() => '');
   const navigables = await extractNavigables(page);
+
+  // iframe 기반 앱: 콘텐츠 frame의 URL이 실제 "현재 화면" route
+  const contentFrame = await findContentFrame(page);
+  const contentUrl   = contentFrame ? contentFrame.url() : null;
+  const contentRoute = contentUrl ? normRoute(contentUrl) : null;
+
+  // Claude가 화면 매핑 시 사용할 "activeRoute":
+  //   iframe 앱이면 contentRoute, 아니면 메인 route
+  const activeRoute = contentRoute || route;
 
   return {
     command:   'snapshot',
     url,
     route,
     title,
+    // iframe 앱 대응: 실제 콘텐츠 화면 정보
+    contentUrl,
+    contentRoute,
+    activeRoute,          // ← 화면 매핑은 이 값으로 비교할 것
+    isIframeApp: !!contentFrame,
     navigables,
     stats: {
       navLinks: navigables.filter(n => n.type === 'nav-link').length,
@@ -302,9 +333,25 @@ async function doCapture(page, screenId, cdpSession) {
 
   const outPng = path.join(outDir, 'preview.png');
 
-  // 스크린샷
+  // 스크린샷: iframe 앱이면 콘텐츠 iframe 영역만 캡처
   let imgBuf;
-  if (cdpSession) {
+  if (cf) {
+    // 콘텐츠 iframe의 element handle로 해당 영역만 캡처
+    try {
+      const iframeEl = await page.locator('iframe').all().then(async (els) => {
+        for (const el of els) {
+          const fr = await el.contentFrame().catch(() => null);
+          if (fr === cf) return el;
+        }
+        return null;
+      });
+      if (iframeEl) {
+        imgBuf = await iframeEl.screenshot({ timeout: 8000 }).catch(() => null);
+      }
+    } catch (_) {}
+  }
+  // fallback: 전체 페이지 캡처
+  if (!imgBuf && cdpSession) {
     const r = await cdpSession.send('Page.captureScreenshot', { format: 'png' }).catch(() => null);
     imgBuf = r ? Buffer.from(r.data, 'base64') : null;
   }
