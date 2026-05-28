@@ -674,6 +674,43 @@ async function captureConfirmed(page, cf, navFrame, navSel, confirmedData, cdpSe
   const page    = context.pages()[0];
   console.error(`[bfs] 현재 탭: ${page.url()}`);
 
+  // project.env의 PREVIEW_BASE_URL이 있고, 현재 탭이 다른 도메인이면 자동 이동
+  // (로그인은 사용자가 미리 완료한 상태여야 함)
+  const env = parseProjectEnv();
+  const baseUrl = env.PREVIEW_BASE_URL || '';
+  if (baseUrl) {
+    const currentHost = (() => { try { return new URL(page.url()).hostname; } catch(_) { return ''; } })();
+    const targetHost  = (() => { try { return new URL(baseUrl).hostname; } catch(_) { return ''; } })();
+    if (currentHost !== targetHost) {
+      console.error(`[bfs] 현재 탭(${currentHost})이 타겟(${targetHost})과 다름 → ${baseUrl} 로 이동`);
+      await page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 20000 }).catch(e => {
+        console.error(`[WARN] 자동 이동 실패: ${e.message} — 현재 탭 그대로 사용`);
+      });
+      await page.waitForTimeout(2000);
+      console.error(`[bfs] 이동 후 탭: ${page.url()}`);
+      console.error(`[주의] 로그인이 필요한 경우 Chrome 창에서 직접 로그인 후 Enter를 눌러주세요.`);
+      // 사용자가 로그인할 시간을 주기 위해 대기 (로그인 페이지로 리디렉션된 경우)
+      const afterUrl = page.url();
+      const isLoginPage = /login|signin|auth|sso/i.test(afterUrl);
+      if (isLoginPage) {
+        console.error(`[bfs] 로그인 페이지 감지됨: ${afterUrl}`);
+        console.error(`[bfs] 로그인 완료 후 30초 내 메인 페이지로 이동하세요...`);
+        // 최대 60초 대기: 로그인 완료 후 URL이 변경되면 진행
+        let waited = 0;
+        while (waited < 60000) {
+          await page.waitForTimeout(2000);
+          waited += 2000;
+          const nowUrl = page.url();
+          if (!/login|signin|auth|sso/i.test(nowUrl)) {
+            console.error(`[bfs] 로그인 완료 감지: ${nowUrl}`);
+            await page.waitForTimeout(2000);
+            break;
+          }
+        }
+      }
+    }
+  }
+
   const appInfo = await detectAppType(page);
   console.error(`[bfs] 앱 타입: ${appInfo.type}  iframe 수: ${appInfo.iframeCount}`);
 
