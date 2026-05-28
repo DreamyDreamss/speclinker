@@ -281,8 +281,28 @@ async function findNavContainer(page, contentFrame) {
 // ── 현재 상태 스냅샷 (URL 변화 감지용) ────────────────────────────────────────
 async function getState(page, cf) {
   const pu = page.url();
-  const fu = cf ? cf.url() : '';
-  return `${pu}|${fu}`;
+  // 모든 프레임 URL을 포함하여 새 iframe 추가 감지
+  const allUrls = page.frames().map(f => { try { return f.url(); } catch(_) { return ''; } })
+    .filter(u => u && u !== 'about:blank').sort().join('|');
+  return `${pu}|${allUrls}`;
+}
+
+// ── 클릭 후 실제 컨텐츠 프레임 URL 추출 ────────────────────────────────────────
+// iframe이 동적으로 교체되는 앱에서 새로 로드된 컨텐츠 프레임을 찾는다
+async function getActiveContentUrl(page, cf, knownUrls) {
+  const frames = page.frames();
+  const mainUrl = page.url().split('#')[0];
+  // knownUrls에 없던 새 URL 우선
+  for (const f of [...frames].reverse()) {
+    try {
+      const u = f.url();
+      if (!u || u === 'about:blank' || u.startsWith('about:')) continue;
+      if (u.split('#')[0] === mainUrl) continue;
+      if (!knownUrls.has(u)) return u;
+    } catch(_) {}
+  }
+  // 새 URL 없으면 cf URL (기존 방식)
+  return cf ? cf.url() : page.url();
 }
 
 // ── DOM에서 메뉴 트리 정적 추출 (클릭 없이) ────────────────────────────────────
@@ -571,6 +591,8 @@ async function traverseTree(nodes, page, cf, navFrame, navSel, ctx) {
       }
 
       const stateBefore = await getState(page, cf);
+      // 클릭 전 알려진 frame URL 목록 저장
+      const urlsBefore = new Set(page.frames().map(f => { try { return f.url(); } catch(_) { return ''; } }).filter(Boolean));
 
       // 전체 경로 클릭 (L1 재펼침 포함)
       await navigateByPath(navFrame, navSel, pathStack, page);
@@ -578,15 +600,17 @@ async function traverseTree(nodes, page, cf, navFrame, navSel, ctx) {
       const stateAfter = await getState(page, cf);
       const didNavigate = stateAfter !== stateBefore;
 
-      const currentUrl  = cf ? cf.url() : page.url();
+      const currentUrl  = await getActiveContentUrl(page, cf, urlsBefore);
       const route       = normRoute(currentUrl);
       const isDuplicate = seenRoutes.has(route);
 
       if (didNavigate && !isDuplicate) {
         seenRoutes.add(route);
 
-        // 탭 감지
-        const capFrame = cf || page;
+        // 탭 감지 — 동적 iframe 교체 앱: currentUrl과 일치하는 frame 우선 사용
+        const activeFrame = page.frames().find(f => { try { return f.url() === currentUrl; } catch(_) { return false; } })
+                            || cf || page;
+        const capFrame = activeFrame;
         const tabs = await detectTabs(capFrame);
 
         const rawName  = route.split('/').pop().split('.')[0].replace(/[^a-zA-Z0-9]/g, '_') || id;
@@ -612,7 +636,7 @@ async function traverseTree(nodes, page, cf, navFrame, navSel, ctx) {
         };
 
         if (DO_CAPTURE) {
-          const captured = await captureScreen(page, cf, screenNode, cdpSession);
+          const captured = await captureScreen(page, activeFrame, screenNode, cdpSession);
           screenNode.captureStatus = captured.length > 0 ? 'done' : 'fail';
           screenNode.tabs = screenNode.tabs.map((t, i) => ({
             ...t, captureFile: captured[i]?.png || null,
