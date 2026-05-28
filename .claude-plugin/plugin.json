@@ -1,7 +1,7 @@
 {
   "name": "speclinker",
-  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 REQ-ID 체이닝, UA 대시보드 통합. v2.24: sl-recon-uis 순서 재구성 (캡처->마커->spec), ddd-ui-agent captureDir 연동",
-  "version": "2.24.0",
+  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 REQ-ID 체이닝, UA 대시보드 통합. v2.25: 브라우저 메뉴BFS 탐색 1단계/goto보완 2단계 명시, goto 직접접근 금지",
+  "version": "2.25.0",
   "author": {
     "name": "DreamyDreamss"
   },

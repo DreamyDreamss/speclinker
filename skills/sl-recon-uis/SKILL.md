@@ -244,12 +244,21 @@ for s in inv:
 **Claude가 직접 ai_nav.js를 반복 호출하며 탐색 결정을 내린다.**
 스크립트는 DOM 조작 / 스크린샷 / 마커 생성만 수행하고, 어디로 갈지 판단은 Claude가 한다.
 
+> ⚠️ **goto로 직접 URL 접근 금지 (1단계)** — enterprise 앱은 메뉴 context 없이 직접 URL 접근 시
+> 빈 화면 / 리다이렉트가 발생한다. **반드시 메뉴 클릭 BFS로 탐색**하고,
+> 메뉴로 찾지 못한 화면만 2단계에서 goto를 시도한다.
+
 **상태 관리 (Claude가 메모리에서 추적):**
-- `visited` — 방문 완료한 route 집합
-- `captured` — 캡처+마커 완료한 screenId 집합  
+- `visited_routes` — 방문 완료한 route 집합
+- `clicked_navs` — 클릭 완료한 nav-link 텍스트 집합
+- `captured` — 캡처+마커 완료한 screenId 집합
 - `new_screens` — 정적 분석에 없는 신규 발견 화면 목록 `[{route, title, url}]`
 
-**루프 시작 — 현재 페이지 스냅샷 획득:**
+---
+
+**[1단계] 메뉴 BFS 탐색 — goto 없이 클릭만 사용**
+
+루프 시작 — 현재 페이지 스냅샷 획득:
 
 ```
 !node {AI_NAV} --port={CDP_PORT} --workspace={CWD} snapshot
@@ -257,31 +266,44 @@ for s in inv:
 
 **매 iteration 판단 순서:**
 
-1. 반환된 JSON의 `route` 값을 `screen_inventory.json` 목록과 비교:
-   - **매핑 O + 아직 캡처 안 됨** → 즉시 캡처 (스크린샷 + 마커 자동 생성):
+1. 반환된 JSON의 `route`를 `screen_inventory.json`과 비교:
+   - **매핑 O + 미캡처** → 즉시 캡처 (스크린샷 + 마커 자동 생성):
      ```
      !node {AI_NAV} --port={CDP_PORT} --workspace={CWD} capture {screenId}
      ```
    - **매핑 X** → `new_screens`에 `{route, title, url}` 기록
-   - 현재 route를 `visited`에 추가
+   - 현재 route를 `visited_routes`에 추가
 
-2. `navigables` 목록에서 다음 목적지 선택:
-   - `type: "nav-link"` 중 `visited`에 없는 항목 우선
-   - `hasChildren: true` 항목은 클릭 후 서브메뉴가 펼쳐질 수 있음 - 클릭 후 snapshot 재확인
-   - 메뉴명으로 클릭:
+2. `navigables` 중 **클릭하지 않은 nav-link** 선택:
+   - `hasChildren: true` 항목 우선 (서브메뉴 존재 가능) → 클릭 후 snapshot 재확인
+   - `type: "nav-link"` 중 `clicked_navs`에 없는 항목
+   - **반드시 클릭으로 이동** — goto 절대 사용하지 않음:
      ```
      !node {AI_NAV} --port={CDP_PORT} --workspace={CWD} click "메뉴명"
      ```
-   - 또는 href를 알고 있으면 직접 이동:
-     ```
-     !node {AI_NAV} --port={CDP_PORT} --workspace={CWD} goto "/경로"
-     ```
+   - 클릭 텍스트를 `clicked_navs`에 추가
 
-3. 반환된 JSON이 새 snapshot → 1번으로 반복
+3. 새 snapshot 반환 → 1번으로 반복
 
-**종료 조건:**
-- `navigables`에 미방문 `nav-link`가 없음
-- 또는 연속 3회 `click` 후 route 변화 없음
+**1단계 종료 조건:**
+- `navigables`에 미클릭 `nav-link`가 없음
+- 또는 연속 3회 `click` 후 route / DOM 변화 없음
+
+---
+
+**[2단계] 미캡처 화면 직접 goto 보완**
+
+1단계 BFS가 끝난 후, `screen_inventory.json`에서 아직 `captured`에 없는 화면에 한해
+정적 분석의 route로 직접 접근을 시도한다.
+
+```
+# 미캡처 screenId 목록 확인 후 순서대로:
+!node {AI_NAV} --port={CDP_PORT} --workspace={CWD} goto "{route}"
+# → 정상 화면이면 capture, 빈 화면 / 리다이렉트면 스킵 (와이어프레임으로 처리)
+!node {AI_NAV} --port={CDP_PORT} --workspace={CWD} capture {screenId}
+```
+
+**2단계 종료 조건:** 미캡처 화면 모두 시도 완료
 
 ### STEP 6-2-3: 캡처 결과 반영
 
