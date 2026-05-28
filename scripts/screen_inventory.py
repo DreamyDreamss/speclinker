@@ -45,121 +45,10 @@ def resolve_kg_path(arg, wdir):
         pass
     return os.path.join(wdir, '.understand-anything/knowledge-graph.json')
 
-kg_path        = resolve_kg_path(kg_path_arg, workspace_dir)
-plan_path      = os.path.join(workspace_dir, 'docs/05_설계서/_domain_plan.json')
-confirmed_path = os.path.join(workspace_dir, '.speclinker', 'screen_plan.confirmed.json')
+kg_path   = resolve_kg_path(kg_path_arg, workspace_dir)
+plan_path = os.path.join(workspace_dir, 'docs/05_설계서/_domain_plan.json')
 
-# ── Phase 7 패스: confirmed.json → screen_inventory 변환 ──────────────────────
-def _convert_confirmed(confirmed_doc, plan_doc, wdir):
-    domains = plan_doc.get('domains', [])
-    uis_ctr = {d['name']: d['uis']['start'] for d in domains}
-
-    def _n(p): return p.replace('\\', '/')
-    def _abs(rel): return os.path.join(wdir, rel) if rel else ''
-
-    def _assign(entry, route, hint=''):
-        if hint:
-            for d in domains:
-                if d['name'].lower() == hint.lower():
-                    return d['name']
-        np = _n(entry)
-        for d in domains:
-            if any(np.startswith(_n(r).rstrip('/')) for r in d.get('rootPaths', [])):
-                return d['name']
-        if route:
-            seg0 = next((s.lower() for s in route.lstrip('/').split('/') if s), '')
-            for d in domains:
-                dn = d['name'].lower()
-                if dn == seg0 or seg0 in dn or dn in seg0:
-                    return d['name']
-        for d in domains:
-            if d['name'].lower() in np.lower():
-                return d['name']
-        return domains[0]['name'] if domains else ''
-
-    out = []
-    seen = set()
-    for scr in confirmed_doc.get('screens', []):
-        entry_rel = scr.get('entry', '') or scr.get('entry_file', '')
-        if not entry_rel:
-            continue
-        entry_abs = _abs(entry_rel)
-        key = _n(entry_abs)
-        if key in seen:
-            continue
-        seen.add(key)
-
-        route  = scr.get('route', '')
-        domain = _assign(entry_abs, route, scr.get('domain', ''))
-        if domain not in uis_ctr:
-            continue
-
-        # confirmed.json에 uisId가 있으면 우선 사용 (숫자 또는 "UIS-F-NNN" 형식 모두 지원)
-        raw_uis = scr.get('uisId') or scr.get('uis_id') or scr.get('UIS_ID')
-        if raw_uis is not None:
-            if isinstance(raw_uis, int):
-                uis_id = raw_uis
-            else:
-                m = re.search(r'(\d+)', str(raw_uis))
-                uis_id = int(m.group(1)) if m else uis_ctr[domain]
-        else:
-            uis_id = uis_ctr[domain]
-            uis_ctr[domain] += 1
-
-        # screenId: confirmed.json의 screen_id / screenId 우선
-        screen_id = (scr.get('screenId') or scr.get('screen_id') or
-                     os.path.splitext(os.path.basename(entry_abs))[0])
-        # PascalCase 보정 (pr201Form → Pr201Form)
-        if screen_id and screen_id[0].islower():
-            screen_id = screen_id[0].upper() + screen_id[1:]
-
-        # screenName: confirmed.json의 screenName 또는 screen_id
-        screen_name = scr.get('screenName') or scr.get('screen_name') or screen_id
-
-        item = {
-            'route':          route,
-            'domain':         domain,
-            'entryFile':      entry_abs,
-            'componentFiles': [_abs(c) for c in scr.get('component_files', []) if c],
-            'uisId':          uis_id,
-            'screenId':       screen_id,
-            'screenName':     screen_name,
-            'infDir':         '../../INF/',
-            'source':         scr.get('source', 'confirmed'),
-        }
-        # BFS 메뉴 경로 메타 보존 (build_capture_plan.py에서 menu-click preActions 생성에 사용)
-        meta = scr.get('metadata', {})
-        if meta.get('menu_l1') or meta.get('menu_l2'):
-            item['menuMeta'] = {'menu_l1': meta.get('menu_l1', ''), 'menu_l2': meta.get('menu_l2', '')}
-        out.append(item)
-    return out
-
-if os.path.exists(confirmed_path):
-    if not os.path.exists(plan_path):
-        print(f'[ERROR] _domain_plan.json 없음: {plan_path}', file=sys.stderr)
-        sys.exit(1)
-    confirmed_doc = json.load(open(confirmed_path, encoding='utf-8'))
-    plan_doc      = json.load(open(plan_path, encoding='utf-8'))
-    result = _convert_confirmed(confirmed_doc, plan_doc, workspace_dir)
-    out_path = os.path.join(workspace_dir, '_tmp', 'screen_inventory.json')
-    with open(out_path, 'w', encoding='utf-8') as f:
-        json.dump(result, f, ensure_ascii=False, indent=2)
-    sources = {}
-    for r in result:
-        sources.setdefault(r['source'], 0)
-        sources[r['source']] += 1
-    print(f'[screen_inventory] screen_plan.confirmed.json 사용 (Phase 7 패스)')
-    print(f'감지 화면: {len(result)}개')
-    print(f'탐지 방식: {dict(sources)}')
-    for r in result[:5]:
-        nf = len(r.get('componentFiles', []))
-        print(f'  {r["route"]:40} → {os.path.basename(r["entryFile"])} (+참조 {nf}개)')
-    if len(result) > 5:
-        print(f'  ... 외 {len(result)-5}개')
-    print(f'저장: {out_path}')
-    sys.exit(0)
-
-# ── KG 패스 (confirmed.json 없을 때 fallback) ─────────────────────────────────
+# ── KG 패스 ───────────────────────────────────────────────────────────────────
 if not os.path.exists(kg_path):
     print(f'[ERROR] knowledge-graph 없음: {kg_path}', file=sys.stderr)
     sys.exit(1)
@@ -587,12 +476,16 @@ for r in routes:
         if ctrl != r['entryFile']:
             extra = [ctrl]
 
+    fname = os.path.splitext(os.path.basename(r['entryFile']))[0] if r['entryFile'] else ''
     result.append({
         'route':          r['route'],
         'domain':         domain,
         'entryFile':      r['entryFile'],
         'componentFiles': trace_imports(r['entryFile'], extra_files=extra) + [f for f in extra if f not in trace_imports(r['entryFile'])],
         'uisId':          uis_id,
+        'screenId':       fname,
+        'screenName':     fname,
+        'captureDir':     '',
         'infDir':         '../../INF/',
         'source':         r.get('source', 'unknown'),
     })
@@ -615,3 +508,47 @@ for r in result[:5]:
 if len(result) > 5:
     print(f'  ... 외 {len(result)-5}개')
 print(f'저장: {out_path}')
+
+# ── 5. BFS 발견 화면 병합 (_tmp/screen_hierarchy.json 있을 때) ───────────────
+hier_path = os.path.join(workspace_dir, '_tmp', 'screen_hierarchy.json')
+if os.path.exists(hier_path):
+    try:
+        hier = json.load(open(hier_path, encoding='utf-8'))
+        bfs_screens = [s for s in hier.get('flat', []) if s.get('type') == 'screen']
+        existing_routes = {norm_path(r['route']) for r in result}
+        added = 0
+        for s in bfs_screens:
+            route = s.get('route', '')
+            if not route or norm_path(route) in existing_routes:
+                continue
+            domain_bfs = assign_domain('', route)
+            if uis_counter.get(domain_bfs) is None:
+                continue
+            uis_id_bfs = uis_counter[domain_bfs]
+            uis_counter[domain_bfs] += 1
+            sid = s.get('screenId', '') or s.get('id', '')
+            cap_dir = os.path.join(workspace_dir, '_tmp', 'captures', sid) if sid else ''
+            result.append({
+                'route':          route,
+                'fullUrl':        s.get('fullUrl', ''),
+                'domain':         domain_bfs,
+                'entryFile':      '',
+                'componentFiles': [],
+                'uisId':          uis_id_bfs,
+                'screenId':       sid,
+                'screenName':     s.get('label', sid),
+                'menuPath':       s.get('path', []),
+                'tabs':           s.get('tabs', []),
+                'captureDir':     cap_dir if os.path.isdir(cap_dir) else '',
+                'infDir':         '../../INF/',
+                'source':         'bfs',
+            })
+            existing_routes.add(norm_path(route))
+            added += 1
+        if added:
+            # 병합된 결과 재저장
+            with open(out_path, 'w', encoding='utf-8') as f:
+                json.dump(result, f, ensure_ascii=False, indent=2)
+            print('[BFS 병합] ' + str(added) + '개 신규 화면 추가 → 총 ' + str(len(result)) + '개')
+    except Exception as e:
+        print('[WARN] BFS 병합 실패: ' + str(e))

@@ -40,22 +40,23 @@ function arg(n, d) {
 }
 function flag(n) { return args.includes('--' + n); }
 
-const PORT           = arg('port', '9222');
-const OUT_DIR        = path.resolve(arg('out', '_tmp'));
-const SCOPE_RAW      = arg('scope', '');
-const MAX_DEPTH      = parseInt(arg('max-depth', '6'), 10);
-const DO_CAPTURE     = flag('capture');
-const TREE_ONLY      = flag('tree-only');    // 정적 트리 추출만, 클릭/탐색 없음
-const CONFIRMED_FILE = arg('confirmed', ''); // 확정 목록 기반 캡처 모드
-const WORKSPACE      = path.resolve(arg('workspace', process.cwd()));
-const FRAME_URL      = arg('frame-url', '');
+const PORT                = arg('port', '9222');
+const OUT_DIR             = path.resolve(arg('out', '_tmp'));
+const SCOPE_RAW           = arg('scope', '');
+const MAX_DEPTH           = parseInt(arg('max-depth', '6'), 10);
+const DO_CAPTURE          = flag('capture');
+const TREE_ONLY           = flag('tree-only');    // 정적 트리 추출만, 클릭/탐색 없음
+const CONFIRMED_FILE      = arg('confirmed', ''); // 확정 목록 기반 캡처 모드
+const WORKSPACE           = path.resolve(arg('workspace', process.cwd()));
+const FRAME_URL           = arg('frame-url', '');
+const NAV_SELECTOR_OVERRIDE = arg('nav-selector', '');
 
 fs.mkdirSync(OUT_DIR, { recursive: true });
 
 // ── 상수 ─────────────────────────────────────────────────────────────────────
 
-// nav 컨테이너 후보 (우선순위 순)
-const NAV_SELECTORS = [
+// nav 컨테이너 fallback 후보 (우선순위 순) — 휴리스틱 탐색 실패 시 사용
+const FALLBACK_SELECTORS = [
   '.lnb', '#lnb', '.snb', '#snb', '.gnb', '#gnb',
   '.sidebar', '#sidebar', '.left-menu', '.side-menu',
   '.nav-menu', '.menu-wrap', '#menu-wrap', '.main-nav',
@@ -174,31 +175,106 @@ async function findContentFrame(page) {
   return best;
 }
 
+// ── 휴리스틱 nav 탐색 (CSS 클래스 무관) ──────────────────────────────────────
+async function findNavByHeuristic(frame) {
+  const sel = await frame.evaluate(() => {
+    function bestSel(el) {
+      if (el.id) return '#' + el.id;
+      const cls = typeof el.className === 'string'
+        ? el.className.trim().split(/\s+/)[0] : '';
+      return cls ? el.tagName.toLowerCase() + '.' + CSS.escape(cls) : el.tagName.toLowerCase();
+    }
+
+    // 1순위: ARIA semantic roles
+    for (const s of ['[role="navigation"]', '[role="menubar"]', '[role="tree"]', 'nav']) {
+      const el = document.querySelector(s);
+      if (el && el.querySelectorAll('a').length >= 3) return bestSel(el);
+    }
+
+    // 2순위: 위치 + 링크밀도 휴리스틱
+    const vpW = window.innerWidth  || 1200;
+    const vpH = window.innerHeight || 900;
+    const scored = [];
+
+    for (const el of document.querySelectorAll('div,nav,aside,ul,section,header')) {
+      const links = el.querySelectorAll('a[href]');
+      if (links.length < 3) continue;
+
+      const rect = el.getBoundingClientRect();
+      if (rect.width < 40 || rect.height < 60)  continue;
+      if (rect.top  > vpH * 0.75) continue;      // footer 제외
+      if (rect.left > vpW * 0.70) continue;      // 우측 위젯 제외
+
+      // 직계 자식이 같은 링크 80% 이상 포함 → 더 구체적인 컨테이너가 있음
+      let dominated = false;
+      for (const c of el.children) {
+        if (c.querySelectorAll('a[href]').length >= links.length * 0.8) {
+          dominated = true; break;
+        }
+      }
+      if (dominated) continue;
+
+      const isLeft    = rect.right  < vpW * 0.38;
+      const isTopBar  = rect.top    < 80 && rect.width > vpW * 0.5;
+      const nestedUl  = el.querySelectorAll('ul,ol').length;
+      const areaScore = Math.min(rect.width * rect.height / 300000, 5); // 너무 넓으면 패널티
+
+      const score = links.length * 3
+                  + (isLeft   ? 60 : 0)
+                  + (isTopBar ? 25 : 0)
+                  + nestedUl  *  5
+                  - areaScore;
+
+      scored.push({ sel: bestSel(el), score });
+    }
+
+    scored.sort((a, b) => b.score - a.score);
+    return scored.length ? scored[0].sel : null;
+  }).catch(() => null);
+
+  if (!sel) return null;
+  try {
+    if ((await frame.locator(sel).count()) > 0) return sel;
+  } catch (_) {}
+  return null;
+}
+
 // ── nav 컨테이너 탐색 ─────────────────────────────────────────────────────────
 async function findNavContainer(page, contentFrame) {
-  // 1순위: main frame
-  for (const sel of NAV_SELECTORS) {
-    if ((await page.locator(sel).count()) > 0) return { frame: page, sel };
-  }
-  // 2순위: content frame (가장 넓은 iframe)
-  if (contentFrame) {
-    for (const sel of NAV_SELECTORS) {
-      if ((await contentFrame.locator(sel).count()) > 0) return { frame: contentFrame, sel };
+  // 0. 사용자 지정 override (PREVIEW_NAV_SELECTOR → --nav-selector)
+  if (NAV_SELECTOR_OVERRIDE) {
+    for (const frame of page.frames()) {
+      try {
+        if ((await frame.locator(NAV_SELECTOR_OVERRIDE).count()) > 0) {
+          console.error(`[bfs] nav override: ${NAV_SELECTOR_OVERRIDE}`);
+          return { frame, sel: NAV_SELECTOR_OVERRIDE };
+        }
+      } catch (_) {}
     }
   }
-  // 3순위: 나머지 모든 frame 순회 (nav가 별도 iframe인 split-frame 레이아웃)
+
+  // 1. 모든 frame에서 휴리스틱 시도
   for (const frame of page.frames()) {
-    if (frame === page.mainFrame()) continue;
-    if (contentFrame && frame === contentFrame) continue;
-    for (const sel of NAV_SELECTORS) {
+    const sel = await findNavByHeuristic(frame);
+    if (sel) {
+      const label = frame === page.mainFrame() ? 'main' : (frame.url().split('/').pop() || 'iframe');
+      console.error(`[bfs] nav 발견 (휴리스틱): frame=${label} sel=${sel}`);
+      return { frame, sel };
+    }
+  }
+
+  // 2. fallback: 알려진 셀렉터 리스트
+  for (const frame of page.frames()) {
+    for (const sel of FALLBACK_SELECTORS) {
       try {
         if ((await frame.locator(sel).count()) > 0) {
-          console.error(`[bfs] nav frame 발견: ${frame.url()} (${sel})`);
+          console.error(`[bfs] nav 발견 (fallback): sel=${sel}`);
           return { frame, sel };
         }
       } catch (_) {}
     }
   }
+
   return null;
 }
 
