@@ -191,9 +191,27 @@ ANNO_JSON_RE = re.compile(
     r'produces\s*=\s*["\{][^"]*application/json'
     r'|MediaType\.APPLICATION_JSON'
 )
-CLASS_MAPPING_RE  = re.compile(r'@RequestMapping\s*\(\s*(?:value\s*=\s*)?"(/[^"]*)"')
-METHOD_MAPPING_RE = re.compile(r'@(?:Request|Get)Mapping\s*\(\s*(?:value\s*=\s*)?"([^"]+)"')
+CLASS_MAPPING_RE  = re.compile(
+    r'@RequestMapping\s*\(\s*(?:value\s*=\s*)?'
+    r'(?:"(/[^"]*)"|\{"(/[^"]*)"\})'
+)
+METHOD_MAPPING_RE = re.compile(
+    r'@(?:Request|Get)Mapping\s*\(\s*(?:value\s*=\s*)?'
+    r'(?:"([^"]+)"|\{"([^"]+)"\})'
+)
 METHOD_MAPPING_BARE_RE = re.compile(r'@GetMapping\s*\(\s*\)')
+
+
+def _extract_class_path(content):
+    """클래스 레벨 @RequestMapping 경로만 추출 (메서드 레벨 오염 방지).
+    class 선언 이전 헤더 영역만 검색한다."""
+    class_open = re.search(r'\bclass\s+\w[\w\s<>,.]*\{', content)
+    header = content[:class_open.end()] if class_open else content[:1500]
+    cm = CLASS_MAPPING_RE.search(header)
+    if not cm:
+        return ''
+    path = cm.group(1) or cm.group(2) or ''
+    return path.rstrip('/*')
 VIEW_NAME_RE      = re.compile(r'new\s+ModelAndView\s*\(\s*"([^"]+)"')
 RETURN_STRING_RE  = re.compile(r'return\s+"([^"]+)"')
 
@@ -233,7 +251,7 @@ def _scan_spring_mvc(wdir):
                 continue
 
             for fname in filenames:
-                if not fname.endswith('Controller.java'):
+                if not fname.endswith('.java'):
                     continue
                 fpath = os.path.join(dirpath, fname)
                 try:
@@ -244,9 +262,8 @@ def _scan_spring_mvc(wdir):
                 if '@Controller' not in content or '@RestController' in content:
                     continue
 
-                # 클래스 레벨 @RequestMapping
-                cm = CLASS_MAPPING_RE.search(content)
-                class_path = cm.group(1).rstrip('/*') if cm else ''
+                # 클래스 레벨 @RequestMapping (헤더 영역만 검색해 메서드 레벨 오염 방지)
+                class_path = _extract_class_path(content)
 
                 for ann_text, body_text in _extract_method_blocks(content):
                     # POST/PUT/DELETE/PATCH 메서드 스킵
@@ -268,7 +285,7 @@ def _scan_spring_mvc(wdir):
                     # 메서드 레벨 매핑 경로
                     mm = METHOD_MAPPING_RE.search(ann_text)
                     if mm:
-                        method_path = mm.group(1).strip('/')
+                        method_path = (mm.group(1) or mm.group(2) or '').strip('/')
                     elif METHOD_MAPPING_BARE_RE.search(ann_text):
                         method_path = ''
                     else:
@@ -508,47 +525,3 @@ for r in result[:5]:
 if len(result) > 5:
     print(f'  ... 외 {len(result)-5}개')
 print(f'저장: {out_path}')
-
-# ── 5. BFS 발견 화면 병합 (_tmp/screen_hierarchy.json 있을 때) ───────────────
-hier_path = os.path.join(workspace_dir, '_tmp', 'screen_hierarchy.json')
-if os.path.exists(hier_path):
-    try:
-        hier = json.load(open(hier_path, encoding='utf-8'))
-        bfs_screens = [s for s in hier.get('flat', []) if s.get('type') == 'screen']
-        existing_routes = {norm_path(r['route']) for r in result}
-        added = 0
-        for s in bfs_screens:
-            route = s.get('route', '')
-            if not route or norm_path(route) in existing_routes:
-                continue
-            domain_bfs = assign_domain('', route)
-            if uis_counter.get(domain_bfs) is None:
-                continue
-            uis_id_bfs = uis_counter[domain_bfs]
-            uis_counter[domain_bfs] += 1
-            sid = s.get('screenId', '') or s.get('id', '')
-            cap_dir = os.path.join(workspace_dir, '_tmp', 'captures', sid) if sid else ''
-            result.append({
-                'route':          route,
-                'fullUrl':        s.get('fullUrl', ''),
-                'domain':         domain_bfs,
-                'entryFile':      '',
-                'componentFiles': [],
-                'uisId':          uis_id_bfs,
-                'screenId':       sid,
-                'screenName':     s.get('label', sid),
-                'menuPath':       s.get('path', []),
-                'tabs':           s.get('tabs', []),
-                'captureDir':     cap_dir if os.path.isdir(cap_dir) else '',
-                'infDir':         '../../INF/',
-                'source':         'bfs',
-            })
-            existing_routes.add(norm_path(route))
-            added += 1
-        if added:
-            # 병합된 결과 재저장
-            with open(out_path, 'w', encoding='utf-8') as f:
-                json.dump(result, f, ensure_ascii=False, indent=2)
-            print('[BFS 병합] ' + str(added) + '개 신규 화면 추가 → 총 ' + str(len(result)) + '개')
-    except Exception as e:
-        print('[WARN] BFS 병합 실패: ' + str(e))
