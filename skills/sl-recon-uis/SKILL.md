@@ -13,11 +13,17 @@ triggers:
 !python -c "
 import json, os, sys
 
+try:
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+except AttributeError:
+    pass
+
 errors = []
 if not os.path.exists('_tmp/recon_checkpoint.json'):
-    errors.append('[FAIL] recon_checkpoint.json 없음 — /sl-recon 먼저 실행')
+    errors.append('[FAIL] recon_checkpoint.json 없음 -> /sl-recon 먼저 실행')
 if not os.path.exists('docs/05_설계서/_domain_plan.json'):
-    errors.append('[FAIL] _domain_plan.json 없음 — /sl-recon STEP 3 확인')
+    errors.append('[FAIL] _domain_plan.json 없음 -> /sl-recon STEP 3 확인')
 if errors:
     for e in errors: print(e)
     sys.exit(1)
@@ -27,7 +33,7 @@ env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
 plan = json.load(open('docs/05_설계서/_domain_plan.json', encoding='utf-8'))
 base_url = env.get('PREVIEW_BASE_URL', '')
 print('[OK] 도메인 ' + str(len(plan['domains'])) + '개')
-print('[BFS 보강] ' + ('활성 (STEP 6-3 실행)' if base_url else '비활성 (PREVIEW_BASE_URL 미설정) — 소스 분석만 실행'))
+print('[브라우저 보강] ' + ('활성 (STEP 6-3 실행)' if base_url else '비활성 (PREVIEW_BASE_URL 미설정) - 소스 분석만 실행'))
 "
 ```
 
@@ -47,7 +53,7 @@ env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
 plugin = env.get('PLUGIN_PATH', '')
 script = os.path.join(plugin, 'scripts', 'screen_inventory.py') if plugin else ''
 if not (script and os.path.exists(script)):
-    print('[ERROR] screen_inventory.py 없음 — PLUGIN_PATH 확인'); sys.exit(1)
+    print('[ERROR] screen_inventory.py 없음 (PLUGIN_PATH 확인)'); sys.exit(1)
 
 r = subprocess.run([sys.executable, script, os.getcwd()],
                    capture_output=True, text=True, encoding='utf-8', errors='ignore')
@@ -126,7 +132,7 @@ for s in inv:
 
 new_cnt   = len([p for p in pending if not p['_specExists']])
 patch_cnt = len([p for p in pending if p['_specExists']])
-print('전체 ' + str(len(pending)) + '개 — 신규생성: ' + str(new_cnt) + '개 / §5패치: ' + str(patch_cnt) + '개')
+print('전체 ' + str(len(pending)) + '개 (신규생성: ' + str(new_cnt) + '개 / 5패치: ' + str(patch_cnt) + '개)')
 print()
 for i, p in enumerate(pending, 1):
     mode = '§5패치' if p['_specExists'] else '전체생성'
@@ -174,9 +180,9 @@ import os
 env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
            if '=' in l and not l.startswith('#'))
 if not env.get('PREVIEW_BASE_URL',''):
-    print('[SKIP] PREVIEW_BASE_URL 미설정 — STEP 6-4로 이동')
+    print('[SKIP] PREVIEW_BASE_URL 미설정 - STEP 6-4로 이동')
 else:
-    print('[OK] BFS 보강 시작')
+    print('[OK] 브라우저 보강 시작')
 "
 ```
 
@@ -184,7 +190,13 @@ else:
 
 ```bash
 !python -c "
-import os, subprocess, sys, socket, time, platform
+import os, subprocess, sys, socket, time, platform, tempfile
+
+try:
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+except AttributeError:
+    pass
 
 env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
            if '=' in l and not l.startswith('#'))
@@ -200,27 +212,47 @@ if cdp_alive(cdp_port):
     print('[OK] Chrome CDP ' + cdp_port + ' 이미 열려있음')
 else:
     plat = platform.system()
+    # --user-data-dir: 기존 Chrome 인스턴스와 충돌 없이 별도 디버그 프로파일로 실행
+    debug_profile = os.path.join(tempfile.gettempdir(), 'speclinker-chrome-debug')
     if plat == 'Windows':
-        subprocess.Popen('start chrome --remote-debugging-port=' + cdp_port,
-                         shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        # 레지스트리/공통 경로에서 chrome.exe 탐색
+        chrome_candidates = [
+            os.path.expandvars(r'%ProgramFiles%\\Google\\Chrome\\Application\\chrome.exe'),
+            os.path.expandvars(r'%ProgramFiles(x86)%\\Google\\Chrome\\Application\\chrome.exe'),
+            os.path.expandvars(r'%LocalAppData%\\Google\\Chrome\\Application\\chrome.exe'),
+        ]
+        chrome_exe = next((p for p in chrome_candidates if os.path.exists(p)), 'chrome')
+        cmd = '\"' + chrome_exe + '\" --remote-debugging-port=' + cdp_port + ' --user-data-dir=\"' + debug_profile + '\" about:blank'
+        subprocess.Popen(cmd, shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     elif plat == 'Darwin':
-        subprocess.Popen(['open', '-a', 'Google Chrome', '--args', '--remote-debugging-port=' + cdp_port],
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.Popen([
+            'open', '-a', 'Google Chrome', '--args',
+            '--remote-debugging-port=' + cdp_port,
+            '--user-data-dir=' + debug_profile,
+        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     else:
-        subprocess.Popen(['google-chrome', '--remote-debugging-port=' + cdp_port],
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    print('Chrome 시작 대기 중', end='', flush=True)
-    for _ in range(20):
+        subprocess.Popen([
+            'google-chrome',
+            '--remote-debugging-port=' + cdp_port,
+            '--user-data-dir=' + debug_profile,
+        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    print('Chrome 시작 대기 중 (디버그 프로파일: ' + debug_profile + ')', flush=True)
+    for _ in range(25):
         time.sleep(1); print('.', end='', flush=True)
         if cdp_alive(cdp_port): print(' 준비!'); break
     else:
-        print(); print('[ERROR] Chrome 시작 실패'); sys.exit(1)
+        print()
+        print('[ERROR] Chrome 시작 실패.')
+        print('  수동으로 Chrome을 열고 --remote-debugging-port=' + cdp_port + ' 옵션을 추가하세요.')
+        print('  예) chrome.exe --remote-debugging-port=' + cdp_port + ' --user-data-dir=C:\\\\Temp\\\\chrome-debug')
+        sys.exit(1)
 
 print()
-print('━' * 55)
+print('=' * 55)
 print(' Chrome 창에서 ' + base_url + ' 로그인 완료 후')
 print(' Claude에게 \"계속\" 이라고 말해주세요.')
-print('━' * 55)
+print('=' * 55)
 "
 ```
 
@@ -240,7 +272,7 @@ plugin   = env.get('PLUGIN_PATH', '')
 cdp_port = env.get('PREVIEW_CDP_PORT', '9222')
 ai_nav   = os.path.join(plugin, 'scripts', 'ai_nav.js') if plugin else ''
 if not (ai_nav and os.path.exists(ai_nav)):
-    print('[ERROR] ai_nav.js 없음 — PLUGIN_PATH 확인'); sys.exit(1)
+    print('[ERROR] ai_nav.js 없음 (PLUGIN_PATH 확인)'); sys.exit(1)
 print('AI_NAV='   + ai_nav)
 print('CDP_PORT=' + cdp_port)
 print('CWD='      + os.getcwd())
