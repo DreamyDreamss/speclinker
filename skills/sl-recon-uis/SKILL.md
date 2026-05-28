@@ -40,41 +40,83 @@ if not base_url:
     print('[주의] PREVIEW_BASE_URL 미설정 → BFS 탐색만 가능, 캡처 스킵')
     print('       project.env에 PREVIEW_BASE_URL=https://... 추가하면 캡처 활성화됩니다.')
 else:
-    print()
-    print('[캡처 준비] Chrome을 CDP 포트로 실행하고 로그인 완료 상태여야 합니다:')
-    print(f'  Windows : Start-Process chrome -ArgumentList \"--remote-debugging-port={cdp_port}\"')
-    print(f'  macOS   : open -a \"Google Chrome\" --args --remote-debugging-port={cdp_port}')
-    print('  → 로그인 완료 후 STEP 6-0 진행')
+    print('[OK] PREVIEW_BASE_URL 설정됨 → STEP 6-0에서 Chrome 자동 실행·이동 처리')
 "
 ```
 
-> **캡처 사전 준비 (1회 설정):**
-> 1. Chrome을 `--remote-debugging-port=9222` 옵션으로 실행
-> 2. `PREVIEW_BASE_URL`에 접속하여 로그인 (2FA·SSO 포함)
-> 3. 로그인 완료 상태 유지 → BFS 탐색·캡처 시 자동 attach
-
 ---
 
-### STEP 6-0: BFS 메뉴 계층 탐색 (정적 트리 추출 — 클릭 없음)
+### STEP 6-0: Chrome CDP 포트 확인 + 자동 실행 → BFS 메뉴 계층 탐색
 
-메뉴 DOM을 **클릭 없이** 정적으로 분석해 계층 구조를 추출한다.  
-CSS로 숨겨진 서브메뉴도 DOM에 있으면 감지된다.
+Chrome이 아직 안 켜져 있으면 **자동으로 실행**하고 `PREVIEW_BASE_URL`로 이동한다.  
+로그인이 필요하면 **Chrome 창에서 직접 로그인**하면 감지 후 자동 재개된다.  
+이미 Chrome이 CDP 포트로 열려있으면 그대로 attach해서 진행한다.
 
 ```bash
 !python3 -c "
-import os, subprocess, sys
+import os, subprocess, sys, socket, time, platform
+
 env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
            if '=' in l and not l.startswith('#'))
 plugin   = env.get('PLUGIN_PATH', '')
 cdp_port = env.get('PREVIEW_CDP_PORT', '9222')
+base_url = env.get('PREVIEW_BASE_URL', '')
 ws       = os.getcwd()
 
+def cdp_alive(port):
+    try:
+        s = socket.create_connection(('localhost', int(port)), timeout=1)
+        s.close()
+        return True
+    except:
+        return False
+
+# ── Chrome 자동 실행 ──────────────────────────────────────────────────────────
+if not cdp_alive(cdp_port):
+    print(f'[bfs] Chrome CDP 포트 {cdp_port} 닫혀있음 → Chrome 자동 실행')
+
+    plat = platform.system()
+    if plat == 'Windows':
+        subprocess.Popen(
+            ['powershell', '-Command',
+             f'Start-Process chrome -ArgumentList \"--remote-debugging-port={cdp_port}\"'],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
+    elif plat == 'Darwin':
+        subprocess.Popen(
+            ['open', '-a', 'Google Chrome', '--args', f'--remote-debugging-port={cdp_port}'],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
+    else:
+        subprocess.Popen(
+            ['google-chrome', f'--remote-debugging-port={cdp_port}'],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
+
+    print('Chrome 시작 대기 중', end='', flush=True)
+    for _ in range(30):
+        time.sleep(1)
+        print('.', end='', flush=True)
+        if cdp_alive(cdp_port):
+            print(' 준비 완료!')
+            break
+    else:
+        print()
+        print('[ERROR] Chrome 30초 내 시작 안 됨.')
+        print('  Chrome이 설치되어 있는지 확인하거나, 직접 실행 후 재시도하세요.')
+        sys.exit(1)
+else:
+    print(f'[bfs] Chrome CDP 포트 {cdp_port} 이미 열려있음 — 기존 세션 재사용')
+
+# ── BFS 트리 추출 ─────────────────────────────────────────────────────────────
 script = os.path.join(plugin, 'scripts', 'bfs_navigator.js') if plugin else ''
 if not (script and os.path.exists(script)):
     print('[ERROR] bfs_navigator.js 없음 — PLUGIN_PATH 확인')
     sys.exit(1)
 
 os.makedirs('_tmp', exist_ok=True)
+print(f'\\n[bfs] --tree-only 탐색 시작 (base_url={base_url or \"project.env로부터 자동 이동\"})')
+
 r = subprocess.run(
     ['node', script,
      f'--port={cdp_port}',
@@ -84,9 +126,10 @@ r = subprocess.run(
      f'--workspace={ws}'],
     capture_output=True, text=True, encoding='utf-8', errors='ignore'
 )
-print(r.stderr[-2000:] if len(r.stderr) > 2000 else r.stderr)
+print(r.stderr[-3000:] if len(r.stderr) > 3000 else r.stderr)
 if r.returncode != 0:
-    print('[ERROR] BFS 트리 추출 실패. Chrome CDP 포트가 열려있는지 확인하세요.')
+    print('[ERROR] BFS 트리 추출 실패.')
+    print('  → 로그인이 필요한 경우: Chrome 창에서 직접 로그인 후 이 단계를 다시 실행하세요.')
     sys.exit(1)
 
 import json
@@ -95,8 +138,11 @@ print(f'\\n[결과] L1 메뉴 {hier[\"stats\"][\"l1Count\"]}개 / 전체 노드 
 "
 ```
 
-> PREVIEW_BASE_URL 미설정이거나 Chrome이 닫혀있으면 CDP 연결 실패로 이 단계가 중단된다.  
-> BFS 없이 진행하려면: `_tmp/screen_hierarchy.json`을 수동으로 작성하고 STEP 6-0.5로 건너뛴다.
+> **로그인 흐름:**
+> 1. STEP 6-0 실행 → Chrome 자동 실행 → `PREVIEW_BASE_URL` 자동 이동 (bfs_navigator 내부 처리)
+> 2. 로그인 페이지로 리디렉션된 경우 → Chrome 창에서 직접 로그인
+> 3. 로그인 완료 감지(URL 변경) → BFS 탐색 자동 재개
+> 4. 이후 Chrome을 닫지 않는 한 STEP 6-1~6-2 캡처도 같은 세션 재사용
 
 ---
 
