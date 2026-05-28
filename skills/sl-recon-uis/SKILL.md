@@ -1,19 +1,28 @@
 ---
 name: sl-recon-uis
-description: RECON Phase-2 — 소스 기반 화면 발견 → 브라우저 캡처+마커 → UIS 설계서 생성 (STEP 6). /sl-recon 완료 후 실행.
+description: RECON Phase-2 — BFS 브라우저 전수 탐색(E2E 스타일)으로 화면 목록 확정 → 소스 역매핑 → UIS 설계서 생성. /sl-recon 완료 후 실행.
 triggers:
   - /sl-recon-uis
 ---
 
-# /sl-recon-uis — 화면 설계서 생성
+# /sl-recon-uis — 화면 설계서 생성 (BFS-First)
+
+**E2E 스타일 화면 발견**: Playwright E2E 테스트처럼 실제 브라우저로 모든 메뉴를 순회하여
+런타임 화면 목록을 확정 → 각 화면의 소스 파일 역매핑 → UIS 생성.
+
+**왜 BFS-First인가:**
+- 정적분석은 프레임워크(jwork, Spring MVC 등) URL 패턴을 모른다
+- 실제 앱에서 보이는 화면이 진실 — URL prefix, 권한 제한 화면, 동적 라우팅 모두 자동 대응
+- `menuPath[0]` (L1 GNB 카테고리) = 도메인 — 매핑 불필요
 
 **실행 순서:**
-1. STEP 6-1: 소스 정적 분석 → 화면 목록 확정
-2. STEP 6-1.5: 사용자 검토 (필수)
-3. STEP 6-2: 브라우저 캡처 + 마커 (`PREVIEW_BASE_URL` 설정 시) — **spec 생성 전 반드시 먼저**
-4. STEP 6-3: UIS spec 생성 (captureDir 있으면 캡처 포함, 없으면 와이어프레임)
-5. STEP 6-4: api_hints 수집
-6. STEP 6-5: _TOC.md 생성
+1. STEP 6-1: Chrome + 로그인 (브라우저 환경 준비)
+2. STEP 6-2: BFS 전수 탐색 → `uis_capture_map.json` 생성
+3. STEP 6-2-3: BFS → 도메인 구조 자동생성 + 소스 파일 역매핑 (선택적 보강)
+4. ✋ STEP 6-2-4: 사용자 검토 (필수 체크포인트)
+5. STEP 6-3: UIS spec 생성 (브라우저 불필요, ddd-ui-agent 배치)
+6. STEP 6-4: api_hints 수집
+7. STEP 6-5: _TOC.md 생성
 
 ---
 
@@ -32,116 +41,32 @@ except AttributeError:
 errors = []
 if not os.path.exists('_tmp/recon_checkpoint.json'):
     errors.append('[FAIL] recon_checkpoint.json 없음 -> /sl-recon 먼저 실행')
-if not os.path.exists('docs/05_설계서/_domain_plan.json'):
-    errors.append('[FAIL] _domain_plan.json 없음 -> /sl-recon STEP 3 확인')
 if errors:
     for e in errors: print(e)
     sys.exit(1)
 
 env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
            if '=' in l and not l.startswith('#'))
-plan = json.load(open('docs/05_설계서/_domain_plan.json', encoding='utf-8'))
 base_url = env.get('PREVIEW_BASE_URL', '')
-print('[OK] 도메인 ' + str(len(plan['domains'])) + '개')
-print('[브라우저 캡처] ' + ('활성 (STEP 6-2 실행)' if base_url else '비활성 (PREVIEW_BASE_URL 미설정) - 소스 기반 와이어프레임만 생성'))
-"
-```
+if not base_url:
+    print('[FAIL] PREVIEW_BASE_URL 미설정')
+    print('  project.env에 PREVIEW_BASE_URL=http://localhost:8080 추가 후 재실행')
+    sys.exit(1)
 
----
-
-## STEP 6-1: 소스 기반 화면 발견
-
-소스코드(knowledge-graph + Spring MVC 컨트롤러)에서 화면 목록을 추출한다.
-브라우저·네트워크 불필요 — 항상 실행된다.
-
-```bash
-!python -c "
-import os, subprocess, sys
-
-env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
-           if '=' in l and not l.startswith('#'))
-plugin = env.get('PLUGIN_PATH', '')
-script = os.path.join(plugin, 'scripts', 'screen_inventory.py') if plugin else ''
-if not (script and os.path.exists(script)):
-    print('[ERROR] screen_inventory.py 없음 (PLUGIN_PATH 확인)'); sys.exit(1)
-
-r = subprocess.run([sys.executable, script, os.getcwd()],
-                   capture_output=True, text=True, encoding='utf-8', errors='ignore')
-print(r.stdout); print(r.stderr[-1000:] if r.stderr else '')
-if r.returncode != 0: sys.exit(1)
-"
-```
-
----
-
-## ✋ STEP 6-1.5: 화면 목록 검토 (필수 체크포인트)
-
-발견된 화면 목록을 출력하고 피드백을 받는다.
-
-```bash
-!python -c "
-import json, os
-from collections import Counter
-
-try:
-    import sys
-    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
-except AttributeError:
-    pass
-
-inv = json.load(open('_tmp/screen_inventory.json', encoding='utf-8'))
-dc = Counter(s['domain'] for s in inv)
-
-print('=' * 70)
-print('발견된 화면 목록 (총 ' + str(len(inv)) + '개)')
-print('=' * 70)
-print('  ' + '번호'.rjust(4) + '  ' + '화면ID'.ljust(25) + ' ' + '도메인'.ljust(15) + ' 경로')
-print('-' * 70)
-for i, s in enumerate(inv, 1):
-    sid    = s.get('screenId', '') or os.path.splitext(os.path.basename(s.get('entryFile','')))[0]
-    domain = s.get('domain', '')
-    route  = s.get('route', '')
-    print('  ' + str(i).rjust(4) + '. ' + sid.ljust(25) + ' ' + domain.ljust(15) + ' ' + route)
-
-print()
-print('도메인별: ' + str(dict(dc)))
-print()
-print('[피드백 방법]')
-print('  이상없음    : \"계속\"')
-print('  제외        : 제외 3,7')
-print('  도메인수정  : 도메인 5 / order')
-print('  화면명수정  : 수정 5 / 새화면명')
-"
-```
-
-사용자 피드백을 받아 `_tmp/screen_inventory.json`을 직접 수정한다.
-
-> **확인 전 STEP 6-2 진행 금지.**
-
----
-
-## STEP 6-2: [선택] 브라우저 캡처 + 마커
-
-> **PREVIEW_BASE_URL 미설정 시 이 STEP 전체를 스킵하고 STEP 6-3으로 이동.**
-> 캡처 → 마커 → 이후 STEP 6-3에서 spec 생성 시 캡처 이미지 포함. **반드시 spec 생성 전에 실행.**
-
-```bash
-!python -c "
-import os, sys
-try:
-    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
-except AttributeError:
-    pass
-env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
-           if '=' in l and not l.startswith('#'))
-if not env.get('PREVIEW_BASE_URL',''):
-    print('[SKIP] PREVIEW_BASE_URL 미설정 - STEP 6-3으로 이동')
+cap_exists = os.path.exists('_tmp/uis_capture_map.json')
+if cap_exists:
+    cap_map = json.load(open('_tmp/uis_capture_map.json', encoding='utf-8'))
+    print('[재개] 기존 캡처 ' + str(len(cap_map)) + '개 — BFS 재개 가능')
 else:
-    print('[OK] 브라우저 캡처 시작 (base_url: ' + env['PREVIEW_BASE_URL'] + ')')
+    print('[신규] BFS 전수 탐색 시작')
+
+print('[OK] PREVIEW_BASE_URL = ' + base_url)
 "
 ```
 
-### STEP 6-2-0: Chrome 실행 + 로그인 대기
+---
+
+## STEP 6-1: Chrome + 로그인 (브라우저 환경 준비)
 
 ```bash
 !python -c "
@@ -208,22 +133,31 @@ print('=' * 55)
 "
 ```
 
-> 사용자가 **"계속"** 하면 STEP 6-2-1로 이동.
+> 사용자가 **"계속"** 하면 STEP 6-2로 이동.
+
+---
+
+## STEP 6-2: BFS 전수 탐색 (E2E 스타일)
+
+**목표**: 실제 앱에서 접근 가능한 **모든 화면**을 발견한다.
+- 정적 분석 결과 무관 — 브라우저가 보여주는 것이 진실
+- `hasChildren=false` 메뉴 아이템 = 실제 화면 (depth 제한 없음)
+- 각 화면: `activeRoute` + 스크린샷 + `menuPath` 수집
+- `_tmp/uis_capture_map.json`에 실시간 저장 (재개 지원)
 
 ### STEP 6-2-1: 탐색 초기화
-
-ai_nav.js 경로와 탐색 파라미터를 확인한다.
 
 ```bash
 !python -c "
 import json, os, sys
+
 try:
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 except AttributeError:
     pass
+
 env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
            if '=' in l and not l.startswith('#'))
-inv      = json.load(open('_tmp/screen_inventory.json', encoding='utf-8'))
 plugin   = env.get('PLUGIN_PATH', '')
 cdp_port = env.get('PREVIEW_CDP_PORT', '9222')
 ai_nav   = os.path.join(plugin, 'scripts', 'ai_nav.js') if plugin else ''
@@ -232,22 +166,19 @@ if not (ai_nav and os.path.exists(ai_nav)):
 print('AI_NAV='   + ai_nav)
 print('CDP_PORT=' + cdp_port)
 print('CWD='      + os.getcwd())
-print()
-print('캡처 대상 화면 (' + str(len(inv)) + '개):')
-for s in inv:
-    print('  ' + (s.get('route') or '미정').ljust(40) + ' ' + s.get('screenId',''))
+
+cap_map = []
+if os.path.exists('_tmp/uis_capture_map.json'):
+    cap_map = json.load(open('_tmp/uis_capture_map.json', encoding='utf-8'))
+    routes = [e.get('activeRoute','') for e in cap_map]
+    print('재개: ' + str(len(cap_map)) + '개 이미 캡처됨')
+    print('  visited_routes: ' + str(routes[:5]) + ('...' if len(routes) > 5 else ''))
+else:
+    print('신규 탐색 시작')
 "
 ```
 
-### STEP 6-2-2: BFS 탐색 + 캡처 → uis_capture_map.json 누적
-
-**Phase 1 목표**: 브라우저 세션을 유지하며 모든 leaf 화면을 캡처하고
-`_tmp/uis_capture_map.json`에 누적 저장한다.
-UIS spec 생성은 이 단계에서 절대 하지 않는다 — Phase 2(STEP 6-3)에서 수행.
-
-> ⚠️ **goto 금지 (1단계)** — 메뉴 클릭으로만 탐색. 메뉴로 못 찾은 화면만 2단계에서 goto.
-
----
+### STEP 6-2-2: BFS 탐색 + 캡처 루프
 
 **Claude 상태 변수 (메모리 추적):**
 
@@ -286,7 +217,7 @@ UIS spec 생성은 이 단계에서 절대 하지 않는다 — Phase 2(STEP 6-3
   → current_path = current_path[0:depth] + [label]
 
 우선순위 3: visible=true AND hasChildren=false AND frame=main AND label ∉ clicked_labels
-  → LEAF 화면 → 클릭 후 캡처 실행 (아래 캡처 절차 참조)
+  → LEAF 화면 → 클릭 후 캡처 실행
   → current_path 갱신 후 menuPath = current_path[0:depth] + [label]
 ```
 
@@ -307,14 +238,16 @@ UIS spec 생성은 이 단계에서 절대 하지 않는다 — Phase 2(STEP 6-3
 !node {AI_NAV} --port={CDP_PORT} --workspace={CWD} capture "{screenId}"
 ```
 
-screenId 생성 규칙: `activeRoute`의 마지막 세그먼트 (예: `/app/order/pay/or416mForm` → `or416mForm`)
+screenId 생성: `activeRoute`의 마지막 세그먼트 (예: `/app/order/pay/or416mForm` → `or416mForm`)
 
 캡처 결과를 `capture_map`에 append:
 ```json
 {
-  "menuPath": ["L1", "L2", ..., "leaf_label"],
+  "menuPath":    ["L1_GNB", "L2", ..., "leaf_label"],
   "screenLabel": "leaf_label",
   "activeRoute": "캡처결과.activeRoute",
+  "contentRoute": "캡처결과.contentRoute",
+  "isIframeApp": 캡처결과.isIframeApp,
   "captureDir":  "캡처결과.captureDir",
   "captureFile": "캡처결과.captureFile",
   "widgetCount": 캡처결과.widgetCount
@@ -335,144 +268,213 @@ process.stdout.write('uis_capture_map 저장: ' + map.length + '개\n');
 
 ---
 
-**1단계 종료 조건:**
-- frame=main 의 depth=0 항목 전부 `clicked_labels`에 있음
+**루프 종료 조건:**
+- depth=0 frame=main 항목 전부 `clicked_labels`에 있음
 - AND visible 항목 중 미클릭 nav-link 없음
-- OR 연속 5회 click 후 `activeRoute` / navigables 변화 없음
+- OR 연속 5회 click 후 `activeRoute`/navigables 변화 없음
 
 ---
 
-**[2단계] 미캡처 화면 goto 보완**
+## STEP 6-2-3: BFS 결과 → 도메인 구조 자동생성 + 소스 역매핑
 
-1단계 완료 후, `screen_inventory.json`의 route 중 `visited_routes`에 없는 항목에 한해 직접 접근:
+> **설계 원칙**:
+> - 도메인 = `menuPath[0]` (L1 GNB 카테고리). 정적분석 도메인과 무관.
+> - `_domain_plan.json` = BFS 완료 후 자동 생성. 사전에 존재할 필요 없음.
+> - 소스 역매핑 = `activeRoute` → controller/JSP 역추적 (선택적 보강).
 
-```
-!node {AI_NAV} --port={CDP_PORT} --workspace={CWD} goto "{route}"
-```
-→ `activeRoute`가 예상 route와 일치하면 capture, 빈 화면/리다이렉트면 스킵.
-
-### STEP 6-2-3: uis_capture_map 완성 (BFS 주축 — 정적분석은 보조)
-
-> **설계 원칙**: `uis_capture_map.json`이 UIS 생성의 유일한 주축이다.
-> - 도메인: `menuPath[0]` (실제 GNB 카테고리) 기준 → `_domain_plan.json`으로 매핑
-> - 화면명: 메뉴 라벨 (menuPath 마지막 항목)
-> - `screen_inventory.json`은 `entryFile`/`componentFiles` 경로 보조 조회용만
-> - BFS에서 못 찾은 화면 = 메뉴에 없는 화면 → 강제 편입 금지, 별도 리스트로 분리
+### 6-2-3-A: menuPath[0] → 도메인 구조 자동생성
 
 ```bash
 !python -c "
-import json, os
+import json, os, sys
+from collections import defaultdict, OrderedDict
 
+try:
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+except AttributeError:
+    pass
+
+cap_map = json.load(open('_tmp/uis_capture_map.json', encoding='utf-8'))
+
+# menuPath[0] = 도메인 (L1 GNB 카테고리)
+domain_screens = OrderedDict()
+for entry in cap_map:
+    mp = entry.get('menuPath', [])
+    domain = mp[0] if mp else 'unknown'
+    if domain not in domain_screens:
+        domain_screens[domain] = []
+    domain_screens[domain].append(entry)
+
+# UIS-F ID 도메인별 순번 배정 (10 단위 gap)
+uis_cursor = 1
+for domain, items in domain_screens.items():
+    for i, item in enumerate(items):
+        item['domain'] = domain
+        item['uisId'] = uis_cursor + i
+        if not item.get('screenId'):
+            ar = item.get('activeRoute', '')
+            seg = [s for s in ar.rstrip('/').split('/') if s]
+            item['screenId'] = seg[-1] if seg else item.get('screenLabel', 'screen')
+    uis_cursor += len(items) + 10
+
+json.dump(cap_map, open('_tmp/uis_capture_map.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
+
+# _domain_plan.json 생성 (BFS 기반)
+uis_cursor = 1
+bfs_domains = []
+for domain, items in domain_screens.items():
+    bfs_domains.append({
+        'name': domain,
+        'description': domain + ' (BFS 자동 추출)',
+        'source': 'BFS',
+        'uis': {'start': uis_cursor, 'end': uis_cursor + len(items) + 9},
+        'inf': {'start': uis_cursor, 'end': uis_cursor + len(items) + 9},
+        'sch': {'start': uis_cursor, 'end': uis_cursor + len(items) + 9},
+        'rootPaths': [],
+        'screens': [e.get('screenId','') for e in items],
+    })
+    uis_cursor += len(items) + 10
+
+bfs_plan = {
+    'project': os.path.basename(os.getcwd()),
+    'source': 'BFS',
+    'generatedAt': __import__('datetime').datetime.now().isoformat(),
+    'domains': bfs_domains,
+}
+os.makedirs('docs/05_설계서', exist_ok=True)
+json.dump(bfs_plan, open('docs/05_설계서/_domain_plan.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
+
+print('도메인 자동 추출 완료 (BFS menuPath[0] 기준):')
+for domain, items in domain_screens.items():
+    print('  ' + domain.ljust(25) + str(len(items)).rjust(3) + '개 화면')
+print()
+print('총 ' + str(len(cap_map)) + '개 화면, ' + str(len(bfs_domains)) + '개 도메인')
+print('_domain_plan.json 생성 완료')
+"
+```
+
+### 6-2-3-B: 소스 파일 역매핑 (선택적 보강)
+
+`route_source_map.py`가 있으면 `activeRoute` → controller/JSP/service 경로를 보강한다.
+없거나 실패해도 BFS 캡처만으로 UIS 생성 진행.
+
+```bash
+!python -c "
+import os, sys, subprocess, json
+
+try:
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+except AttributeError:
+    pass
+
+env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
+           if '=' in l and not l.startswith('#'))
+plugin = env.get('PLUGIN_PATH', '')
+
+# route_source_map.py 우선, 없으면 screen_inventory.py fallback
+script = ''
+for fname in ('route_source_map.py', 'screen_inventory.py'):
+    candidate = os.path.join(plugin, 'scripts', fname) if plugin else ''
+    if candidate and os.path.exists(candidate):
+        script = candidate
+        break
+
+if not script:
+    print('[INFO] 소스 역매핑 스크립트 없음 — 캡처만으로 UIS 생성')
+else:
+    print('[INFO] 소스 역매핑: ' + os.path.basename(script))
+    r = subprocess.run([sys.executable, script, os.getcwd()],
+                       capture_output=True, text=True, encoding='utf-8', errors='ignore')
+    print(r.stdout[-2000:] if len(r.stdout) > 2000 else r.stdout)
+    if r.returncode != 0:
+        print('[WARN] 소스 역매핑 실패 — 캡처만으로 계속 진행')
+        print(r.stderr[-300:] if r.stderr else '')
+        sys.exit(0)  # 실패해도 계속
+
+    # screen_inventory.json 이 생성됐으면 capture_map에 entryFile 보강
+    if os.path.exists('_tmp/screen_inventory.json'):
+        inv = json.load(open('_tmp/screen_inventory.json', encoding='utf-8'))
+        cap_map = json.load(open('_tmp/uis_capture_map.json', encoding='utf-8'))
+
+        def norm(r): return (r or '').rstrip('/').lower()
+        inv_index = {norm(s.get('route','')): s for s in inv}
+
+        def find_inv(ar):
+            ar_n = norm(ar)
+            if ar_n in inv_index: return inv_index[ar_n]
+            for route, item in inv_index.items():
+                if ar_n.endswith(route) or route.endswith(ar_n.lstrip('/')):
+                    return item
+            return None
+
+        enriched = 0
+        for entry in cap_map:
+            inv_item = find_inv(entry.get('activeRoute',''))
+            if inv_item:
+                entry.setdefault('entryFile', inv_item.get('entryFile',''))
+                entry.setdefault('componentFiles', inv_item.get('componentFiles',[]))
+                enriched += 1
+
+        json.dump(cap_map, open('_tmp/uis_capture_map.json','w',encoding='utf-8'), ensure_ascii=False, indent=2)
+        print('소스 역매핑 보강: ' + str(enriched) + '/' + str(len(cap_map)) + '개 화면')
+"
+```
+
+---
+
+## ✋ STEP 6-2-4: 화면 목록 검토 (필수 체크포인트)
+
+BFS로 발견된 전체 화면 목록을 출력하고 피드백을 받는다.
+
+```bash
+!python -c "
+import json
 try:
     import sys
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 except AttributeError:
     pass
 
-cap_map = json.load(open('_tmp/uis_capture_map.json', encoding='utf-8')) if os.path.exists('_tmp/uis_capture_map.json') else []
-inv     = json.load(open('_tmp/screen_inventory.json', encoding='utf-8'))
-plan    = json.load(open('docs/05_설계서/_domain_plan.json', encoding='utf-8'))
-
-def norm(r): return (r or '').rstrip('/').lower()
-
-# 정적분석: route 부분매칭 → entryFile/componentFiles 보조 조회
-# activeRoute(/app/promotion/mk003mForm) vs inventory route(/promotion/mk003mForm) 처럼
-# prefix가 달라도 경로 suffix로 매칭한다
-def find_inv_by_route(ar, inv_index):
-    ar_norm = norm(ar)
-    # 1) 완전일치
-    if ar_norm in inv_index: return inv_index[ar_norm]
-    # 2) suffix 매칭: inventory route가 activeRoute의 끝부분과 일치
-    for route, item in inv_index.items():
-        if ar_norm.endswith(route) or route.endswith(ar_norm.lstrip('/')):
-            return item
-    return None
-
-inv_index = {norm(s.get('route','')): s for s in inv}
-
-# 도메인 매핑 우선순위:
-# 1순위: activeRoute가 domain.rootPaths 중 하나로 시작 (가장 정확)
-# 2순위: screen_inventory 매칭된 항목의 domain (suffix 매칭 포함)
-# 3순위: menuPath[0] 라벨로 domain name 문자열 매칭
-def route_to_domain(active_route, inv_item):
-    ar = norm(active_route)
-    # 1순위: rootPaths prefix 매칭
-    for d in plan['domains']:
-        for rp in d.get('rootPaths', []):
-            if ar.startswith(norm(rp)):
-                return d['name']
-    # 2순위: inventory 매칭된 도메인
-    if inv_item and inv_item.get('domain'):
-        return inv_item['domain']
-    # 3순위: menuPath 라벨 substring 매칭
-    return ''
-
-# UIS ID 카운터 (도메인별)
-uis_counter = {d['name']: d['uis']['start'] for d in plan['domains']}
+cap_map = json.load(open('_tmp/uis_capture_map.json', encoding='utf-8'))
+from collections import defaultdict
+by_domain = defaultdict(list)
 for e in cap_map:
-    if e.get('uisId'):
-        dom = e.get('domain','')
-        if dom and e['uisId'] >= uis_counter.get(dom, 0):
-            uis_counter[dom] = e['uisId'] + 1
+    by_domain[e.get('domain', '?')].append(e)
 
-enriched = 0
-domain_miss = []
-for entry in cap_map:
-    ar = entry.get('activeRoute', '')
+print('=' * 75)
+print('BFS 발견 화면 목록 (총 ' + str(len(cap_map)) + '개)')
+print('=' * 75)
+idx = 0
+for domain, items in sorted(by_domain.items()):
+    print()
+    print('  [' + domain + '] ' + str(len(items)) + '개')
+    for e in items:
+        idx += 1
+        mp    = ' > '.join(e.get('menuPath', []))
+        route = e.get('activeRoute', '')
+        ef    = e.get('entryFile', '')
+        src   = '  ← ' + ef if ef else ''
+        print('    ' + str(idx).rjust(3) + '. ' + mp.ljust(45) + route[:40] + src)
 
-    # 보조 조회 (prefix 불일치 대응 suffix 매칭 포함)
-    inv_item = find_inv_by_route(ar, inv_index)
-    if inv_item:
-        entry.setdefault('entryFile', inv_item.get('entryFile', ''))
-        entry.setdefault('componentFiles', inv_item.get('componentFiles', []))
-        enriched += 1
-
-    # 도메인: rootPaths 기준 (라벨 매칭보다 정확)
-    domain = route_to_domain(ar, inv_item)
-    entry['domain'] = domain
-
-    if not domain:
-        domain_miss.append(ar)
-
-    # UIS-F ID 할당
-    if not entry.get('uisId') and domain:
-        entry['uisId'] = uis_counter.get(domain, 0)
-        uis_counter[domain] = entry['uisId'] + 1
-
-    # screenId
-    if not entry.get('screenId'):
-        seg = [s for s in ar.rstrip('/').split('/') if s]
-        entry['screenId'] = seg[-1] if seg else entry.get('screenLabel','screen')
-
-json.dump(cap_map, open('_tmp/uis_capture_map.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
-
-# BFS 미발견 화면 (정적분석만 존재) → 메뉴에 없는 화면, 강제 편입 금지
-captured_routes = {norm(e.get('activeRoute','')) for e in cap_map}
-not_in_menu = []
-for s in inv:
-    if find_inv_by_route(s.get('route',''), {norm(e.get('activeRoute','')): e for e in cap_map}) is None:
-        not_in_menu.append(s)
-if not_in_menu:
-    json.dump(not_in_menu, open('_tmp/uis_not_in_menu.json','w',encoding='utf-8'), ensure_ascii=False, indent=2)
-
-print('BFS 캡처: ' + str(len(cap_map)) + '개  entryFile 보강: ' + str(enriched) + '개')
-if not_in_menu:
-    print('메뉴에 없는 화면 (정적분석만): ' + str(len(not_in_menu)) + '개 → _tmp/uis_not_in_menu.json')
-    print('  (별도 판단 필요 — 권한 제한 화면, API 전용 URL 등)')
 print()
-print('도메인별 UIS 배분:')
-from collections import Counter
-dc = Counter(e.get('domain','?') for e in cap_map)
-for dom, cnt in sorted(dc.items()): print('  ' + dom.ljust(20) + str(cnt) + '개')
+print('[피드백 방법]')
+print('  이상없음    : \"계속\"')
+print('  제외        : 제외 3,7')
+print('  도메인수정  : 도메인 5 / newDomain')
+print('  화면명수정  : 수정 5 / 새화면명')
 "
 ```
+
+사용자 피드백을 받아 `_tmp/uis_capture_map.json`을 직접 수정한다.
+
+> **확인 전 STEP 6-3 절대 진행 금지.**
 
 ---
 
 ## STEP 6-3: UIS 스펙 생성 (ddd-ui-agent 배치)
 
 **Phase 2 — 브라우저 불필요. `_tmp/uis_capture_map.json` 단독 입력.**
-BFS로 발견된 화면만 UIS로 생성한다. `uis_not_in_menu.json` 항목은 여기서 처리하지 않는다.
+BFS로 발견된 화면만 UIS로 생성. 도메인별 3개씩 병렬 처리.
 
 ```bash
 !python -c "
@@ -486,7 +488,6 @@ except AttributeError:
 
 cap_map = json.load(open('_tmp/uis_capture_map.json', encoding='utf-8'))
 
-# 도메인별 그룹핑
 from collections import defaultdict
 by_domain = defaultdict(list)
 for e in cap_map:
@@ -496,10 +497,12 @@ print('UIS 생성 대상: ' + str(len(cap_map)) + '개')
 print()
 for dom, items in sorted(by_domain.items()):
     batches = (len(items) + 2) // 3
-    print('  ' + dom.ljust(20) + str(len(items)) + '개  →  ' + str(batches) + '배치')
+    print('  ' + dom.ljust(25) + str(len(items)).rjust(3) + '개  →  ' + str(batches) + '배치')
     for e in items:
-        path_str = ' > '.join(e.get('menuPath', [])) or e.get('activeRoute','')
-        print('    UIS-F-' + str(e.get('uisId',0)).zfill(3) + '  ' + e.get('screenId','').ljust(25) + '  ' + path_str)
+        mp  = ' > '.join(e.get('menuPath', [])) or e.get('activeRoute','')
+        ef  = e.get('entryFile','')
+        src = ' [' + os.path.basename(ef) + ']' if ef else ' [캡처만]'
+        print('    UIS-F-' + str(e.get('uisId',0)).zfill(3) + '  ' + e.get('screenId','').ljust(25) + '  ' + mp[:35] + src)
 "
 ```
 
@@ -513,13 +516,13 @@ for dom, items in sorted(by_domain.items()):
     처리 대상:
 
     [화면 1]
-    메뉴경로: {menuPath.join(' > ')}   ← 화면명/도메인의 실제 근거
+    메뉴경로: {menuPath.join(' > ')}
     라우트: {activeRoute}
-    진입 파일: {entryFile or "정적분석 미매칭"}
+    진입 파일: {entryFile or "소스 미매핑 (캡처만)"}
     도메인: {domain}
     UIS-F ID: UIS-F-{uisId:03d}
     INF 디렉토리: docs/05_설계서/{domain}/INF/
-    캡처 디렉토리: {captureDir}   ← 항상 존재 (BFS 캡처 완료된 화면만 여기 있음)
+    캡처 디렉토리: {captureDir}
     MODE: RECON
     워크스페이스: {현재 작업 디렉토리 절대경로}
 
@@ -527,11 +530,12 @@ for dom, items in sorted(by_domain.items()):
     [화면 3] ...
 
     캡처 디렉토리 파일:
-    - {captureDir}/preview.png         : 실제 스크린샷 (1920x900px)
+    - {captureDir}/preview.png          : 실제 스크린샷 (1920x900px)
     - {captureDir}/preview_annotated.png : 마커 스크린샷 (있으면 우선)
     - {captureDir}/preview_widgets.json  : 감지된 위젯 목록
     화면명은 menuPath 마지막 항목 사용. spec.md에 이미지 상대경로 삽입.
     widgets.json 기반으로 UI 컴포넌트 목록 작성.
+    entryFile이 없으면 캡처 이미지만으로 UI 구조 분석.
 
 각 배치 완료 후 다음 배치 시작.
 ```
@@ -541,6 +545,8 @@ for dom, items in sorted(by_domain.items()):
 ---
 
 ## STEP 6-4: api_hints 수집
+
+UIS spec.md에서 API 호출 패턴을 수집한다.
 
 ```bash
 !python -c "
@@ -552,27 +558,32 @@ try:
 except AttributeError:
     pass
 
-inv = json.load(open('_tmp/screen_inventory.json', encoding='utf-8'))
+cap_map = json.load(open('_tmp/uis_capture_map.json', encoding='utf-8'))
 
 hints_all = {}
-for s in inv:
-    sid  = s.get('screenId') or os.path.splitext(os.path.basename(s.get('entryFile','')))[0]
-    spec = 'docs/05_설계서/' + s['domain'] + '/UI/' + sid + '/spec.md'
+for e in cap_map:
+    sid    = e.get('screenId','')
+    domain = e.get('domain','')
+    if not (sid and domain): continue
+
+    spec = 'docs/05_설계서/' + domain + '/UI/' + sid + '/spec.md'
     if not os.path.exists(spec):
         continue
+
     body = open(spec, encoding='utf-8').read()
     for line in body.splitlines():
         m = re.search(r'(GET|POST|PUT|DELETE|PATCH)\s+\|.*?\|.*?(/[^\s|]+)', line, re.I)
         if m:
             key = m.group(1).upper() + ':' + m.group(2)
             hints_all[key] = {'url': m.group(2), 'method': m.group(1).upper(),
-                              'screen': sid, 'domain': s['domain']}
+                              'screen': sid, 'domain': domain}
+
     gaps = '_tmp/' + sid + '_inf_gaps.json'
     if os.path.exists(gaps):
         for g in json.load(open(gaps, encoding='utf-8')).get('gaps', []):
             key = g['method'].upper() + ':' + g['url']
             hints_all[key] = {'url': g['url'], 'method': g['method'].upper(),
-                              'screen': sid, 'domain': s['domain']}
+                              'screen': sid, 'domain': domain}
 
 result = list(hints_all.values())
 json.dump(result, open('_tmp/uis_api_hints.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
@@ -594,7 +605,7 @@ try:
 except AttributeError:
     pass
 
-plan = json.load(open('docs/05_설계서/_domain_plan.json'))
+plan = json.load(open('docs/05_설계서/_domain_plan.json', encoding='utf-8'))
 for d in plan['domains']:
     domain = d['name']
     ui_dir = 'docs/05_설계서/' + domain + '/UI'
@@ -638,9 +649,10 @@ except AttributeError:
 cp = json.load(open('_tmp/recon_checkpoint.json', encoding='utf-8')) if os.path.exists('_tmp/recon_checkpoint.json') else {}
 cp.update({'phase': 'recon-uis', 'completed_at': datetime.datetime.now().isoformat(), 'status': 'ok'})
 json.dump(cp, open('_tmp/recon_checkpoint.json','w'), ensure_ascii=False, indent=2)
-inv = json.load(open('_tmp/screen_inventory.json', encoding='utf-8'))
-cap_cnt = len([s for s in inv if s.get('captureDir')])
-print('완료: 화면 ' + str(len(inv)) + '개 / 캡처 ' + str(cap_cnt) + '개 / spec.md 생성')
+
+cap_map = json.load(open('_tmp/uis_capture_map.json', encoding='utf-8')) if os.path.exists('_tmp/uis_capture_map.json') else []
+plan = json.load(open('docs/05_설계서/_domain_plan.json', encoding='utf-8')) if os.path.exists('docs/05_설계서/_domain_plan.json') else {}
+print('완료: 화면 ' + str(len(cap_map)) + '개 / 도메인 ' + str(len(plan.get('domains',[]))) + '개 / spec.md 생성')
 print('다음 커맨드: /sl-recon-inf')
 "
 ```
