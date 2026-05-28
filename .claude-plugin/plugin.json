@@ -1,7 +1,7 @@
 {
   "name": "speclinker",
-  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 REQ-ID 체이닝, UA 대시보드 통합. v2.23: Spring MVC 경로중복 수정, 폼컨트롤러 누락 해결, 미사용 스크립트 제거",
-  "version": "2.23.0",
+  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 REQ-ID 체이닝, UA 대시보드 통합. v2.24: sl-recon-uis 순서 재구성 (캡처->마커->spec), ddd-ui-agent captureDir 연동",
+  "version": "2.24.0",
   "author": {
     "name": "DreamyDreamss"
   },

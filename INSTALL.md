@@ -55,7 +55,7 @@ New-Item -ItemType SymbolicLink -Path $PLUGIN_DIR -Target (Get-Location).Path
   {
     "scope": "user",
     "installPath": "C:\\Users\\<유저명>\\.claude\\plugins\\speclinker",
-    "version": "2.23.0",
+    "version": "2.24.0",
     "installedAt": "<오늘날짜>T00:00:00.000Z"
   }
 ]

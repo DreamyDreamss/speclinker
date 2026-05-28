@@ -1,11 +1,21 @@
 ---
 name: sl-recon-uis
-description: RECON Phase-2 — 소스 기반 화면 발견 → UIS 설계서 생성 → 선택적 BFS 캡처 (STEP 6). /sl-recon 완료 후 실행.
+description: RECON Phase-2 — 소스 기반 화면 발견 → 브라우저 캡처+마커 → UIS 설계서 생성 (STEP 6). /sl-recon 완료 후 실행.
 triggers:
   - /sl-recon-uis
 ---
 
 # /sl-recon-uis — 화면 설계서 생성
+
+**실행 순서:**
+1. STEP 6-1: 소스 정적 분석 → 화면 목록 확정
+2. STEP 6-1.5: 사용자 검토 (필수)
+3. STEP 6-2: 브라우저 캡처 + 마커 (`PREVIEW_BASE_URL` 설정 시) — **spec 생성 전 반드시 먼저**
+4. STEP 6-3: UIS spec 생성 (captureDir 있으면 캡처 포함, 없으면 와이어프레임)
+5. STEP 6-4: api_hints 수집
+6. STEP 6-5: _TOC.md 생성
+
+---
 
 ## 실행 전 확인
 
@@ -33,7 +43,7 @@ env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
 plan = json.load(open('docs/05_설계서/_domain_plan.json', encoding='utf-8'))
 base_url = env.get('PREVIEW_BASE_URL', '')
 print('[OK] 도메인 ' + str(len(plan['domains'])) + '개')
-print('[브라우저 보강] ' + ('활성 (STEP 6-3 실행)' if base_url else '비활성 (PREVIEW_BASE_URL 미설정) - 소스 분석만 실행'))
+print('[브라우저 캡처] ' + ('활성 (STEP 6-2 실행)' if base_url else '비활성 (PREVIEW_BASE_URL 미설정) - 소스 기반 와이어프레임만 생성'))
 "
 ```
 
@@ -73,6 +83,12 @@ if r.returncode != 0: sys.exit(1)
 import json, os
 from collections import Counter
 
+try:
+    import sys
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+except AttributeError:
+    pass
+
 inv = json.load(open('_tmp/screen_inventory.json', encoding='utf-8'))
 dc = Counter(s['domain'] for s in inv)
 
@@ -85,9 +101,7 @@ for i, s in enumerate(inv, 1):
     sid    = s.get('screenId', '') or os.path.splitext(os.path.basename(s.get('entryFile','')))[0]
     domain = s.get('domain', '')
     route  = s.get('route', '')
-    src    = s.get('source', '')
-    tag    = ' [BFS]' if src == 'bfs' else ''
-    print('  ' + str(i).rjust(4) + '. ' + sid.ljust(25) + ' ' + domain.ljust(15) + ' ' + route + tag)
+    print('  ' + str(i).rjust(4) + '. ' + sid.ljust(25) + ' ' + domain.ljust(15) + ' ' + route)
 
 print()
 print('도메인별: ' + str(dict(dc)))
@@ -106,87 +120,28 @@ print('  화면명수정  : 수정 5 / 새화면명')
 
 ---
 
-## STEP 6-2: UIS 스펙 생성 (ddd-ui-agent 배치)
+## STEP 6-2: [선택] 브라우저 캡처 + 마커
 
-**캡처 유무와 무관하게 모든 화면에 실행한다.**
-spec.md가 이미 있으면 §5만 패치, 없으면 전체 생성.
-
-```bash
-!python -c "
-import json, os
-
-inv  = json.load(open('_tmp/screen_inventory.json', encoding='utf-8'))
-ws   = os.getcwd()
-
-# 재시작 지원: spec.md 이미 있는 항목은 §5 패치 모드, 없으면 전체 생성
-pending = []
-for s in inv:
-    sid    = s.get('screenId') or os.path.splitext(os.path.basename(s.get('entryFile','')))[0]
-    domain = s.get('domain','')
-    spec   = 'docs/05_설계서/' + domain + '/UI/' + sid + '/spec.md'
-    merged = dict(s)
-    merged['_specExists'] = os.path.exists(spec)
-    merged['_specPath']   = spec
-    merged['_screenId']   = sid
-    pending.append(merged)
-
-new_cnt   = len([p for p in pending if not p['_specExists']])
-patch_cnt = len([p for p in pending if p['_specExists']])
-print('전체 ' + str(len(pending)) + '개 (신규생성: ' + str(new_cnt) + '개 / 5패치: ' + str(patch_cnt) + '개)')
-print()
-for i, p in enumerate(pending, 1):
-    mode = '§5패치' if p['_specExists'] else '전체생성'
-    print('  ' + str(i).rjust(3) + '. [' + mode + '] ' + p['_screenId'].ljust(30) + ' ' + p['route'])
-"
-```
-
-`_tmp/screen_inventory.json`의 각 항목을 3개씩 묶어 `ddd-ui-agent`를 병렬 호출한다:
-
-```
-각 배치(3개씩) → Agent 도구 호출:
-  subagent_type: "speclinker:ddd-ui-agent"
-  description: "{domain} UIS 생성 ({screenId1}, {screenId2}, {screenId3})"
-  prompt: |
-    처리 대상 (여러 화면):
-
-    [화면 1]
-    라우트: {route}
-    진입 파일: {entryFile}
-    참조 컴포넌트: {componentFiles JSON}
-    도메인: {domain}
-    UIS-F ID: UIS-F-{uisId:03d}
-    INF 디렉토리: docs/05_설계서/{domain}/INF/
-    MODE: RECON
-    워크스페이스: {현재 작업 디렉토리 절대경로}
-    기존 spec.md: {_specPath if _specExists else "없음"}
-
-    [화면 2] ...
-    [화면 3] ...
-
-각 배치 완료 후 다음 배치 시작 (3개씩 순차).
-```
-
-> 모든 배치 완료 전 STEP 6-3 진행 금지.
-
----
-
-## STEP 6-3: [선택] 브라우저 보강
-
-> **PREVIEW_BASE_URL 미설정 시 이 STEP 전체를 스킵하고 STEP 6-4로 이동.**
+> **PREVIEW_BASE_URL 미설정 시 이 STEP 전체를 스킵하고 STEP 6-3으로 이동.**
+> 캡처 → 마커 → 이후 STEP 6-3에서 spec 생성 시 캡처 이미지 포함. **반드시 spec 생성 전에 실행.**
 
 ```bash
 !python -c "
-import os
+import os, sys
+try:
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+except AttributeError:
+    pass
 env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
            if '=' in l and not l.startswith('#'))
 if not env.get('PREVIEW_BASE_URL',''):
-    print('[SKIP] PREVIEW_BASE_URL 미설정 - STEP 6-4로 이동')
+    print('[SKIP] PREVIEW_BASE_URL 미설정 - STEP 6-3으로 이동')
 else:
-    print('[OK] 브라우저 보강 시작')
+    print('[OK] 브라우저 캡처 시작 (base_url: ' + env['PREVIEW_BASE_URL'] + ')')
 "
 ```
 
-### STEP 6-3-0: Chrome 실행 + 로그인 대기
+### STEP 6-2-0: Chrome 실행 + 로그인 대기
 
 ```bash
 !python -c "
@@ -212,10 +167,8 @@ if cdp_alive(cdp_port):
     print('[OK] Chrome CDP ' + cdp_port + ' 이미 열려있음')
 else:
     plat = platform.system()
-    # --user-data-dir: 기존 Chrome 인스턴스와 충돌 없이 별도 디버그 프로파일로 실행
     debug_profile = os.path.join(tempfile.gettempdir(), 'speclinker-chrome-debug')
     if plat == 'Windows':
-        # 레지스트리/공통 경로에서 chrome.exe 탐색
         chrome_candidates = [
             os.path.expandvars(r'%ProgramFiles%\\Google\\Chrome\\Application\\chrome.exe'),
             os.path.expandvars(r'%ProgramFiles(x86)%\\Google\\Chrome\\Application\\chrome.exe'),
@@ -245,7 +198,6 @@ else:
         print()
         print('[ERROR] Chrome 시작 실패.')
         print('  수동으로 Chrome을 열고 --remote-debugging-port=' + cdp_port + ' 옵션을 추가하세요.')
-        print('  예) chrome.exe --remote-debugging-port=' + cdp_port + ' --user-data-dir=C:\\\\Temp\\\\chrome-debug')
         sys.exit(1)
 
 print()
@@ -256,15 +208,19 @@ print('=' * 55)
 "
 ```
 
-> 사용자가 **"계속"** 하면 STEP 6-3-1로 이동.
+> 사용자가 **"계속"** 하면 STEP 6-2-1로 이동.
 
-### STEP 6-3-1: 탐색 초기화
+### STEP 6-2-1: 탐색 초기화
 
 ai_nav.js 경로와 탐색 파라미터를 확인한다.
 
 ```bash
 !python -c "
 import json, os, sys
+try:
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+except AttributeError:
+    pass
 env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
            if '=' in l and not l.startswith('#'))
 inv      = json.load(open('_tmp/screen_inventory.json', encoding='utf-8'))
@@ -277,20 +233,20 @@ print('AI_NAV='   + ai_nav)
 print('CDP_PORT=' + cdp_port)
 print('CWD='      + os.getcwd())
 print()
-print('탐색 대상 화면 (' + str(len(inv)) + '개):')
+print('캡처 대상 화면 (' + str(len(inv)) + '개):')
 for s in inv:
     print('  ' + (s.get('route') or '미정').ljust(40) + ' ' + s.get('screenId',''))
 "
 ```
 
-### STEP 6-3-2: Claude 주도 탐색 루프
+### STEP 6-2-2: Claude 주도 탐색 + 캡처 루프
 
 **Claude가 직접 ai_nav.js를 반복 호출하며 탐색 결정을 내린다.**
-스크립트는 DOM 조작 / 스크린샷만 수행하고, 어디로 갈지 판단은 Claude가 한다.
+스크립트는 DOM 조작 / 스크린샷 / 마커 생성만 수행하고, 어디로 갈지 판단은 Claude가 한다.
 
 **상태 관리 (Claude가 메모리에서 추적):**
 - `visited` — 방문 완료한 route 집합
-- `captured` — 캡처 완료한 screenId 집합
+- `captured` — 캡처+마커 완료한 screenId 집합  
 - `new_screens` — 정적 분석에 없는 신규 발견 화면 목록 `[{route, title, url}]`
 
 **루프 시작 — 현재 페이지 스냅샷 획득:**
@@ -302,7 +258,7 @@ for s in inv:
 **매 iteration 판단 순서:**
 
 1. 반환된 JSON의 `route` 값을 `screen_inventory.json` 목록과 비교:
-   - **매핑 O + 아직 캡처 안 됨** → 즉시 캡처:
+   - **매핑 O + 아직 캡처 안 됨** → 즉시 캡처 (스크린샷 + 마커 자동 생성):
      ```
      !node {AI_NAV} --port={CDP_PORT} --workspace={CWD} capture {screenId}
      ```
@@ -311,7 +267,7 @@ for s in inv:
 
 2. `navigables` 목록에서 다음 목적지 선택:
    - `type: "nav-link"` 중 `visited`에 없는 항목 우선
-   - `hasChildren: true` 항목은 클릭 후 서브메뉴가 펼쳐질 수 있음 — 클릭 후 snapshot 재확인
+   - `hasChildren: true` 항목은 클릭 후 서브메뉴가 펼쳐질 수 있음 - 클릭 후 snapshot 재확인
    - 메뉴명으로 클릭:
      ```
      !node {AI_NAV} --port={CDP_PORT} --workspace={CWD} click "메뉴명"
@@ -325,16 +281,22 @@ for s in inv:
 
 **종료 조건:**
 - `navigables`에 미방문 `nav-link`가 없음
-- 또는 연속 3회 `click` 후 route 변화 없음 (더 이상 이동 불가)
+- 또는 연속 3회 `click` 후 route 변화 없음
 
-### STEP 6-3-3: 탐색 결과 반영
+### STEP 6-2-3: 캡처 결과 반영
 
 캡처된 화면의 `captureDir`를 screen_inventory에 업데이트하고,
-신규 발견 화면을 `source: 'bfs:ai'`로 추가한다.
+신규 발견 화면을 inventory에 추가한다. **(UIS spec 생성 전 반드시 완료)**
 
 ```bash
 !python -c "
 import json, os
+
+try:
+    import sys
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+except AttributeError:
+    pass
 
 inv      = json.load(open('_tmp/screen_inventory.json', encoding='utf-8'))
 cap_root = os.path.join('_tmp', 'captures')
@@ -353,11 +315,11 @@ print('captureDir 업데이트: ' + str(updated) + '개')
 captured_list = [s for s in inv if s.get('captureDir')]
 not_captured  = [s for s in inv if not s.get('captureDir')]
 for s in captured_list:
-    print('  [캡처O] ' + s['screenId'].ljust(30) + ' ' + s.get('route',''))
+    print('  [캡처O] ' + s.get('screenId','').ljust(30) + ' ' + s.get('route',''))
 if not_captured:
     print('캡처 미완 (와이어프레임으로 처리): ' + str(len(not_captured)) + '개')
     for s in not_captured:
-        print('  [와이어프레임] ' + s['screenId'].ljust(30) + ' ' + s.get('route',''))
+        print('  [와이어프레임] ' + s.get('screenId','').ljust(30) + ' ' + s.get('route',''))
 "
 ```
 
@@ -367,6 +329,12 @@ if not_captured:
 ```bash
 !python -c "
 import json, os
+
+try:
+    import sys
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+except AttributeError:
+    pass
 
 # Claude가 탐색 루프에서 수집한 신규 화면 목록을 아래에 채운다
 new_screens = []  # 예: [{'route': '/order/popup', 'title': '주문 팝업', 'url': 'http://...'}]
@@ -392,6 +360,7 @@ def assign_domain(route):
     return plan['domains'][0]['name']
 
 existing_routes = {s.get('route','') for s in inv}
+cap_root = os.path.join('_tmp', 'captures')
 added = 0
 for ns in new_screens:
     route = ns.get('route', '')
@@ -399,7 +368,8 @@ for ns in new_screens:
     domain = assign_domain(route)
     uis_id = uis_max.get(domain, 0)
     uis_max[domain] = uis_id + 1
-    sid = route.replace('/', '_').strip('_') or ('bfs_screen_' + str(added + 1))
+    sid = route.replace('/', '_').strip('_') or ('ai_screen_' + str(added + 1))
+    cap_dir = os.path.join(cap_root, sid)
     inv.append({
         'route':          route,
         'domain':         domain,
@@ -408,7 +378,7 @@ for ns in new_screens:
         'uisId':          uis_id,
         'screenId':       sid,
         'screenName':     ns.get('title', sid),
-        'captureDir':     '',
+        'captureDir':     cap_dir.replace(chr(92), '/') if os.path.isdir(cap_dir) else '',
         'infDir':         '../../INF/',
         'source':         'bfs:ai',
     })
@@ -416,11 +386,90 @@ for ns in new_screens:
     added += 1
 
 json.dump(inv, open('_tmp/screen_inventory.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
-print(str(added) + '개 신규 화면 추가 (source: bfs:ai) → 총 ' + str(len(inv)) + '개')
+print(str(added) + '개 신규 화면 추가 (source: bfs:ai) -> 총 ' + str(len(inv)) + '개')
 "
 ```
 
-신규 화면(`source: 'bfs:ai'`)에 ddd-ui-agent 추가 실행 (배치 3개씩, STEP 6-2와 동일 방식).
+---
+
+## STEP 6-3: UIS 스펙 생성 (ddd-ui-agent 배치)
+
+**STEP 6-2(캡처) 완료 후 실행.**
+captureDir가 있는 화면은 실제 스크린샷+마커를 spec에 포함하고,
+없는 화면은 소스 기반 와이어프레임으로 생성한다.
+spec.md가 이미 있으면 캡처 유무 관계없이 재생성(덮어쓰기)한다.
+
+```bash
+!python -c "
+import json, os
+
+try:
+    import sys
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+except AttributeError:
+    pass
+
+inv = json.load(open('_tmp/screen_inventory.json', encoding='utf-8'))
+ws  = os.getcwd()
+
+pending = []
+for s in inv:
+    sid    = s.get('screenId') or os.path.splitext(os.path.basename(s.get('entryFile','')))[0]
+    domain = s.get('domain','')
+    spec   = 'docs/05_설계서/' + domain + '/UI/' + sid + '/spec.md'
+    cap    = s.get('captureDir','')
+    merged = dict(s)
+    merged['_specExists'] = os.path.exists(spec)
+    merged['_specPath']   = spec
+    merged['_screenId']   = sid
+    merged['_hasCapture'] = bool(cap and os.path.isdir(cap))
+    pending.append(merged)
+
+cap_cnt  = len([p for p in pending if p['_hasCapture']])
+wire_cnt = len([p for p in pending if not p['_hasCapture']])
+print('전체 ' + str(len(pending)) + '개 (캡처포함: ' + str(cap_cnt) + '개 / 와이어프레임: ' + str(wire_cnt) + '개)')
+print()
+for i, p in enumerate(pending, 1):
+    mode = '[캡처]  ' if p['_hasCapture'] else '[와이어]'
+    print('  ' + str(i).rjust(3) + '. ' + mode + ' ' + p['_screenId'].ljust(30) + ' ' + p['route'])
+"
+```
+
+`_tmp/screen_inventory.json`의 각 항목을 3개씩 묶어 `ddd-ui-agent`를 병렬 호출한다.
+**captureDir를 반드시 포함해 에이전트가 실제 캡처 이미지를 spec에 반영할 수 있게 한다:**
+
+```
+각 배치(3개씩) -> Agent 도구 호출:
+  subagent_type: "speclinker:ddd-ui-agent"
+  description: "{domain} UIS 생성 ({screenId1}, {screenId2}, {screenId3})"
+  prompt: |
+    처리 대상 (여러 화면):
+
+    [화면 1]
+    라우트: {route}
+    진입 파일: {entryFile}
+    참조 컴포넌트: {componentFiles JSON}
+    도메인: {domain}
+    UIS-F ID: UIS-F-{uisId:03d}
+    INF 디렉토리: docs/05_설계서/{domain}/INF/
+    캡처 디렉토리: {captureDir if _hasCapture else "없음 (소스 기반 와이어프레임)"}
+    MODE: RECON
+    워크스페이스: {현재 작업 디렉토리 절대경로}
+
+    [화면 2] ...
+    [화면 3] ...
+
+    캡처 디렉토리가 있는 화면:
+    - {captureDir}/capture.png  : 원본 스크린샷
+    - {captureDir}/annotated.png : 마커가 표시된 스크린샷 (있으면 우선 사용)
+    - {captureDir}/widgets.json : 감지된 UI 위젯 목록 (버튼/인풋/테이블 등)
+    spec.md의 미리보기 섹션에 annotated.png 경로를 상대경로로 삽입하고
+    widgets.json 기반으로 UI 컴포넌트 목록을 작성할 것.
+
+각 배치 완료 후 다음 배치 시작 (3개씩 순차).
+```
+
+> 모든 배치 완료 전 STEP 6-4 진행 금지.
 
 ---
 
@@ -429,6 +478,12 @@ print(str(added) + '개 신규 화면 추가 (source: bfs:ai) → 총 ' + str(le
 ```bash
 !python -c "
 import os, re, json
+
+try:
+    import sys
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+except AttributeError:
+    pass
 
 inv = json.load(open('_tmp/screen_inventory.json', encoding='utf-8'))
 
@@ -466,6 +521,12 @@ print('api_hints: ' + str(len(result)) + '개')
 !python -c "
 import os, re, json
 
+try:
+    import sys
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+except AttributeError:
+    pass
+
 plan = json.load(open('docs/05_설계서/_domain_plan.json'))
 for d in plan['domains']:
     domain = d['name']
@@ -480,13 +541,14 @@ for d in plan['domains']:
         uis_id  = re.search(r'^UIS-ID:\s*(\S+)', c, re.M)
         screen  = re.search(r'^화면명:\s*(.+)',   c, re.M)
         req_f   = re.search(r'^REQ-F:\s*(\S+)',   c, re.M)
+        cap_tag = '[캡처]' if os.path.isdir(os.path.join(ui_dir, dname, 'captures')) else '[와이어]'
         if uis_id:
             rows.append((uis_id.group(1),
                          screen.group(1).strip() if screen else dname,
-                         req_f.group(1) if req_f else '[TBD]', dname))
-    toc = '# UI 화면 목록 — ' + domain + '\n\n| UIS-ID | 화면명 | REQ-ID |\n|--------|--------|--------|\n'
-    for uid, nm, req, dn in rows:
-        toc += '| ' + uid + ' | [' + nm + '](./' + dn + '/spec.md) | ' + req + ' |\n'
+                         req_f.group(1) if req_f else '[TBD]', dname, cap_tag))
+    toc = '# UI 화면 목록 - ' + domain + '\n\n| UIS-ID | 화면명 | REQ-ID | 유형 |\n|--------|--------|--------|------|\n'
+    for uid, nm, req, dn, tag in rows:
+        toc += '| ' + uid + ' | [' + nm + '](./' + dn + '/spec.md) | ' + req + ' | ' + tag + ' |\n'
     open(os.path.join(ui_dir, '_TOC.md'), 'w', encoding='utf-8').write(toc)
     print(domain + ': _TOC.md ' + str(len(rows)) + '건')
 "
@@ -499,11 +561,19 @@ for d in plan['domains']:
 ```bash
 !python -c "
 import json, os, datetime
+
+try:
+    import sys
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+except AttributeError:
+    pass
+
 cp = json.load(open('_tmp/recon_checkpoint.json', encoding='utf-8')) if os.path.exists('_tmp/recon_checkpoint.json') else {}
 cp.update({'phase': 'recon-uis', 'completed_at': datetime.datetime.now().isoformat(), 'status': 'ok'})
 json.dump(cp, open('_tmp/recon_checkpoint.json','w'), ensure_ascii=False, indent=2)
 inv = json.load(open('_tmp/screen_inventory.json', encoding='utf-8'))
-print('완료: 화면 ' + str(len(inv)) + '개 / spec.md 생성')
+cap_cnt = len([s for s in inv if s.get('captureDir')])
+print('완료: 화면 ' + str(len(inv)) + '개 / 캡처 ' + str(cap_cnt) + '개 / spec.md 생성')
 print('다음 커맨드: /sl-recon-inf')
 "
 ```
