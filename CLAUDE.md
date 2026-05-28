@@ -42,7 +42,7 @@
 | `agents/sad-agent.md` | 아키텍처 설계서 | Opus | Opus | 패턴 매칭 + Self-Critique |
 | `agents/ddd-api-agent.md` | API 명세 (INF-XXX) | Sonnet | Sonnet | DSPy-style 구조화 출력 |
 | `agents/ddd-db-agent.md` | DB 스키마 (SCH-XXX) | Sonnet | Sonnet | 3NF 검증 + ERD 생성 |
-| `agents/ddd-ui-agent.md` | 화면 설계 (UIS-F-XXX) | Sonnet | Sonnet | 소스 증거 원칙 (preview는 runtime_capture가 처리) |
+| `agents/ddd-ui-agent.md` | 화면 설계 (UIS-F-XXX) | Sonnet | Sonnet | 소스 증거 원칙 (preview는 capture.js가 처리) |
 | `agents/ddd-batch-agent.md` | 배치 명세 (BAT-XXX) | Sonnet | Sonnet | 배치 확정 판별 + MCP DB 스케줄 조회 |
 | `agents/rtm-agent.md` | RTM 체인 + 품질 게이트 | Opus | Opus | Constitutional AI (양쪽 모두 추론 필요) |
 

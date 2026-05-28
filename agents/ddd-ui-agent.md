@@ -244,7 +244,7 @@ JSP 화면의 버튼은 HTML에 `id=` 만 있고, 실제 클릭 핸들러와 API
 ```
 
 > **preview.html 생성 책임은 이 에이전트에서 제거되었다.**  
-> preview.png는 sl-recon STEP 5-C에서 `runtime_capture.js`(실제 dev 서버 헤드리스 캡처) 또는  
+> preview.png / preview_tab*_annotated.png는 /sl-recon-uis STEP 6-2에서 `capture.js`(Chrome CDP attach 캡처) 또는  
 > 사용자 수동 제출로 채워진다. 본 에이전트는 spec.md만 작성한다.
 
 ---
@@ -316,7 +316,7 @@ revision_history:
 디스크립션 (번호 마커):
 ![[preview_annotated.png]]
 
-> `preview_annotated.png`가 비어있으면 sl-recon STEP 5-C의 runtime_capture + annotate_preview 파이프라인이 미완료된 상태.
+> `preview_annotated.png`가 없으면 /sl-recon-uis STEP 6-2 capture.js + annotate_preview.py 파이프라인이 미완료된 상태.
 > 그래도 §2 와이어프레임 안의 `[N]` 번호 + §4 위젯 표가 자기충족적 디스크립션 역할을 한다.
 
 [HTML 미리보기 열기 →](preview.html)
@@ -494,6 +494,6 @@ INF 생성 완료 후 `scripts/link_uis_inf.py`가 spec.md §5의 URL을 `[INF-N
 생성 화면: UIS-F-{uisId:03d} ({화면명})
 생성 파일: spec.md
 INF 필요: {N}건 → _tmp/{화면ID}_inf_required.json
-미리보기: sl-recon STEP 5-C (runtime_capture)에서 일괄 처리
+미리보기: /sl-recon-uis STEP 6-2 (capture.js)에서 일괄 처리
 추출 API: {URL 목록 — INF 있는 것은 [INF-NNN] 링크, 없는 것은 URL만}
 ```

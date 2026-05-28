@@ -45,77 +45,43 @@ print('     → STEP 6-1에서 screen_inventory.json 생성 예정')
 
 | 단계 | 역할 | 항상 실행? |
 |------|------|---------|
-| STEP 6-2 [A] 런타임 캡처 | DOM 구조·위젯 위치·스크린샷 → §0/§2/§4/§8 | storageState 있을 때만 |
+| STEP 6-2 [A] 런타임 캡처 | DOM 구조·위젯 위치·스크린샷 → §0/§2/§4/§8 | PREVIEW_BASE_URL + Chrome CDP 포트 열려있을 때만 |
 | STEP 6-3 [B] generate_uis_spec.py | widgets.json → spec.md 시각 초안 | widgets.json 있는 화면만 |
 | STEP 6-4 [C] ddd-ui-agent | 소스 파일 → §5 인터랙션 + _inf_required.json | **항상** |
 
+> **capture.js는 CDP attach 방식** — `runtime_capture.js`(구버전·deprecated)와 달리 storageState 불필요.  
+> 사용자가 Chrome을 CDP 포트로 미리 실행하고 로그인한 상태에서 attach 한다.
+
 ```bash
 !python3 -c "
 import os
 env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
            if '=' in l and not l.startswith('#'))
-base_url   = env.get('PREVIEW_BASE_URL', '')
-storage    = env.get('PREVIEW_STORAGE_STATE', '.preview-storage.json')
-abs_storage = storage if os.path.isabs(storage) else os.path.join(os.getcwd(), storage)
-has_base    = bool(base_url)
-has_storage = os.path.exists(abs_storage)
+base_url = env.get('PREVIEW_BASE_URL', '')
+cdp_port = env.get('PREVIEW_CDP_PORT', '9222')
 
-print(f'PREVIEW_BASE_URL : {base_url if base_url else \"미설정\"}')
-print(f'storageState     : {abs_storage}  ({\"존재\" if has_storage else \"없음\"})')
+print(f'PREVIEW_BASE_URL  : {base_url if base_url else \"미설정\"}')
+print(f'PREVIEW_CDP_PORT  : {cdp_port}')
 
-if not has_base:
+if not base_url:
     print()
     print('[캡처 스킵] PREVIEW_BASE_URL 미설정')
     print('  → project.env에 PREVIEW_BASE_URL=http://... 추가 후 재실행하면 캡처 활성화')
-elif has_storage:
-    print()
-    print('[캡처 준비 완료] STEP 6-2에서 자동 캡처 실행')
 else:
     print()
-    print('[bootstrap 필요] storageState 없음 → STEP 6-2 전에 bootstrap 실행 필요')
-    print('NEED_BOOTSTRAP=true')
+    print('[캡처 준비] Chrome을 CDP 포트로 실행하고 로그인한 상태여야 합니다.')
+    print('  Windows : start chrome --remote-debugging-port=' + cdp_port)
+    print('  macOS   : open -a \"Google Chrome\" --args --remote-debugging-port=' + cdp_port)
+    print('  Linux   : google-chrome --remote-debugging-port=' + cdp_port)
+    print('  → 로그인 완료 후 STEP 6-2 진행')
 "
 ```
 
-**위 출력에 `NEED_BOOTSTRAP=true`가 있으면 즉시 아래를 실행한다:**
-
-```bash
-# PLUGIN_PATH를 project.env에서 읽어 bootstrap 실행
-!python3 -c "
-import os, subprocess, sys
-env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
-           if '=' in l and not l.startswith('#'))
-plugin = env.get('PLUGIN_PATH', '')
-script = os.path.join(plugin, 'scripts', 'runtime_capture.js') if plugin else ''
-if not script or not os.path.exists(script):
-    print('runtime_capture.js를 찾을 수 없습니다. PLUGIN_PATH를 확인하세요.')
-    sys.exit(1)
-print(f'bootstrap 실행: node {script} --bootstrap .')
-" && node "$(python3 -c "import os; env=dict(l.strip().split('=',1) for l in open('project.env') if '=' in l and not l.startswith('#')); print(os.path.join(env.get('PLUGIN_PATH',''), 'scripts', 'runtime_capture.js'))")" --bootstrap "."
-```
-
-> **사용자 액션 필요 (1회):**  
-> 위 명령이 실행되면 Chrome 창이 자동으로 열립니다.  
-> 1. 열린 Chrome에서 로그인 (2FA·SSO·CAPTCHA 포함)  
-> 2. 메인 화면 확인 후 **이 터미널에서 Enter**  
-> → `.preview-storage.json` 저장 완료 → STEP 6-2 자동 캡처로 진행
-
-bootstrap 완료 후 storageState 재확인:
-
-```bash
-!python3 -c "
-import os
-env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
-           if '=' in l and not l.startswith('#'))
-storage = env.get('PREVIEW_STORAGE_STATE', '.preview-storage.json')
-abs_storage = storage if os.path.isabs(storage) else os.path.join(os.getcwd(), storage)
-if os.path.exists(abs_storage):
-    print(f'[OK] storageState 확인: {abs_storage}')
-    print('[캡처 준비 완료] STEP 6-2 진행')
-else:
-    print('[WARN] storageState 생성 안 됨 — bootstrap이 완료됐는지 확인')
-"
-```
+> **사용자 액션 필요 (1회 설정):**  
+> 1. Chrome을 `--remote-debugging-port=9222` 옵션으로 실행  
+> 2. `PREVIEW_BASE_URL`에 접속하여 로그인 (2FA·SSO 포함)  
+> 3. 로그인 완료 상태 유지 → STEP 6-2에서 `capture.js`가 attach하여 캡처 진행  
+> → Chrome 세션이 살아있는 한 재로그인 불필요
 
 ---
 
@@ -160,27 +126,71 @@ else:
 "
 ```
 
-### STEP 6-2: [A] 런타임 캡처 (storageState 있을 때만)
+### STEP 6-2: [A] 런타임 캡처 (PREVIEW_BASE_URL + Chrome CDP 열려있을 때만)
 
-storageState가 있으면 `runtime_capture.js --inspect`를 실행한다.  
-**없으면 이 단계를 스킵하고 STEP 6-3으로 바로 이동한다.**
-
-preview.png + 탭별 위젯 JSON을 **한 번의 실행**으로 모든 화면에 생성한다.
+`capture.js`를 사용하여 각 화면을 개별 캡처한다.  
+**PREVIEW_BASE_URL 미설정 또는 Chrome CDP 포트 닫혀있으면 이 단계를 스킵하고 STEP 6-3으로 이동한다.**
 
 ```bash
-# Linux/macOS:
-!node "$PLUGIN_PATH/scripts/runtime_capture.js" --inspect "$(pwd)" 2>&1 | tail -50
+!python3 -c "
+import os, subprocess, json, glob, sys
+env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
+           if '=' in l and not l.startswith('#'))
+plugin   = env.get('PLUGIN_PATH', '')
+base_url = env.get('PREVIEW_BASE_URL', '')
+cdp_port = env.get('PREVIEW_CDP_PORT', '9222')
+ws       = os.getcwd()
+
+if not base_url:
+    print('[캡처 스킵] PREVIEW_BASE_URL 미설정')
+    sys.exit(0)
+
+script = os.path.join(plugin, 'scripts', 'capture.js') if plugin else ''
+if not (script and os.path.exists(script)):
+    print('[ERROR] capture.js 없음 — PLUGIN_PATH 확인')
+    sys.exit(1)
+
+screens = json.load(open('_tmp/screen_inventory.json', encoding='utf-8'))
+ok_count = skip_count = fail_count = 0
+for s in screens:
+    uid       = f'UIS-F-{s[\"uisId\"]:03d}' if isinstance(s.get('uisId'), int) else (s.get('uisId') or 'UIS-F-001')
+    screen_id = s.get('screenId') or uid.lower().replace('-','_')
+    ui_dir    = os.path.join('docs', '05_설계서', s['domain'], 'UI', screen_id)
+    os.makedirs(ui_dir, exist_ok=True)
+
+    # 이미 캡처된 화면 스킵 (재개 지원)
+    if glob.glob(os.path.join(ui_dir, 'preview_tab*_*.png')) or \
+       os.path.exists(os.path.join(ui_dir, 'preview.png')):
+        print(f'{uid}: 캡처 이미 존재 — 스킵')
+        skip_count += 1
+        continue
+
+    route_key = s['route'].split('/')[-1].split('?')[0] or screen_id
+    r = subprocess.run(
+        ['node', script,
+         f'--out={ui_dir}',
+         f'--frame-url={route_key}',
+         '--tabs=auto', '--auto-annotate',
+         f'--port={cdp_port}',
+         f'--workspace={ws}'],
+        capture_output=True, text=True, encoding='utf-8', errors='ignore')
+    if r.returncode == 0:
+        print(f'{uid}: 캡처 완료')
+        ok_count += 1
+    else:
+        print(f'{uid}: [WARN] {(r.stderr or \"\")[:200]}')
+        fail_count += 1
+
+print(f'\\n캡처 완료: {ok_count}개 성공 / {skip_count}개 스킵 / {fail_count}개 실패')
+"
 ```
 
-```powershell
-# Windows:
-!node "$env:PLUGIN_PATH\scripts\runtime_capture.js" --inspect "$pwd" 2>&1 | Select-Object -Last 50
-```
-
-> `--inspect`가 각 화면 디렉토리(`docs/05_설계서/{domain}/UI/{화면ID}/`)에 생성하는 파일:
-> - `preview.png` — 전체 화면 스크린샷
-> - `preview_tab{N}_{탭명}.png` + `preview_tab{N}_{탭명}_widgets.json` — 탭별 위젯 목록
+> `capture.js --auto-annotate`가 각 화면 디렉토리(`docs/05_설계서/{domain}/UI/{화면ID}/`)에 생성하는 파일:
+> - `preview_tab{N}_{탭명}.png` + `preview_tab{N}_{탭명}_annotated.png` — 탭별 스크린샷 + 어노테이션
+> - `preview_tab{N}_{탭명}_widgets.json` — 탭별 위젯 목록
 > - `network_requests.json` — XHR/fetch 인터셉트 기록
+>
+> `--auto-annotate` 플래그가 어노테이션까지 처리하므로 별도 `annotate_preview.py` 호출 불필요.
 
 ### STEP 6-3: [B] generate_uis_spec.py — 시각 spec.md 초안
 
@@ -211,6 +221,10 @@ for s in screens:
         bool(glob.glob(os.path.join(ui_dir, 'preview_tab*_widgets.json')))
     )
     if not has_widgets:
+        continue
+    # spec.md 이미 생성된 화면 스킵 (재개 지원 — 재생성하려면 spec.md 삭제 후 재실행)
+    if os.path.exists(os.path.join(ui_dir, 'spec.md')):
+        print(f'{uid}: spec.md 이미 존재 — 스킵')
         continue
     script = os.path.join(plugin, 'scripts', 'generate_uis_spec.py') if plugin else ''
     if not (script and os.path.exists(script)):
@@ -383,36 +397,29 @@ else:
 "
 ```
 
-**1순위 — 런타임 캡처 (PREVIEW_BASE_URL 설정 시, Playwright):**
+**1순위 — capture.js attach 캡처 (PREVIEW_BASE_URL 설정 + Chrome CDP 포트 열려있을 때):**
 
-storageState가 없으면 **사용자에게 bootstrap 실행을 안내**한다 (캡처 자동 진행하지 않음):
-
-```
-storageState 없음 — 다음 명령을 사용자에게 안내하고 사용자가 1회 수동 로그인을 마치면 재실행:
-
-  node "%USERPROFILE%\.claude\plugins\speclinker\scripts\runtime_capture.js" --bootstrap "%CD%"
-
-(Chrome 창이 열림 → 로그인 + 2FA/SSO 처리 → 메인 화면 확인 → 터미널에서 Enter)
-```
-
-storageState 존재 시 캡처 실행:
+STEP 6-2에서 아직 캡처되지 않은 화면 대상. Chrome을 CDP 포트로 실행하고 로그인한 상태에서 호출:
 
 ```bash
-!node "$HOME/.claude/plugins/speclinker/scripts/runtime_capture.js" "$(pwd)" 2>&1 | tail -30
+# Chrome을 CDP 모드로 실행 (1회 — 로그인 상태 유지):
+#   Windows: Start-Process chrome -ArgumentList '--remote-debugging-port=9222'
+#   macOS  : open -a "Google Chrome" --args --remote-debugging-port=9222
+
+# 화면별 attach 캡처:
+!node "%PLUGIN_PATH%\scripts\capture.js" --out=docs/05_설계서/{domain}/UI/{화면ID} ^
+       --frame-url={routeKeyword} --tabs=auto --auto-annotate
+
+# spec.md 생성 (widgets.json → §4/§5/§8 자동):
+!python3 "%PLUGIN_PATH%\scripts\generate_uis_spec.py" ^
+       docs/05_설계서/{domain}/UI/{화면ID} ^
+       --uis-id=UIS-F-{NNN} --screen-id={화면ID} --screen-name={화면명} ^
+       --route={route} --domain={domain}
 ```
 
-Windows:
+> `--auto-annotate`: DOM 위젯 자동 발견 + 번호 마커 오버레이 + widgets.json (DOM 메타 11종 + api_hints + condition_hints) 생성.
 
-```bash
-!node "%USERPROFILE%\.claude\plugins\speclinker\scripts\runtime_capture.js" "%CD%" 2>&1 | tail -30
-```
-
-> 실행 결과:
-> - 성공: PNG는 즉시 `docs/05_설계서/{domain}/UI/{화면ID}/preview.png` 에 저장
-> - 만료 감지 (로그인 페이지 리다이렉트 3건 이상): 캡처 자동 중단 + bootstrap 재실행 안내
-> - 기타 실패 (HTTP 4xx/5xx, 타임아웃 등): `_tmp/runtime_capture_report.json`에 기록
-
-**2순위 — 사용자 수동 PNG (PREVIEW_BASE_URL 미설정 또는 런타임 실패 시):**
+**2순위 — 사용자 수동 PNG (PREVIEW_BASE_URL 미설정 또는 캡처 실패 시):**
 
 사용자가 직접 화면 캡처를 다음 경로에 떨궈놓으면 자동 사용된다:
 
@@ -423,23 +430,6 @@ docs/05_설계서/{domain}/UI/{화면ID}/preview.png
 **3순위 — 미리보기 생략:**
 
 PNG 없음 상태로 진행. spec.md의 `![[preview.png]]` 라인은 그대로 두면 Obsidian이 누락 표시.
-
-**5순위 — 다탭 SI 어드민 attach 캡처 (선택, Phase 6.2·6.4)**
-
-복잡한 jwork·다탭 화면(예: 상품등록 8탭)은 자동 1순위로 못 잡힐 수 있다. 이 경우 사용자가 Chrome `--remote-debugging-port=9222` 로 로그인까지 마친 상태에서 `scripts/capture.js`를 attach 모드로 호출한다. 메뉴 자동 진입 + 트리거 버튼 클릭 + 다탭 순회 + auto-annotate + widgets.json(DOM 메타 11종 + api_hints + condition_hints) dump를 일괄 처리한다. 이어서 `scripts/generate_uis_spec.py`가 widgets.json + INF 디렉토리를 cross-link 해서 §4 풀자동 / §5 INF 매핑 / §8 조건 신호까지 spec.md 본문을 자동 작성한다.
-
-```bash
-# 1) Chrome 디버깅 모드로 띄우고 로그인까지 사용자가 직접
-#    Start-Process chrome -ArgumentList '--remote-debugging-port=9222','--user-data-dir=C:/tmp/chrome-attach'
-# 2) 화면별 attach 캡처 (사용자 명시 호출)
-!node "%PLUGIN_PATH%\scripts\capture.js" --out=docs/05_설계서/{domain}/UI/{화면ID} ^
-       --frame-url={routeKeyword} --tabs=auto --auto-annotate
-# 3) spec.md 자동 생성 (widgets.json → §4/§5/§8 자동) + INF gaps.json 출력
-!python3 "%PLUGIN_PATH%\scripts\generate_uis_spec.py" ^
-       docs/05_설계서/{domain}/UI/{화면ID} ^
-       --uis-id=UIS-F-{NNN} --screen-id={화면ID} --screen-name={화면명} ^
-       --route={route} --domain={domain}
-```
 
 **4) INF 역주입 루프** — gaps.json에 `[매칭 INF 없음]` 항목이 있으면 자동 실행:
 
@@ -523,15 +513,22 @@ import os, json
 env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
            if '=' in l and not l.startswith('#'))
 fallback = env.get('PREVIEW_FALLBACK_BO','false').lower() == 'true'
-report_path = '_tmp/runtime_capture_report.json'
-if fallback and os.path.exists(report_path):
-    r = json.load(open(report_path, encoding='utf-8'))
-    missing = [x for x in r['results'] if x['status'] != 'ok']
-    print(f'BO admin 폴백 대상: {len(missing)}건')
-elif fallback:
-    print('runtime_capture 미실행 + PREVIEW_FALLBACK_BO=true → BO admin 폴백 단독 실행')
-else:
+if not fallback:
     print('BO admin 폴백 비활성화')
+else:
+    import glob
+    screens = json.load(open('_tmp/screen_inventory.json', encoding='utf-8')) if os.path.exists('_tmp/screen_inventory.json') else []
+    missing = []
+    for s in screens:
+        uid = f'UIS-F-{s[\"uisId\"]:03d}' if isinstance(s.get('uisId'), int) else (s.get('uisId') or 'UIS-F-001')
+        screen_id = s.get('screenId') or uid.lower().replace('-','_')
+        ui_dir = os.path.join('docs', '05_설계서', s['domain'], 'UI', screen_id)
+        has_capture = glob.glob(os.path.join(ui_dir, 'preview_tab*_*.png')) or os.path.exists(os.path.join(ui_dir, 'preview.png'))
+        if not has_capture:
+            missing.append(uid)
+    print(f'BO admin 폴백 대상: {len(missing)}건 (캡처 없는 화면)')
+    for m in missing[:10]:
+        print(f'  {m}')
 "
 ```
 

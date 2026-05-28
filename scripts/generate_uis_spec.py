@@ -69,32 +69,40 @@ def match_inf(api_hints, inf_idx, form_method=None):
 
 def find_tab_assets(ui_dir):
     """디렉토리에서 preview_tab*_*.png + 그에 매칭되는 widgets.json 찾기.
+    원본(preview_tab1_foo.png)이 삭제된 경우 annotated(_annotated.png)로 fallback.
     Returns: [{'name': str, 'png': path, 'widgets_json': path|None, 'order': int}]
     """
     pat = re.compile(r'^preview_tab(\d+)_(.+)\.png$')
-    tabs = []
+    by_order = {}  # order -> dict (originals take priority)
     for f in sorted(os.listdir(ui_dir)):
         m = pat.match(f)
         if not m:
             continue
         order = int(m.group(1))
-        name = m.group(2).replace('_annotated', '')
-        if name.endswith('_annotated'):
-            continue
-        if '_annotated' in f:
-            continue
-        png = os.path.join(ui_dir, f)
-        widgets_json = png.replace('.png', '_widgets.json')
-        annotated = png.replace('.png', '_annotated.png')
-        tabs.append({
-            'order': order,
-            'name': name,
-            'png': f,
-            'annotated_png': os.path.basename(annotated) if os.path.exists(annotated) else None,
-            'widgets_json': widgets_json if os.path.exists(widgets_json) else None,
-        })
-    tabs.sort(key=lambda t: t['order'])
-    return tabs
+        raw_name = m.group(2)
+        is_annotated = raw_name.endswith('_annotated') or '_annotated' in f
+        name = raw_name[:-len('_annotated')] if raw_name.endswith('_annotated') else raw_name
+
+        if not is_annotated:
+            # Original: always use, overrides any earlier annotated-only fallback
+            png = os.path.join(ui_dir, f)
+            widgets_json = png.replace('.png', '_widgets.json')
+            annotated = png.replace('.png', '_annotated.png')
+            by_order[order] = {
+                'order': order, 'name': name, 'png': f,
+                'annotated_png': os.path.basename(annotated) if os.path.exists(annotated) else None,
+                'widgets_json': widgets_json if os.path.exists(widgets_json) else None,
+            }
+        elif order not in by_order:
+            # Annotated-only fallback (original was deleted by annotate_preview.py)
+            widgets_json = os.path.join(ui_dir, f'preview_tab{order}_{name}_widgets.json')
+            by_order[order] = {
+                'order': order, 'name': name, 'png': f,
+                'annotated_png': f,
+                'widgets_json': widgets_json if os.path.exists(widgets_json) else None,
+            }
+
+    return sorted(by_order.values(), key=lambda t: t['order'])
 
 
 def load_widgets(path):
@@ -325,7 +333,7 @@ def build_spec(ui_dir, uis_id, screen_id, screen_name, route, domain, workspace_
     inf_idx = load_inf_index(workspace_root, domain)
     gaps = []  # INF 미매칭 api_hints 수집
 
-    # 탭 없음 + widgets.json 존재 → runtime_capture --inspect 비탭 화면
+    # 탭 없음 + widgets.json 존재 → capture.js 단탭 화면 또는 수동 widgets.json
     # find_tab_assets가 못 잡는 경우를 보완
     if not tabs:
         fallback_json = os.path.join(ui_dir, 'widgets.json')
@@ -466,7 +474,8 @@ revision_history:
     for tw in tabs_with_widgets:
         widgets = tw['widgets']
         nums = [w.get('number') for w in widgets if w.get('number')]
-        num_range = f'WG-{min(nums)}~{max(nums)}' if nums else '위젯 없음'
+        int_nums = sorted(int(n) for n in nums if str(n).isdigit())
+        num_range = (f'WG-{int_nums[0]}~{int_nums[-1]}' if int_nums else f'WG-{min(nums)}~{max(nums)}') if nums else '위젯 없음'
         parts.append(f'### §4.{tw["order"]} {tw["name"]} 탭 ({len(widgets)}개, {num_range})')
         parts.append('')
         if tw.get('annotated_png'):

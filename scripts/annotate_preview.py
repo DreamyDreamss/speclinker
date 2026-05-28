@@ -12,8 +12,10 @@ annotate_preview.py — preview.png + preview_widgets.json → preview_annotated
   python3 annotate_preview.py --batch <도메인디렉토리>
     예: python3 annotate_preview.py --batch docs/05_설계서/order/UI
 
+  --keep-originals  어노테이션 완료 후 원본 PNG를 삭제하지 않음 (기본: 삭제)
+
 입력:
-  <화면디렉토리>/preview.png         — 실제 화면 캡처 (runtime_capture가 생성)
+  <화면디렉토리>/preview.png         — 실제 화면 캡처 (capture.js가 생성)
   <화면디렉토리>/preview_widgets.json — widget bbox 정보
     [
       {"id": "WG-01", "number": "[1]", "bbox": [x1, y1, x2, y2], "label": "검색바"},
@@ -47,19 +49,21 @@ def _check_pillow():
 
 
 def annotate(screen_dir: str, dry_run: bool = False,
-             png_path: str = None, widgets_path: str = None, out_path: str = None) -> dict:
+             png_path: str = None, widgets_path: str = None, out_path: str = None,
+             keep_originals: bool = False) -> dict:
     """
     화면 디렉토리에서 preview.png + preview_widgets.json 을 읽어
     preview_annotated.png 를 생성한다.
 
     png_path/widgets_path/out_path 를 명시하면 해당 경로를 직접 사용한다.
+    keep_originals=False(기본): 어노테이션 완료 후 원본 PNG 삭제.
     Returns: {ok, annotated_path, marker_count, message}
     """
     if png_path is None:
         png_path = os.path.join(screen_dir, 'preview.png')
     if widgets_path is None:
         widgets_path = os.path.join(screen_dir, 'preview_widgets.json')
-        # widgets.json fallback (runtime_capture --inspect 가 생성하는 파일명)
+        # widgets.json fallback (capture.js --auto-annotate 구버전이 생성하는 파일명)
         if not os.path.exists(widgets_path):
             fallback = os.path.join(screen_dir, 'widgets.json')
             if os.path.exists(fallback):
@@ -130,10 +134,17 @@ def annotate(screen_dir: str, dry_run: bool = False,
     out = Image.alpha_composite(img, overlay).convert('RGB')
     out.save(out_path, 'PNG', optimize=True)
 
+    # 원본 삭제 (어노테이션 완료 후 불필요한 원본 PNG 제거)
+    if not keep_originals and os.path.abspath(png_path) != os.path.abspath(out_path):
+        try:
+            os.remove(png_path)
+        except OSError:
+            pass
+
     return {'ok': True, 'annotated_path': out_path, 'marker_count': rendered, 'message': ''}
 
 
-def batch(domain_ui_dir: str, dry_run: bool = False) -> dict:
+def batch(domain_ui_dir: str, dry_run: bool = False, keep_originals: bool = False) -> dict:
     """도메인 UI 디렉토리 하위 모든 화면에 annotate 적용"""
     if not os.path.isdir(domain_ui_dir):
         return {'ok': False, 'message': f'디렉토리 없음: {domain_ui_dir}'}
@@ -142,7 +153,7 @@ def batch(domain_ui_dir: str, dry_run: bool = False) -> dict:
         sd = os.path.join(domain_ui_dir, d)
         if not os.path.isdir(sd):
             continue
-        r = annotate(sd, dry_run=dry_run)
+        r = annotate(sd, dry_run=dry_run, keep_originals=keep_originals)
         r['screen'] = d
         results.append(r)
     return {'ok': True, 'results': results}
@@ -156,10 +167,12 @@ def main():
     p.add_argument('--png', default=None, help='PNG 파일 경로 (기본: <path>/preview.png)')
     p.add_argument('--widgets', default=None, help='widgets JSON 경로 (기본: <path>/preview_widgets.json)')
     p.add_argument('--out', default=None, help='출력 PNG 경로 (기본: <path>/preview_annotated.png)')
+    p.add_argument('--keep-originals', action='store_true',
+                   help='어노테이션 완료 후 원본 PNG를 삭제하지 않음 (기본: 삭제)')
     args = p.parse_args()
 
     if args.batch:
-        r = batch(args.path, dry_run=args.dry_run)
+        r = batch(args.path, dry_run=args.dry_run, keep_originals=args.keep_originals)
         if not r.get('ok'):
             print(f'[ERROR] {r["message"]}')
             sys.exit(1)
@@ -170,7 +183,8 @@ def main():
         print(f'\n총 {len(r["results"])}개 화면 중 {ok}개 어노테이션 생성')
     else:
         r = annotate(args.path, dry_run=args.dry_run,
-                     png_path=args.png, widgets_path=args.widgets, out_path=args.out)
+                     png_path=args.png, widgets_path=args.widgets, out_path=args.out,
+                     keep_originals=args.keep_originals)
         if r.get('ok'):
             print(f'OK — {r["annotated_path"]}  (markers: {r["marker_count"]})')
         else:
