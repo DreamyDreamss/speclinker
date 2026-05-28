@@ -126,10 +126,75 @@ else:
 "
 ```
 
+### ✋ STEP 6-1.5: 도메인 선택 체크포인트 (필수)
+
+screen_inventory.json 생성 후 **어떤 도메인을 이번 실행에서 처리할지 사용자에게 확인**한다.  
+전체 화면을 한 번에 생성하면 시간·비용 부담이 크므로 도메인 단위로 나눠 진행할 수 있다.
+
+```bash
+!python3 -c "
+import json, os
+
+inv = json.load(open('_tmp/screen_inventory.json', encoding='utf-8'))
+from collections import Counter
+domain_counts = Counter(s.get('domain', 'unknown') for s in inv)
+
+print('도메인별 화면 수:')
+for i, (d, cnt) in enumerate(sorted(domain_counts.items()), 1):
+    done = len([s for s in inv if s.get('domain') == d
+                and os.path.exists(f'docs/05_설계서/{d}/UI/uis_f_{str(s.get(\"uisId\",0)).zfill(3)}/spec.md')])
+    print(f'  {i:2}. {d:20} {cnt:3}개 화면 (완료: {done})')
+print()
+print('전체:', sum(domain_counts.values()), '개 화면')
+print()
+print('[선택 방법]')
+print('  전체 처리: \"all\" 또는 \"계속\"')
+print('  특정 도메인: 도메인명 입력 (예: \"product\" 또는 \"product,order\")')
+"
+```
+
+사용자 응답을 받아 처리 대상 도메인을 확정한다:
+
+- 사용자가 **"all" / "계속" / "전체"** → 전체 도메인 처리
+- 사용자가 **도메인명** 입력 → 해당 도메인만 필터링하여 처리
+
+선택 결과를 `_tmp/uis_domain_selection.json`에 저장하고, 이후 STEP 6-2~6-4에서 이 파일을 읽어 해당 도메인 화면만 처리한다:
+
+```bash
+!python3 -c "
+import json, os
+
+# 사용자 응답값을 여기서 반영한다
+# selected_domains = [] 이면 전체, ['product'] 이면 해당 도메인만
+selected_domains = []  # ← 사용자 응답에 따라 채운다
+
+inv = json.load(open('_tmp/screen_inventory.json', encoding='utf-8'))
+if selected_domains:
+    filtered = [s for s in inv if s.get('domain') in selected_domains]
+    print(f'선택: {selected_domains} → {len(filtered)}개 화면 처리 예정 (전체 {len(inv)}개 중)')
+else:
+    filtered = inv
+    print(f'전체 선택 → {len(filtered)}개 화면 처리 예정')
+
+os.makedirs('_tmp', exist_ok=True)
+json.dump({'selected_domains': selected_domains or None, 'screens': filtered},
+          open('_tmp/uis_domain_selection.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
+print('_tmp/uis_domain_selection.json 저장 완료')
+"
+```
+
+> **재실행 시**: 이전에 저장된 `uis_domain_selection.json`이 있으면 도메인 선택을 재사용할지 묻는다.  
+> **확인 전 STEP 6-2 절대 진행 금지.**
+
+---
+
 ### STEP 6-2: [A] 런타임 캡처 (PREVIEW_BASE_URL + Chrome CDP 열려있을 때만)
 
-`capture.js`를 사용하여 각 화면을 개별 캡처한다.  
+`capture.js`를 사용하여 **선택된 도메인의 화면만** 개별 캡처한다.  
 **PREVIEW_BASE_URL 미설정 또는 Chrome CDP 포트 닫혀있으면 이 단계를 스킵하고 STEP 6-3으로 이동한다.**
+
+> STEP 6-1.5에서 `_tmp/uis_domain_selection.json`을 생성했으면 아래 캡처 루프에서  
+> `screen_inventory.json` 대신 `uis_domain_selection.json`의 `screens` 배열을 사용한다.
 
 ```bash
 !python3 -c "
@@ -150,7 +215,12 @@ if not (script and os.path.exists(script)):
     print('[ERROR] capture.js 없음 — PLUGIN_PATH 확인')
     sys.exit(1)
 
-screens = json.load(open('_tmp/screen_inventory.json', encoding='utf-8'))
+# domain selection 우선, fallback to full inventory
+sel_path = '_tmp/uis_domain_selection.json'
+if os.path.exists(sel_path):
+    screens = json.load(open(sel_path, encoding='utf-8')).get('screens', [])
+else:
+    screens = json.load(open('_tmp/screen_inventory.json', encoding='utf-8'))
 ok_count = skip_count = fail_count = 0
 for s in screens:
     uid       = f'UIS-F-{s[\"uisId\"]:03d}' if isinstance(s.get('uisId'), int) else (s.get('uisId') or 'UIS-F-001')
@@ -210,7 +280,9 @@ env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
 plugin = env.get('PLUGIN_PATH','')
 ws = os.getcwd()
 import json
-screens = json.load(open('_tmp/screen_inventory.json', encoding='utf-8'))
+sel_path = '_tmp/uis_domain_selection.json'
+screens = json.load(open(sel_path, encoding='utf-8')).get('screens', []) if os.path.exists(sel_path) \
+          else json.load(open('_tmp/screen_inventory.json', encoding='utf-8'))
 for s in screens:
     uid = f'UIS-F-{s[\"uisId\"]:03d}' if isinstance(s.get('uisId'), int) else (s.get('uisId') or 'UIS-F-001')
     screen_id = s.get('screenId') or uid.lower().replace('-','_')
@@ -250,10 +322,11 @@ for s in screens:
 **캡처 여부와 무관하게 모든 화면에 실행한다.**  
 spec.md가 이미 있으면(STEP 6-3에서 생성) §5만 패치한다. 없으면 전체 생성한다.
 
-`_tmp/screen_inventory.json`을 읽어 배치 처리한다.
+`_tmp/uis_domain_selection.json`(존재 시) 또는 `_tmp/screen_inventory.json`을 읽어 배치 처리한다.  
+**선택된 도메인의 화면만 처리한다.**
 
 ```
-_tmp/screen_inventory.json의 각 항목에 대해 Agent 도구 호출 (배치 3개씩 동시):
+선택된 화면 목록의 각 항목에 대해 Agent 도구 호출 (배치 3개씩 동시):
   subagent_type: "speclinker:ddd-ui-agent"
   description: "{route} §5 소스 분석"
   prompt: |
