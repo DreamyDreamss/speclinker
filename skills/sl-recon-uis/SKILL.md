@@ -239,120 +239,125 @@ for s in inv:
 "
 ```
 
-### STEP 6-2-2: Claude 주도 탐색 + 캡처 루프
+### STEP 6-2-2: BFS 탐색 + 캡처 → uis_capture_map.json 누적
 
-**Claude가 직접 ai_nav.js를 반복 호출하며 탐색 결정을 내린다.**
-스크립트는 DOM 조작 / 스크린샷 / 마커 생성만 수행하고, 어디로 갈지 판단은 Claude가 한다.
+**Phase 1 목표**: 브라우저 세션을 유지하며 모든 leaf 화면을 캡처하고
+`_tmp/uis_capture_map.json`에 누적 저장한다.
+UIS spec 생성은 이 단계에서 절대 하지 않는다 — Phase 2(STEP 6-3)에서 수행.
 
-> ⚠️ **goto로 직접 URL 접근 금지 (1단계)** — enterprise 앱은 메뉴 context 없이 직접 URL 접근 시
-> 빈 화면 / 리다이렉트가 발생한다. **반드시 메뉴 클릭 BFS로 탐색**하고,
-> 메뉴로 찾지 못한 화면만 2단계에서 goto를 시도한다.
-
-**상태 관리 (Claude가 메모리에서 추적):**
-- `visited_routes` — 방문 완료한 route 집합
-- `clicked_navs` — 클릭 완료한 nav-link 텍스트 집합
-- `captured` — 캡처+마커 완료한 screenId 집합
-- `new_screens` — 정적 분석에 없는 신규 발견 화면 목록 `[{route, title, url}]`
+> ⚠️ **goto 금지 (1단계)** — 메뉴 클릭으로만 탐색. 메뉴로 못 찾은 화면만 2단계에서 goto.
 
 ---
 
-**[1단계] 메뉴 BFS 탐색 — goto 없이 클릭만 사용**
+**Claude 상태 변수 (메모리 추적):**
 
-루프 시작 — 현재 페이지 스냅샷 획득:
+| 변수 | 타입 | 역할 |
+|------|------|------|
+| `capture_map` | list | 캡처 결과 누적 → 매 캡처 후 `_tmp/uis_capture_map.json`에 저장 |
+| `visited_routes` | set | 이미 캡처한 `activeRoute` (중복 방지) |
+| `clicked_labels` | set | 이미 클릭한 nav-link 텍스트 |
+| `current_path` | list | BFS 현재 경로 — 클릭 depth 기반 갱신 |
 
+**재개 지원**: `_tmp/uis_capture_map.json`이 존재하면 로드해 `visited_routes`에 기존 `activeRoute` 추가.
+
+---
+
+**BFS 루프 알고리즘:**
+
+루프마다 snapshot 실행:
 ```
 !node {AI_NAV} --port={CDP_PORT} --workspace={CWD} snapshot
 ```
 
-**매 iteration 판단 순서:**
+**매 iteration 판단:**
 
-1. 반환된 JSON의 **`activeRoute`** 값으로 `screen_inventory.json`과 비교:
-   - `isIframeApp: true` 이면 `contentRoute`가 실제 화면 route이므로 `activeRoute`를 사용
-   - `isIframeApp: false` 이면 `route`(메인 URL)를 사용
-   - **매핑 O + 미캡처** → 즉시 캡처 (스크린샷 + 마커 자동 생성):
-     ```
-     !node {AI_NAV} --port={CDP_PORT} --workspace={CWD} capture {screenId}
-     ```
-   - **매핑 X** → `new_screens`에 `{route: activeRoute, title, url: contentUrl or url}` 기록
-   - `activeRoute`를 `visited_routes`에 추가
+**① navigables 필터 — `frame: 'main'` 항목만 BFS 대상**
+(content frame 내부 탭/버튼은 절대 클릭하지 않는다)
 
-2. `navigables` 중 **클릭하지 않은 nav-link** 선택:
-   - `hasChildren: true` 항목 우선 (서브메뉴 존재 가능) → 클릭 후 snapshot 재확인
-   - `type: "nav-link"` 중 `clicked_navs`에 없는 항목
-   - **반드시 클릭으로 이동** — goto 절대 사용하지 않음:
-     ```
-     !node {AI_NAV} --port={CDP_PORT} --workspace={CWD} click "메뉴명"
-     ```
-   - 클릭 텍스트를 `clicked_navs`에 추가
-
-3. 새 snapshot 반환 → 1번으로 반복
-
-**1단계 종료 조건:**
-- `navigables`에 미클릭 `nav-link`가 없음
-- 또는 연속 3회 `click` 후 route / DOM 변화 없음
-
----
-
-**[2단계] 미캡처 화면 직접 goto 보완**
-
-1단계 BFS가 끝난 후, `screen_inventory.json`에서 아직 `captured`에 없는 화면에 한해
-정적 분석의 route로 직접 접근을 시도한다.
+**② 다음 클릭 대상 선택 (우선순위):**
 
 ```
-# 미캡처 screenId 목록 확인 후 순서대로:
-!node {AI_NAV} --port={CDP_PORT} --workspace={CWD} goto "{route}"
-# → 정상 화면이면 capture, 빈 화면 / 리다이렉트면 스킵 (와이어프레임으로 처리)
-!node {AI_NAV} --port={CDP_PORT} --workspace={CWD} capture {screenId}
+우선순위 1: visible=false AND depth=0 AND frame=main AND label ∉ clicked_labels
+  → L1 GNB 카테고리 미탐색 → 클릭 (사이드바 전환)
+  → current_path = [label]
+
+우선순위 2: visible=true AND hasChildren=true AND frame=main AND label ∉ clicked_labels
+  → 중간 노드 (expand 필요) → 클릭
+  → current_path = current_path[0:depth] + [label]
+
+우선순위 3: visible=true AND hasChildren=false AND frame=main AND label ∉ clicked_labels
+  → LEAF 화면 → 클릭 후 캡처 실행 (아래 캡처 절차 참조)
+  → current_path 갱신 후 menuPath = current_path[0:depth] + [label]
 ```
 
-**2단계 종료 조건:** 미캡처 화면 모두 시도 완료
+> `depth`는 해당 nav-link 항목의 `depth` 필드 값.
+> 우선순위 1→2→3 순으로 선택 — 모두 없으면 루프 종료.
 
-### STEP 6-2-3: 캡처 결과 반영
+**③ LEAF 클릭 후 캡처 절차:**
 
-캡처된 화면의 `captureDir`를 screen_inventory에 업데이트하고,
-신규 발견 화면을 inventory에 추가한다. **(UIS spec 생성 전 반드시 완료)**
+```
+!node {AI_NAV} --port={CDP_PORT} --workspace={CWD} click "{leaf_label}"
+```
 
-```bash
-!python -c "
-import json, os
+클릭 결과의 `activeRoute` 확인:
+- `activeRoute`가 `visited_routes`에 있으면 → 스킵 (이미 캡처됨)
+- 없으면 → 캡처 실행:
 
-try:
-    import sys
-    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
-except AttributeError:
-    pass
+```
+!node {AI_NAV} --port={CDP_PORT} --workspace={CWD} capture "{screenId}"
+```
 
-inv      = json.load(open('_tmp/screen_inventory.json', encoding='utf-8'))
-cap_root = os.path.join('_tmp', 'captures')
+screenId 생성 규칙: `activeRoute`의 마지막 세그먼트 (예: `/app/order/pay/or416mForm` → `or416mForm`)
 
-updated = 0
-for s in inv:
-    sid = s.get('screenId', '')
-    if not sid: continue
-    cap_dir = os.path.join(cap_root, sid)
-    if os.path.isdir(cap_dir) and any(f.endswith('.png') for f in os.listdir(cap_dir)):
-        s['captureDir'] = cap_dir.replace(chr(92), '/')
-        updated += 1
+캡처 결과를 `capture_map`에 append:
+```json
+{
+  "menuPath": ["L1", "L2", ..., "leaf_label"],
+  "screenLabel": "leaf_label",
+  "activeRoute": "캡처결과.activeRoute",
+  "captureDir":  "캡처결과.captureDir",
+  "captureFile": "캡처결과.captureFile",
+  "widgetCount": 캡처결과.widgetCount
+}
+```
 
-json.dump(inv, open('_tmp/screen_inventory.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
-print('captureDir 업데이트: ' + str(updated) + '개')
-captured_list = [s for s in inv if s.get('captureDir')]
-not_captured  = [s for s in inv if not s.get('captureDir')]
-for s in captured_list:
-    print('  [캡처O] ' + s.get('screenId','').ljust(30) + ' ' + s.get('route',''))
-if not_captured:
-    print('캡처 미완 (와이어프레임으로 처리): ' + str(len(not_captured)) + '개')
-    for s in not_captured:
-        print('  [와이어프레임] ' + s.get('screenId','').ljust(30) + ' ' + s.get('route',''))
+즉시 파일 저장 (매 캡처 후):
+```
+!node -e "
+const fs = require('fs');
+const map = <capture_map_JSON>;
+fs.writeFileSync('_tmp/uis_capture_map.json', JSON.stringify(map, null, 2));
+process.stdout.write('uis_capture_map 저장: ' + map.length + '개\n');
 "
 ```
 
-탐색 중 발견한 `new_screens`(정적 분석에 없던 화면)가 있으면 아래 스크립트에서
-`new_screens` 리스트를 직접 채워 실행한다:
+`visited_routes`에 `activeRoute` 추가, `clicked_labels`에 `leaf_label` 추가.
+
+---
+
+**1단계 종료 조건:**
+- frame=main 의 depth=0 항목 전부 `clicked_labels`에 있음
+- AND visible 항목 중 미클릭 nav-link 없음
+- OR 연속 5회 click 후 `activeRoute` / navigables 변화 없음
+
+---
+
+**[2단계] 미캡처 화면 goto 보완**
+
+1단계 완료 후, `screen_inventory.json`의 route 중 `visited_routes`에 없는 항목에 한해 직접 접근:
+
+```
+!node {AI_NAV} --port={CDP_PORT} --workspace={CWD} goto "{route}"
+```
+→ `activeRoute`가 예상 route와 일치하면 capture, 빈 화면/리다이렉트면 스킵.
+
+### STEP 6-2-3: uis_capture_map ↔ screen_inventory 매칭
+
+BFS 완료 후, 두 데이터를 결합해 `uis_capture_map.json`을 최종화한다.
 
 ```bash
 !python -c "
-import json, os
+import json, os, re
 
 try:
     import sys
@@ -360,57 +365,45 @@ try:
 except AttributeError:
     pass
 
-# Claude가 탐색 루프에서 수집한 신규 화면 목록을 아래에 채운다
-new_screens = []  # 예: [{'route': '/order/popup', 'title': '주문 팝업', 'url': 'http://...'}]
+cap_map = json.load(open('_tmp/uis_capture_map.json', encoding='utf-8')) if os.path.exists('_tmp/uis_capture_map.json') else []
+inv     = json.load(open('_tmp/screen_inventory.json', encoding='utf-8'))
 
-if not new_screens:
-    print('신규 화면 없음'); import sys; sys.exit(0)
+# route 정규화 (끝 / 제거, 대소문자 통일)
+def norm(r): return (r or '').rstrip('/').lower()
 
-inv  = json.load(open('_tmp/screen_inventory.json', encoding='utf-8'))
-plan = json.load(open('docs/05_설계서/_domain_plan.json', encoding='utf-8'))
+inv_by_route = {norm(s.get('route','')): s for s in inv}
 
-uis_max = {d['name']: d['uis']['start'] for d in plan['domains']}
-for s in inv:
-    dom = s.get('domain','')
-    if dom and s.get('uisId'):
-        uis_max[dom] = max(uis_max.get(dom, 0), s['uisId'] + 1)
+matched = 0
+for entry in cap_map:
+    ar = norm(entry.get('activeRoute',''))
+    inv_item = inv_by_route.get(ar)
+    if inv_item:
+        entry['inventoryMatch'] = {
+            'screenId':   inv_item.get('screenId',''),
+            'uisId':      inv_item.get('uisId', 0),
+            'entryFile':  inv_item.get('entryFile',''),
+            'domain':     inv_item.get('domain',''),
+            'route':      inv_item.get('route',''),
+        }
+        matched += 1
+    else:
+        # BFS에서 발견했지만 정적분석 미포함 화면
+        entry.setdefault('inventoryMatch', None)
 
-def assign_domain(route):
-    seg = [s for s in route.lstrip('/').split('/') if s]
-    if seg:
-        for d in plan['domains']:
-            if d['name'].lower() in seg[0].lower() or seg[0].lower() in d['name'].lower():
-                return d['name']
-    return plan['domains'][0]['name']
+json.dump(cap_map, open('_tmp/uis_capture_map.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
 
-existing_routes = {s.get('route','') for s in inv}
-cap_root = os.path.join('_tmp', 'captures')
-added = 0
-for ns in new_screens:
-    route = ns.get('route', '')
-    if not route or route in existing_routes: continue
-    domain = assign_domain(route)
-    uis_id = uis_max.get(domain, 0)
-    uis_max[domain] = uis_id + 1
-    sid = route.replace('/', '_').strip('_') or ('ai_screen_' + str(added + 1))
-    cap_dir = os.path.join(cap_root, sid)
-    inv.append({
-        'route':          route,
-        'domain':         domain,
-        'entryFile':      '',
-        'componentFiles': [],
-        'uisId':          uis_id,
-        'screenId':       sid,
-        'screenName':     ns.get('title', sid),
-        'captureDir':     cap_dir.replace(chr(92), '/') if os.path.isdir(cap_dir) else '',
-        'infDir':         '../../INF/',
-        'source':         'bfs:ai',
-    })
-    existing_routes.add(route)
-    added += 1
+# 정적분석엔 있지만 BFS에서 못 찾은 화면 → goto 재시도 목록
+captured_routes = {norm(e.get('activeRoute','')) for e in cap_map}
+goto_fallback = [s for s in inv if norm(s.get('route','')) not in captured_routes]
+if goto_fallback:
+    json.dump(goto_fallback, open('_tmp/uis_goto_fallback.json','w',encoding='utf-8'), ensure_ascii=False, indent=2)
 
-json.dump(inv, open('_tmp/screen_inventory.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
-print(str(added) + '개 신규 화면 추가 (source: bfs:ai) -> 총 ' + str(len(inv)) + '개')
+print('BFS 캡처: ' + str(len(cap_map)) + '개  매칭: ' + str(matched) + '개')
+print('goto 재시도 대상: ' + str(len(goto_fallback)) + '개' + (' -> _tmp/uis_goto_fallback.json' if goto_fallback else ''))
+for e in cap_map:
+    m = e.get('inventoryMatch')
+    tag = '[매칭O ' + (m['screenId'] if m else '') + ']' if m else '[매칭X — BFS신규]'
+    print('  ' + tag.ljust(30) + ' ' + e.get('activeRoute',''))
 "
 ```
 
@@ -418,10 +411,8 @@ print(str(added) + '개 신규 화면 추가 (source: bfs:ai) -> 총 ' + str(len
 
 ## STEP 6-3: UIS 스펙 생성 (ddd-ui-agent 배치)
 
-**STEP 6-2(캡처) 완료 후 실행.**
-captureDir가 있는 화면은 실제 스크린샷+마커를 spec에 포함하고,
-없는 화면은 소스 기반 와이어프레임으로 생성한다.
-spec.md가 이미 있으면 캡처 유무 관계없이 재생성(덮어쓰기)한다.
+**Phase 2 — 브라우저 불필요. `_tmp/uis_capture_map.json` 기준으로 실행.**
+캡처가 있는 화면은 실제 스크린샷+위젯 기반으로, 없는 화면은 소스 기반 와이어프레임으로 생성한다.
 
 ```bash
 !python -c "
@@ -433,50 +424,79 @@ try:
 except AttributeError:
     pass
 
-inv = json.load(open('_tmp/screen_inventory.json', encoding='utf-8'))
-ws  = os.getcwd()
+cap_map = json.load(open('_tmp/uis_capture_map.json', encoding='utf-8')) if os.path.exists('_tmp/uis_capture_map.json') else []
+inv     = json.load(open('_tmp/screen_inventory.json', encoding='utf-8'))
 
+# uis_capture_map 항목 — 캡처 있음
 pending = []
-for s in inv:
-    sid    = s.get('screenId') or os.path.splitext(os.path.basename(s.get('entryFile','')))[0]
-    domain = s.get('domain','')
-    spec   = 'docs/05_설계서/' + domain + '/UI/' + sid + '/spec.md'
-    cap    = s.get('captureDir','')
-    merged = dict(s)
-    merged['_specExists'] = os.path.exists(spec)
-    merged['_specPath']   = spec
-    merged['_screenId']   = sid
-    merged['_hasCapture'] = bool(cap and os.path.isdir(cap))
-    pending.append(merged)
+for e in cap_map:
+    m = e.get('inventoryMatch') or {}
+    pending.append({
+        'source':      'bfs',
+        'menuPath':    e.get('menuPath', []),
+        'screenLabel': e.get('screenLabel', ''),
+        'activeRoute': e.get('activeRoute', ''),
+        'captureDir':  e.get('captureDir', ''),
+        'captureFile': e.get('captureFile', ''),
+        'widgetCount': e.get('widgetCount', 0),
+        'screenId':    m.get('screenId', '') or e.get('screenLabel','').replace(' ','_'),
+        'uisId':       m.get('uisId', 0),
+        'domain':      m.get('domain', ''),
+        'entryFile':   m.get('entryFile', ''),
+        'route':       m.get('route', '') or e.get('activeRoute',''),
+        '_hasCapture': True,
+    })
 
-cap_cnt  = len([p for p in pending if p['_hasCapture']])
-wire_cnt = len([p for p in pending if not p['_hasCapture']])
-print('전체 ' + str(len(pending)) + '개 (캡처포함: ' + str(cap_cnt) + '개 / 와이어프레임: ' + str(wire_cnt) + '개)')
+# screen_inventory 항목 — BFS 미발견 (와이어프레임)
+captured_routes = {e.get('activeRoute','').rstrip('/').lower() for e in cap_map}
+for s in inv:
+    if s.get('route','').rstrip('/').lower() in captured_routes:
+        continue
+    sid = s.get('screenId') or os.path.splitext(os.path.basename(s.get('entryFile','')))[0]
+    pending.append({
+        'source':      'inventory',
+        'menuPath':    [],
+        'screenLabel': s.get('screenName', sid),
+        'activeRoute': s.get('route',''),
+        'captureDir':  '',
+        'captureFile': '',
+        'widgetCount': 0,
+        'screenId':    sid,
+        'uisId':       s.get('uisId', 0),
+        'domain':      s.get('domain', ''),
+        'entryFile':   s.get('entryFile', ''),
+        'route':       s.get('route', ''),
+        '_hasCapture': False,
+    })
+
+cap_cnt  = sum(1 for p in pending if p['_hasCapture'])
+wire_cnt = sum(1 for p in pending if not p['_hasCapture'])
+print('전체 ' + str(len(pending)) + '개  캡처: ' + str(cap_cnt) + '  와이어프레임: ' + str(wire_cnt))
 print()
 for i, p in enumerate(pending, 1):
-    mode = '[캡처]  ' if p['_hasCapture'] else '[와이어]'
-    print('  ' + str(i).rjust(3) + '. ' + mode + ' ' + p['_screenId'].ljust(30) + ' ' + p['route'])
+    tag = '[캡처]  ' if p['_hasCapture'] else '[와이어]'
+    path_str = ' > '.join(p['menuPath']) if p['menuPath'] else p['route']
+    print(str(i).rjust(3) + '. ' + tag + ' ' + p['screenId'].ljust(30) + ' ' + path_str)
 "
 ```
 
-`_tmp/screen_inventory.json`의 각 항목을 3개씩 묶어 `ddd-ui-agent`를 병렬 호출한다.
-**captureDir를 반드시 포함해 에이전트가 실제 캡처 이미지를 spec에 반영할 수 있게 한다:**
+위 목록을 **도메인별로 3개씩 묶어** `ddd-ui-agent`를 병렬 호출한다:
 
 ```
-각 배치(3개씩) -> Agent 도구 호출:
+각 배치(도메인 동일 3개씩) → Agent 도구 호출:
   subagent_type: "speclinker:ddd-ui-agent"
   description: "{domain} UIS 생성 ({screenId1}, {screenId2}, {screenId3})"
   prompt: |
-    처리 대상 (여러 화면):
+    처리 대상:
 
     [화면 1]
-    라우트: {route}
+    메뉴경로: {menuPath.join(' > ')}
+    라우트: {activeRoute}
     진입 파일: {entryFile}
-    참조 컴포넌트: {componentFiles JSON}
     도메인: {domain}
     UIS-F ID: UIS-F-{uisId:03d}
     INF 디렉토리: docs/05_설계서/{domain}/INF/
-    캡처 디렉토리: {captureDir if _hasCapture else "없음 (소스 기반 와이어프레임)"}
+    캡처 디렉토리: {captureDir or "없음 (소스 기반 와이어프레임)"}
     MODE: RECON
     워크스페이스: {현재 작업 디렉토리 절대경로}
 
@@ -484,13 +504,13 @@ for i, p in enumerate(pending, 1):
     [화면 3] ...
 
     캡처 디렉토리가 있는 화면:
-    - {captureDir}/capture.png  : 원본 스크린샷
-    - {captureDir}/annotated.png : 마커가 표시된 스크린샷 (있으면 우선 사용)
-    - {captureDir}/widgets.json : 감지된 UI 위젯 목록 (버튼/인풋/테이블 등)
-    spec.md의 미리보기 섹션에 annotated.png 경로를 상대경로로 삽입하고
-    widgets.json 기반으로 UI 컴포넌트 목록을 작성할 것.
+    - {captureDir}/preview.png  : 원본 스크린샷 (1920x900px)
+    - {captureDir}/preview_annotated.png : 마커 스크린샷 (있으면 우선 사용)
+    - {captureDir}/preview_widgets.json : 감지된 위젯 목록
+    spec.md 미리보기에 이미지 경로(상대경로)를 삽입하고
+    widgets.json 기반으로 UI 컴포넌트 목록 작성.
 
-각 배치 완료 후 다음 배치 시작 (3개씩 순차).
+각 배치 완료 후 다음 배치 시작.
 ```
 
 > 모든 배치 완료 전 STEP 6-4 진행 금지.

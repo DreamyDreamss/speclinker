@@ -61,45 +61,29 @@ function parseProjectEnv() {
 function escRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 
 // ── content frame 탐색 ────────────────────────────────────────────────────────
-// iframe 기반 앱(메인 shell + 콘텐츠 iframe 구조)에서 실제 화면이 로드된 iframe 반환.
-// 메인 프레임은 절대 반환하지 않는다.
+// 내부 탭 시스템 앱: 메뉴 클릭마다 새 frame이 추가되므로
+// "가장 최근 navigated된 실제 URL을 가진 non-blank frame"을 반환한다.
 async function findContentFrame(page) {
-  const iframes = await page.locator('iframe').all();
-  if (iframes.length === 0) return null;
+  const mainUrl = page.mainFrame().url();
+  const allFrames = page.frames();
 
-  const mainUrl  = page.mainFrame().url();
-  const vpW      = await page.evaluate(() => window.innerWidth  || 1200).catch(() => 1200);
-  const vpH      = await page.evaluate(() => window.innerHeight || 900).catch(() => 900);
+  // 실제 .do/.jsp/경로 URL을 가진 non-main frame만 수집
+  const candidates = allFrames.filter(f => {
+    if (f === page.mainFrame()) return false;
+    const u = f.url();
+    if (!u || u === 'about:blank' || u.startsWith('data:')) return false;
+    return true;
+  });
 
-  let best = null, bestScore = 0;
-  for (const ifEl of iframes) {
-    const box = await ifEl.boundingBox().catch(() => null);
-    if (!box) continue;
-    const area = box.width * box.height;
+  if (candidates.length === 0) return null;
 
-    // 너무 작은 iframe (광고/숨김) 제외
-    if (box.width < 200 || box.height < 100) continue;
-
-    const src = (await ifEl.getAttribute('src').catch(() => '')) || '';
-    const key = src.split('/').pop().split('?')[0];
-    const frame = page.frames().find(f =>
-      f !== page.mainFrame() && (key ? f.url().includes(key) : true)
-    ) || null;
-    if (!frame) continue;
-
-    // 콘텐츠 영역 점수: 크고, 오른쪽/중앙에 있고, URL이 실제 라우트인 것 우선
-    const isCenterOrRight = box.left > vpW * 0.20;
-    const hasRealUrl = frame.url() && frame.url() !== mainUrl && !frame.url().endsWith('blank');
-    const score = area
-      + (isCenterOrRight ? vpW * vpH * 0.3 : 0)
-      + (hasRealUrl ? vpW * vpH * 0.5 : 0);
-
-    if (score > bestScore) { bestScore = score; best = frame; }
-  }
-  return best;
+  // 가장 마지막(최근) 추가된 frame 반환 (내부탭 시스템에서 최신 화면)
+  return candidates[candidates.length - 1];
 }
 
 // ── 탐색 가능 요소 추출 (모든 frame 검색) ────────────────────────────────────
+// href="#" / JavaScript onclick 전용 메뉴도 수집한다.
+// 메뉴 클릭 결과(URL 변화)는 snapshot의 activeRoute로 감지한다.
 async function extractNavigables(page) {
   const allFrames = page.frames();
   let navigables  = [];
@@ -110,63 +94,115 @@ async function extractNavigables(page) {
       : (frame.url().split('/').pop().split('?')[0] || 'iframe');
 
     const items = await frame.evaluate(() => {
-      // nav 컨테이너 찾기 (heuristic: ARIA 우선 → 위치/링크밀도)
-      function findNav() {
-        for (const s of ['[role="navigation"]', '[role="menubar"]', '[role="tree"]', 'nav']) {
-          const el = document.querySelector(s);
-          if (el && el.querySelectorAll('a[href]').length >= 3) return el;
-        }
-        const vpW = window.innerWidth  || 1200;
+      const items = [];
+
+      // ── 1. 전형적인 nav 컨테이너 후보 수집 ──────────────────────────────
+      // href="#" 전용 JS 메뉴도 포함하기 위해 a[href] 대신 a 전체를 센다.
+      function findNavContainers() {
+        const candidates = [];
+        const vpW = window.innerWidth  || 1280;
         const vpH = window.innerHeight || 900;
-        let best = null, bestScore = 0;
-        for (const el of document.querySelectorAll('div,nav,aside,ul,section')) {
-          const links = el.querySelectorAll('a[href]');
+
+        // ARIA 우선
+        for (const s of ['[role="navigation"]', '[role="menubar"]', '[role="tree"]', 'nav']) {
+          for (const el of document.querySelectorAll(s)) {
+            if (el.querySelectorAll('a').length >= 3) candidates.push({ el, score: 10000 });
+          }
+        }
+        if (candidates.length) return candidates;
+
+        // id/class 키워드 기반 (사이드메뉴, GNB 공통 패턴)
+        const NAV_KW = /menu|nav|sidebar|gnb|lnb|leftmenu|sidemenu/i;
+        for (const el of document.querySelectorAll('div,ul,nav,aside')) {
+          const id  = el.id || '';
+          const cls = (el.className && typeof el.className === 'string') ? el.className : '';
+          if (!NAV_KW.test(id + ' ' + cls)) continue;
+          const links = el.querySelectorAll('a');
           if (links.length < 3) continue;
-          const r = el.getBoundingClientRect();
-          if (r.width < 40 || r.height < 60) continue;
-          if (r.top  > vpH * 0.75) continue;
-          if (r.left > vpW * 0.70) continue;
+          // 화면 밖(collapsed 사이드바)도 포함 — 실제 DOM 존재 여부만 확인
           let dominated = false;
           for (const c of el.children) {
-            if (c.querySelectorAll('a[href]').length >= links.length * 0.8) {
-              dominated = true; break;
-            }
+            if (c.querySelectorAll('a').length >= links.length * 0.85) { dominated = true; break; }
           }
           if (dominated) continue;
-          const isLeft = r.right < vpW * 0.38;
-          const score  = links.length * 3
-                       + (isLeft ? 60 : 0)
-                       + el.querySelectorAll('ul,ol').length * 5;
-          if (score > bestScore) { bestScore = score; best = el; }
+          const r = el.getBoundingClientRect();
+          const onScreen = r.width > 0 && r.height > 0;
+          const score = links.length * 3 + (onScreen ? 100 : 0);
+          candidates.push({ el, score });
         }
-        return best;
+
+        // 위치 + 링크밀도 fallback (화면에 보이는 것만)
+        if (!candidates.length) {
+          for (const el of document.querySelectorAll('div,ul,nav,aside,section')) {
+            const links = el.querySelectorAll('a');
+            if (links.length < 3) continue;
+            const r = el.getBoundingClientRect();
+            if (r.width < 40 || r.height < 40) continue;
+            if (r.top > vpH * 0.85 || r.left > vpW * 0.75) continue;
+            let dominated = false;
+            for (const c of el.children) {
+              if (c.querySelectorAll('a').length >= links.length * 0.85) { dominated = true; break; }
+            }
+            if (dominated) continue;
+            const isLeft = r.right < vpW * 0.40;
+            const score = links.length * 3 + (isLeft ? 80 : 0);
+            candidates.push({ el, score });
+          }
+        }
+
+        return candidates.sort((a, b) => b.score - a.score).slice(0, 3);
       }
 
-      const items = [];
-      const nav = findNav();
+      const navContainers = findNavContainers();
 
-      // nav 링크
-      if (nav) {
-        for (const a of nav.querySelectorAll('a[href]')) {
+      // ── 2. 각 nav 컨테이너에서 링크 수집 ────────────────────────────────
+      const seenInThisFrame = new Set();
+      for (const { el: nav } of navContainers) {
+        for (const a of nav.querySelectorAll('a')) {
           const label = (a.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 60);
           const href  = a.getAttribute('href') || '';
+
           if (!label) continue;
-          if (/^(#|javascript:|mailto:|tel:)/i.test(href)) continue;
           if (/logout|signout|log-out/i.test(href + label)) continue;
+          // href가 완전한 외부 URL이면 제외 (mailto, tel)
+          if (/^(mailto:|tel:)/i.test(href)) continue;
+
+          const key = label + '|' + href;
+          if (seenInThisFrame.has(key)) continue;
+          seenInThisFrame.add(key);
+
+          // 가시성: 실제로 보이는 요소인지 (collapsed 메뉴 내 항목은 hidden일 수 있음)
+          const r = a.getBoundingClientRect();
+          const visible = r.width > 0 && r.height > 0 && r.top >= -10;
 
           // depth (li 중첩 수)
           let depth = 0, p = a.closest('li');
           while (p) { p = p.parentElement && p.parentElement.closest('li'); if (p) depth++; }
 
+          // hasChildren: 형제 또는 자식에 서브메뉴가 있는지
           const li = a.closest('li');
-          const hasChildren = li ? li.querySelectorAll('ul li, ol li').length > 0 : false;
+          const hasChildren = li
+            ? (li.querySelectorAll('ul li, ol li').length > 0 || li.classList.toString().includes('has-child'))
+            : false;
 
-          items.push({ type: 'nav-link', label, href, depth, hasChildren });
+          // href가 "#"이면 JS onclick 메뉴 (clickOnly)
+          const isHashOnly = href === '#' || href === '' || href.endsWith('#');
+          // 실제 .do / 경로가 있는 링크
+          const hasRealUrl = !isHashOnly && !/^javascript/i.test(href);
+
+          items.push({
+            type:      'nav-link',
+            label,
+            href:      hasRealUrl ? href : null,
+            depth,
+            hasChildren,
+            visible,   // false = collapsed 영역 (클릭 전 불가)
+            clickOnly: isHashOnly, // JS onclick 전용 메뉴
+          });
         }
       }
 
-      // 탭
-      let tabFound = false;
+      // ── 3. 탭 수집 ───────────────────────────────────────────────────────
       for (const sel of [
         '[role="tab"]', '.tab-item > a', '.tab-menu li > a',
         '.nav-tabs li > a', '[data-toggle="tab"]', '[data-bs-toggle="tab"]',
@@ -175,9 +211,8 @@ async function extractNavigables(page) {
         if (tabs.length < 2) continue;
         tabs.forEach((t, i) => {
           const label = (t.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 40);
-          if (label) items.push({ type: 'tab', label, tabIdx: i, selector: sel });
+          if (label) items.push({ type: 'tab', label, tabIdx: i, selector: sel, visible: true });
         });
-        tabFound = true;
         break;
       }
 
@@ -188,7 +223,7 @@ async function extractNavigables(page) {
     navigables = navigables.concat(items);
   }
 
-  // 중복 제거 (label + href 기준)
+  // 전역 중복 제거
   const seen = new Set();
   navigables = navigables.filter(n => {
     const key = n.label + '|' + (n.href || n.selector || '');
@@ -242,39 +277,74 @@ async function doClick(page, textOrSelector) {
   }
 
   const isSel = /^[#.[]/.test(textOrSelector);
-  const allFrames = page.frames();
   let clicked = false;
 
-  for (const frame of allFrames) {
-    try {
-      if (isSel) {
+  // CSS selector 직접 지정
+  if (isSel) {
+    for (const frame of page.frames()) {
+      try {
         const cnt = await frame.locator(textOrSelector).count();
         if (cnt > 0) {
           await frame.locator(textOrSelector).first().click({ force: true, timeout: 5000 });
           clicked = true;
           break;
         }
-      } else {
-        // 정확 일치 먼저
-        const exact = frame.locator('a, button, [role="menuitem"], [role="tab"], li > span, li > a')
-          .filter({ hasText: new RegExp('^\\s*' + escRe(textOrSelector) + '\\s*$') })
-          .first();
-        if (await exact.count() > 0) {
-          await exact.click({ force: true, timeout: 5000 });
-          clicked = true;
-          break;
-        }
-        // 포함 일치 fallback
-        const contains = frame.locator('a, [role="menuitem"]')
-          .filter({ hasText: textOrSelector })
-          .first();
-        if (await contains.count() > 0) {
-          await contains.click({ force: true, timeout: 5000 });
-          clicked = true;
-          break;
-        }
+      } catch (_) {}
+    }
+  } else {
+    // 텍스트 기반 클릭: 뷰포트 안에 실제로 보이는 요소 우선
+    const textRe = new RegExp('^\\s*' + escRe(textOrSelector) + '\\s*$');
+
+    // 1순위: 뷰포트 안의 visible 요소 (정확 일치)
+    const visibleEl = await page.evaluate((text) => {
+      const re = new RegExp('^\\s*' + text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*$');
+      const vw = window.innerWidth, vh = window.innerHeight;
+      const candidates = Array.from(document.querySelectorAll('a, button, [role="menuitem"]'))
+        .filter(el => {
+          if (!re.test(el.textContent.trim())) return false;
+          const r = el.getBoundingClientRect();
+          return r.width > 0 && r.height > 0 && r.left >= 0 && r.left < vw && r.top >= 0 && r.top < vh * 1.5;
+        });
+      if (!candidates.length) return null;
+      const el = candidates[0];
+      const r = el.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    }, textOrSelector).catch(() => null);
+
+    if (visibleEl) {
+      await page.mouse.click(visibleEl.x, visibleEl.y);
+      clicked = true;
+    }
+
+    // 2순위: 전체 frame에서 force click
+    if (!clicked) {
+      for (const frame of page.frames()) {
+        try {
+          const exact = frame.locator('a, button, [role="menuitem"], li > a')
+            .filter({ hasText: textRe }).first();
+          if (await exact.count() > 0) {
+            await exact.click({ force: true, timeout: 5000 });
+            clicked = true;
+            break;
+          }
+        } catch (_) {}
       }
-    } catch (_) {}
+    }
+
+    // 3순위: 포함 일치
+    if (!clicked) {
+      for (const frame of page.frames()) {
+        try {
+          const contains = frame.locator('a, button, [role="menuitem"]')
+            .filter({ hasText: textOrSelector }).first();
+          if (await contains.count() > 0) {
+            await contains.click({ force: true, timeout: 5000 });
+            clicked = true;
+            break;
+          }
+        } catch (_) {}
+      }
+    }
   }
 
   if (!clicked) {
@@ -316,27 +386,21 @@ async function doCapture(page, screenId, cdpSession) {
   const outDir = path.join(OUT_DIR, 'captures', sid);
   fs.mkdirSync(outDir, { recursive: true });
 
-  // content frame 찾기 (iframe 앱 대응)
-  const cf = await findContentFrame(page);
-
-  // 전체 스크롤 높이
-  const scrollH = await (cf || page).evaluate(() =>
-    Math.max(document.body.scrollHeight, window.innerHeight)
-  ).catch(() => 900);
-
+  // 이전 setDeviceMetricsOverride 잔류 제거: 항상 정상 뷰포트로 리셋 후 캡처
+  // (이전 캡처에서 높이를 수천px로 올려놓으면 iframe이 css height:100vh로 함께 늘어남)
   if (cdpSession) {
     await cdpSession.send('Emulation.setDeviceMetricsOverride',
-      { width: 1920, height: scrollH + 200, deviceScaleFactor: 1, mobile: false }
+      { width: 1920, height: 900, deviceScaleFactor: 1, mobile: false }
     ).catch(() => {});
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(400);
   }
 
+  const cf     = await findContentFrame(page);
   const outPng = path.join(outDir, 'preview.png');
-
-  // 스크린샷: iframe 앱이면 콘텐츠 iframe 영역만 캡처
   let imgBuf;
+
   if (cf) {
-    // 콘텐츠 iframe의 element handle로 해당 영역만 캡처
+    // iframe 앱: iframe 엘리먼트 영역만 스크린샷 (자동 clip — body.scrollHeight 오염 없음)
     try {
       const iframeEl = await page.locator('iframe').all().then(async (els) => {
         for (const el of els) {
@@ -349,13 +413,49 @@ async function doCapture(page, screenId, cdpSession) {
         imgBuf = await iframeEl.screenshot({ timeout: 8000 }).catch(() => null);
       }
     } catch (_) {}
+
+    // iframe 캡처 실패 시 현재 뷰포트 CDP 스크린샷 (fullPage 금지)
+    if (!imgBuf && cdpSession) {
+      const r = await cdpSession.send('Page.captureScreenshot', { format: 'png' }).catch(() => null);
+      imgBuf = r ? Buffer.from(r.data, 'base64') : null;
+    }
+  } else {
+    // 일반 페이지: body.scrollHeight 대신 documentElement.scrollHeight, 최대 1800px cap
+    // body.scrollHeight는 collapsed 사이드바 DOM을 포함해 수천px로 부풀 수 있음
+    const viewH = await page.evaluate(() =>
+      window.innerHeight || document.documentElement.clientHeight || 900
+    ).catch(() => 900);
+
+    const rawScrollH = await page.evaluate(() =>
+      document.documentElement.scrollHeight
+    ).catch(() => viewH);
+
+    const captureH = Math.min(Math.max(rawScrollH, viewH), 1800);
+
+    if (cdpSession) {
+      await cdpSession.send('Emulation.setDeviceMetricsOverride',
+        { width: 1920, height: captureH, deviceScaleFactor: 1, mobile: false }
+      ).catch(() => {});
+      await page.waitForTimeout(300);
+
+      const r = await cdpSession.send('Page.captureScreenshot', { format: 'png' }).catch(() => null);
+      imgBuf = r ? Buffer.from(r.data, 'base64') : null;
+
+      // CDP 뷰포트 복원
+      await cdpSession.send('Emulation.setDeviceMetricsOverride',
+        { width: 1920, height: viewH, deviceScaleFactor: 1, mobile: false }
+      ).catch(() => {});
+    }
+
+    if (!imgBuf) {
+      imgBuf = await page.screenshot({
+        clip: { x: 0, y: 0, width: 1920, height: captureH },
+      }).catch(() => null);
+    }
   }
-  // fallback: 전체 페이지 캡처
-  if (!imgBuf && cdpSession) {
-    const r = await cdpSession.send('Page.captureScreenshot', { format: 'png' }).catch(() => null);
-    imgBuf = r ? Buffer.from(r.data, 'base64') : null;
-  }
-  if (!imgBuf) imgBuf = await page.screenshot({ fullPage: true }).catch(() => null);
+
+  // 최종 fallback: 뷰포트만 (fullPage 절대 사용 안 함)
+  if (!imgBuf) imgBuf = await page.screenshot().catch(() => null);
   if (imgBuf) fs.writeFileSync(outPng, imgBuf);
 
   // 위젯 감지
@@ -406,16 +506,24 @@ async function doCapture(page, screenId, cdpSession) {
     } catch (_) {}
   }
 
+  // iframe 앱 대응: 실제 화면 route를 activeRoute에 포함
+  const captureContentFrame = await findContentFrame(page);
+  const captureContentUrl   = captureContentFrame ? captureContentFrame.url() : null;
+  const captureContentRoute = captureContentUrl ? normRoute(captureContentUrl) : null;
+
   return {
-    command:     'capture',
-    screenId:    sid,
+    command:      'capture',
+    screenId:     sid,
     url,
     route,
+    activeRoute:  captureContentRoute || route,  // 화면 매핑용 핵심 필드
+    contentRoute: captureContentRoute,
+    isIframeApp:  !!captureContentRoute,
     title,
-    captureFile: path.relative(WORKSPACE, outPng).replace(/\\/g, '/'),
-    captureDir:  path.relative(WORKSPACE, outDir).replace(/\\/g, '/'),
-    widgetCount: widgets.length,
-    success:     !!imgBuf,
+    captureFile:  path.relative(WORKSPACE, outPng).replace(/\\/g, '/'),
+    captureDir:   path.relative(WORKSPACE, outDir).replace(/\\/g, '/'),
+    widgetCount:  widgets.length,
+    success:      !!imgBuf,
   };
 }
 
