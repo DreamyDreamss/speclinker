@@ -375,59 +375,83 @@ plan    = json.load(open('docs/05_설계서/_domain_plan.json', encoding='utf-8'
 
 def norm(r): return (r or '').rstrip('/').lower()
 
-# 정적분석: route → {entryFile, componentFiles} 보조 조회용
-inv_by_route = {norm(s.get('route','')): s for s in inv}
+# 정적분석: route 부분매칭 → entryFile/componentFiles 보조 조회
+# activeRoute(/app/promotion/mk003mForm) vs inventory route(/promotion/mk003mForm) 처럼
+# prefix가 달라도 경로 suffix로 매칭한다
+def find_inv_by_route(ar, inv_index):
+    ar_norm = norm(ar)
+    # 1) 완전일치
+    if ar_norm in inv_index: return inv_index[ar_norm]
+    # 2) suffix 매칭: inventory route가 activeRoute의 끝부분과 일치
+    for route, item in inv_index.items():
+        if ar_norm.endswith(route) or route.endswith(ar_norm.lstrip('/')):
+            return item
+    return None
 
-# GNB 카테고리 → domain plan 매핑
-# menuPath[0] 라벨을 도메인 plan rootPaths 또는 name으로 매핑
-def gnb_to_domain(gnb_label):
-    label_lower = gnb_label.lower().replace(' ','').replace('/','')
+inv_index = {norm(s.get('route','')): s for s in inv}
+
+# 도메인 매핑 우선순위:
+# 1순위: activeRoute가 domain.rootPaths 중 하나로 시작 (가장 정확)
+# 2순위: screen_inventory 매칭된 항목의 domain (suffix 매칭 포함)
+# 3순위: menuPath[0] 라벨로 domain name 문자열 매칭
+def route_to_domain(active_route, inv_item):
+    ar = norm(active_route)
+    # 1순위: rootPaths prefix 매칭
     for d in plan['domains']:
-        name_lower = d['name'].lower().replace(' ','').replace('/','')
-        if label_lower in name_lower or name_lower in label_lower:
-            return d['name']
-    # 매핑 실패 시 첫 번째 도메인 반환
-    return plan['domains'][0]['name'] if plan['domains'] else ''
+        for rp in d.get('rootPaths', []):
+            if ar.startswith(norm(rp)):
+                return d['name']
+    # 2순위: inventory 매칭된 도메인
+    if inv_item and inv_item.get('domain'):
+        return inv_item['domain']
+    # 3순위: menuPath 라벨 substring 매칭
+    return ''
 
 # UIS ID 카운터 (도메인별)
 uis_counter = {d['name']: d['uis']['start'] for d in plan['domains']}
 for e in cap_map:
-    if e.get('uisId'): # 이미 할당됨
+    if e.get('uisId'):
         dom = e.get('domain','')
         if dom and e['uisId'] >= uis_counter.get(dom, 0):
             uis_counter[dom] = e['uisId'] + 1
 
 enriched = 0
+domain_miss = []
 for entry in cap_map:
-    # 도메인: menuPath[0] 기반 (정적분석 덮어쓰기 금지)
-    menu_path = entry.get('menuPath', [])
-    gnb = menu_path[0] if menu_path else ''
-    domain = gnb_to_domain(gnb) if gnb else ''
-    entry['domain'] = domain
-
-    # UIS-F ID 할당 (미할당 항목만)
-    if not entry.get('uisId') and domain:
-        entry['uisId'] = uis_counter.get(domain, 0)
-        uis_counter[domain] = entry['uisId'] + 1
-
-    # screenId: activeRoute 마지막 세그먼트
     ar = entry.get('activeRoute', '')
-    if not entry.get('screenId'):
-        seg = [s for s in ar.rstrip('/').split('/') if s]
-        entry['screenId'] = seg[-1] if seg else entry.get('screenLabel','screen')
 
-    # 보조 조회: entryFile / componentFiles (있으면 추가, 없어도 무방)
-    inv_item = inv_by_route.get(norm(ar))
+    # 보조 조회 (prefix 불일치 대응 suffix 매칭 포함)
+    inv_item = find_inv_by_route(ar, inv_index)
     if inv_item:
         entry.setdefault('entryFile', inv_item.get('entryFile', ''))
         entry.setdefault('componentFiles', inv_item.get('componentFiles', []))
         enriched += 1
 
+    # 도메인: rootPaths 기준 (라벨 매칭보다 정확)
+    domain = route_to_domain(ar, inv_item)
+    entry['domain'] = domain
+
+    if not domain:
+        domain_miss.append(ar)
+
+    # UIS-F ID 할당
+    if not entry.get('uisId') and domain:
+        entry['uisId'] = uis_counter.get(domain, 0)
+        uis_counter[domain] = entry['uisId'] + 1
+
+    # screenId
+    if not entry.get('screenId'):
+        seg = [s for s in ar.rstrip('/').split('/') if s]
+        entry['screenId'] = seg[-1] if seg else entry.get('screenLabel','screen')
+
 json.dump(cap_map, open('_tmp/uis_capture_map.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
 
-# 정적분석엔 있지만 BFS에서 못 찾은 화면 → 메뉴에 없는 화면 (강제 편입 금지)
+# BFS 미발견 화면 (정적분석만 존재) → 메뉴에 없는 화면, 강제 편입 금지
 captured_routes = {norm(e.get('activeRoute','')) for e in cap_map}
-not_in_menu = [s for s in inv if norm(s.get('route','')) not in captured_routes]
+not_in_menu = []
+for s in inv:
+    if find_inv_by_route(s.get('route',''), {norm(e.get('activeRoute','')): e for e in cap_map}) is None:
+        not_in_menu.append(s)
 if not_in_menu:
     json.dump(not_in_menu, open('_tmp/uis_not_in_menu.json','w',encoding='utf-8'), ensure_ascii=False, indent=2)
 
