@@ -40,14 +40,15 @@ function arg(n, d) {
 }
 function flag(n) { return args.includes('--' + n); }
 
-const PORT       = arg('port', '9222');
-const OUT_DIR    = path.resolve(arg('out', '_tmp'));
-const SCOPE_RAW  = arg('scope', '');
-const MAX_DEPTH  = parseInt(arg('max-depth', '6'), 10);
-const DO_CAPTURE = flag('capture');
-const TREE_ONLY  = flag('tree-only');   // 정적 트리 추출만, 클릭/탐색 없음
-const WORKSPACE  = path.resolve(arg('workspace', process.cwd()));
-const FRAME_URL  = arg('frame-url', '');
+const PORT           = arg('port', '9222');
+const OUT_DIR        = path.resolve(arg('out', '_tmp'));
+const SCOPE_RAW      = arg('scope', '');
+const MAX_DEPTH      = parseInt(arg('max-depth', '6'), 10);
+const DO_CAPTURE     = flag('capture');
+const TREE_ONLY      = flag('tree-only');    // 정적 트리 추출만, 클릭/탐색 없음
+const CONFIRMED_FILE = arg('confirmed', ''); // 확정 목록 기반 캡처 모드
+const WORKSPACE      = path.resolve(arg('workspace', process.cwd()));
+const FRAME_URL      = arg('frame-url', '');
 
 fs.mkdirSync(OUT_DIR, { recursive: true });
 
@@ -538,6 +539,121 @@ async function traverseTree(nodes, page, cf, navFrame, navSel, ctx) {
   return results;
 }
 
+// ── preActions 실행 ───────────────────────────────────────────────────────────
+// confirmed.json의 각 화면에 첨부된 preActions를 순서대로 실행
+// action.type: navigate | click | wait | input | scroll
+async function executePreActions(page, cf, actions) {
+  for (const action of (actions || [])) {
+    const frame = cf || page;
+    const wait  = action.wait || 800;
+    try {
+      switch (action.type) {
+        case 'navigate': {
+          const url = action.url || action.href || '';
+          if (!url) break;
+          await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 12000 }).catch(() => {});
+          await page.waitForTimeout(action.wait || 1500);
+          break;
+        }
+        case 'click': {
+          const sel = action.selector || '';
+          if (!sel || sel === 'MANUAL') {
+            console.error(`  [WARN] click selector=${sel || '미지정'} → 스킵`);
+            break;
+          }
+          await frame.locator(sel).first().click({ force: true, timeout: 6000 });
+          await page.waitForTimeout(wait);
+          break;
+        }
+        case 'wait':
+          await page.waitForTimeout(action.ms || wait);
+          break;
+        case 'input': {
+          await frame.locator(action.selector || 'input').first()
+            .fill(action.value || '', { timeout: 4000 });
+          await page.waitForTimeout(action.wait || 300);
+          break;
+        }
+        case 'scroll': {
+          const sel = action.selector || 'body';
+          await frame.evaluate(s => {
+            const el = document.querySelector(s);
+            if (el) el.scrollIntoView({ block: 'center' });
+          }, sel).catch(() => {});
+          await page.waitForTimeout(action.wait || 400);
+          break;
+        }
+        default:
+          console.error(`  [WARN] 알 수 없는 action.type: ${action.type}`);
+      }
+    } catch (e) {
+      console.error(`  [WARN] preAction 실패 (type=${action.type}): ${e.message}`);
+    }
+  }
+}
+
+// ── 확정 목록 기반 캡처 (--confirmed 모드) ────────────────────────────────────
+// confirmed.json: { screens: [...], additions: [...] }
+// 각 항목: { screenId, label, route, path, tabs, include, preActions, notes }
+async function captureConfirmed(page, cf, navFrame, navSel, confirmedData, cdpSession) {
+  const allScreens = [
+    ...(confirmedData.screens   || []).filter(s => s.include !== false),
+    ...(confirmedData.additions || []).filter(s => s.include !== false),
+  ];
+
+  const results = [];
+  for (const screen of allScreens) {
+    console.error(`\n[확정 캡처] ${screen.label}  (${screen.route || '경로 없음'})`);
+
+    if (screen.preActions && screen.preActions.length > 0) {
+      // 사용자 지정 preActions 실행
+      console.error(`  → preActions ${screen.preActions.length}개 실행`);
+      await executePreActions(page, cf, screen.preActions);
+
+    } else if (screen.path && screen.path.length > 0) {
+      // BFS 발견 경로로 메뉴 클릭 재현
+      await navigateByPath(navFrame, navSel, screen.path, page);
+
+    } else if (screen.route) {
+      // route로 직접 이동 (SPA / 직접 URL 접근)
+      const base = page.url().split('/').slice(0, 3).join('/');
+      const dest = screen.route.startsWith('http') ? screen.route : base + screen.route;
+      await page.goto(dest, { waitUntil: 'domcontentloaded', timeout: 10000 }).catch(() => {});
+      await page.waitForTimeout(1200);
+    }
+
+    // 탭 감지 (additions 신규 화면은 탭 미지정일 수 있음)
+    const capFrame = cf || page;
+    const tabs = (screen.tabs && screen.tabs.length > 0)
+      ? screen.tabs
+      : await detectTabs(capFrame);
+
+    const screenNode = {
+      id:            screen.screenId,
+      screenId:      screen.screenId,
+      label:         screen.label,
+      type:          'screen',
+      depth:         (screen.path || []).length,
+      path:          screen.path || [],
+      route:         screen.route || normRoute(capFrame.url()),
+      fullUrl:       screen.fullUrl || capFrame.url(),
+      tabs:          tabs.map((t, i) => ({
+        index: i, label: t.label || `탭${i+1}`, selector: t.selector || '', captureFile: null,
+      })),
+      captureStatus: 'none',
+      domain:        screen.domain || '',
+      notes:         screen.notes  || '',
+    };
+
+    const captured = await captureScreen(page, cf, screenNode, cdpSession);
+    screenNode.captureStatus = captured.length > 0 ? 'done' : 'fail';
+    console.error(`  → ${screenNode.captureStatus} (${captured.length}개 파일)`);
+    results.push(screenNode);
+  }
+
+  return results;
+}
+
 // ── 메인 ─────────────────────────────────────────────────────────────────────
 (async () => {
   console.error(
@@ -621,7 +737,46 @@ async function traverseTree(nodes, page, cf, navFrame, navSel, ctx) {
     process.exit(0);
   }
 
-  // 4. 트리 순회 (클릭 + 선택적 캡처)
+  // 4. CONFIRMED 모드: 확정 목록 기반 캡처 후 기존 screen_hierarchy.json 업데이트
+  if (CONFIRMED_FILE) {
+    const confirmedPath = path.resolve(CONFIRMED_FILE);
+    if (!fs.existsSync(confirmedPath)) {
+      console.error(`[ERROR] confirmed 파일 없음: ${confirmedPath}`);
+      await browser.close();
+      process.exit(1);
+    }
+    const confirmedData = JSON.parse(fs.readFileSync(confirmedPath, 'utf-8'));
+    const capturedResults = await captureConfirmed(page, cf, navFrame, navSel, confirmedData, cdpSession);
+
+    // 기존 screen_hierarchy.json 업데이트 (captureStatus 반영 + additions 추가)
+    const outPath = path.join(OUT_DIR, 'screen_hierarchy.json');
+    const existing = fs.existsSync(outPath)
+      ? JSON.parse(fs.readFileSync(outPath, 'utf-8'))
+      : { version: 2, flat: [] };
+
+    const resultMap = Object.fromEntries(capturedResults.map(r => [r.screenId, r]));
+    existing.flat = existing.flat.map(s =>
+      resultMap[s.screenId] ? { ...s, captureStatus: resultMap[s.screenId].captureStatus } : s
+    );
+    for (const r of capturedResults) {
+      if (!existing.flat.find(s => s.screenId === r.screenId)) {
+        existing.flat.push(r);  // additions (BFS에 없던 화면)
+      }
+    }
+    existing.stats = {
+      screens:   existing.flat.filter(s => s.type === 'screen').length,
+      captured:  existing.flat.filter(s => s.captureStatus === 'done').length,
+    };
+
+    fs.writeFileSync(outPath, JSON.stringify(existing, null, 2));
+    const doneCount = capturedResults.filter(r => r.captureStatus === 'done').length;
+    console.error(`\n[확정 캡처 완료] ${capturedResults.length}개 처리 / ${doneCount}개 성공`);
+    console.error(`  저장: ${outPath}`);
+    await browser.close();
+    process.exit(0);
+  }
+
+  // 5. 트리 순회 (클릭 + 선택적 캡처)
   const seenRoutes = new Set();
   const flat       = [];
 
@@ -629,7 +784,7 @@ async function traverseTree(nodes, page, cf, navFrame, navSel, ctx) {
     pathStack: [], seenRoutes, flat, cdpSession,
   });
 
-  // 5. 결과 저장
+  // 6. 결과 저장
   const screens   = flat.filter(n => n.type === 'screen');
   const captured  = flat.filter(n => n.captureStatus === 'done');
   const noNav     = flat.filter(n => n.type === 'no-navigation');
