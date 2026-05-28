@@ -1,7 +1,7 @@
 {
   "name": "speclinker",
-  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 REQ-ID 체이닝, UA 대시보드 통합. v2.19: Phase 스킬 필수 의존성 누락 시 즉시 실패 처리",
-  "version": "2.20.0",
+  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 REQ-ID 체이닝, UA 대시보드 통합. v2.21: ai_nav.js — Claude 세션 주도 브라우저 탐색",
+  "version": "2.21.0",
   "author": {
     "name": "DreamyDreamss"
   },
