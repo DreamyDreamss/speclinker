@@ -226,220 +226,169 @@ print('━' * 55)
 
 > 사용자가 **"계속"** 하면 STEP 6-3-1로 이동.
 
-### STEP 6-3-1: BFS 메뉴 탐색 (nav 자동 감지)
+### STEP 6-3-1: 탐색 초기화
+
+ai_nav.js 경로와 탐색 파라미터를 확인한다.
 
 ```bash
 !python -c "
-import os, subprocess, sys, json
-
+import json, os, sys
 env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
            if '=' in l and not l.startswith('#'))
+inv      = json.load(open('_tmp/screen_inventory.json', encoding='utf-8'))
 plugin   = env.get('PLUGIN_PATH', '')
 cdp_port = env.get('PREVIEW_CDP_PORT', '9222')
-ws       = os.getcwd()
-
-script = os.path.join(plugin, 'scripts', 'bfs_navigator.js') if plugin else ''
-if not (script and os.path.exists(script)):
-    print('[ERROR] bfs_navigator.js 없음'); sys.exit(1)
-
-os.makedirs('_tmp', exist_ok=True)
-
-# 1단계: 정적 트리 추출 (nav 자동 감지 테스트)
-r = subprocess.run(['node', script, '--port=' + cdp_port, '--tree-only',
-                    '--max-depth=6', '--out=_tmp', '--workspace=' + ws],
-                   capture_output=True, text=True, encoding='utf-8', errors='ignore')
-print(r.stderr[-2000:] if len(r.stderr) > 2000 else r.stderr)
-if r.returncode != 0:
-    print('[ERROR] BFS 트리 추출 실패 — nav 자동 감지가 모든 frame에서 실패했습니다.')
-    print('  Chrome DevTools에서 메뉴 컨테이너 selector를 확인 후 project.env에 추가하세요:')
-    print('  PREVIEW_NAV_SELECTOR=<selector>')
-    sys.exit(1)
-
-hier = json.load(open('_tmp/screen_hierarchy.json', encoding='utf-8'))
-print('트리 추출 완료: L1 ' + str(hier['stats']['l1Count']) + '개 / 노드 ' + str(hier['stats']['totalNodes']) + '개')
+ai_nav   = os.path.join(plugin, 'scripts', 'ai_nav.js') if plugin else ''
+if not (ai_nav and os.path.exists(ai_nav)):
+    print('[ERROR] ai_nav.js 없음 — PLUGIN_PATH 확인'); sys.exit(1)
+print('AI_NAV='   + ai_nav)
+print('CDP_PORT=' + cdp_port)
+print('CWD='      + os.getcwd())
+print()
+print('탐색 대상 화면 (' + str(len(inv)) + '개):')
+for s in inv:
+    print('  ' + (s.get('route') or '미정').ljust(40) + ' ' + s.get('screenId',''))
 "
 ```
 
-nav 자동 감지 실패 시 `project.env`에 `PREVIEW_NAV_SELECTOR=<selector>` 추가 후 재실행:
+### STEP 6-3-2: Claude 주도 탐색 루프
 
-```bash
-!python -c "
-import os, subprocess, sys, json
+**Claude가 직접 ai_nav.js를 반복 호출하며 탐색 결정을 내린다.**
+스크립트는 DOM 조작 / 스크린샷만 수행하고, 어디로 갈지 판단은 Claude가 한다.
 
-env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
-           if '=' in l and not l.startswith('#'))
-plugin   = env.get('PLUGIN_PATH', '')
-cdp_port = env.get('PREVIEW_CDP_PORT', '9222')
-nav_sel  = env.get('PREVIEW_NAV_SELECTOR', '')
-ws       = os.getcwd()
+**상태 관리 (Claude가 메모리에서 추적):**
+- `visited` — 방문 완료한 route 집합
+- `captured` — 캡처 완료한 screenId 집합
+- `new_screens` — 정적 분석에 없는 신규 발견 화면 목록 `[{route, title, url}]`
 
-# 전체 BFS 탐색 (클릭 포함, 캡처 없음)
-script = os.path.join(plugin, 'scripts', 'bfs_navigator.js')
-cmd = ['node', script, '--port=' + cdp_port, '--max-depth=6', '--out=_tmp', '--workspace=' + ws]
-if nav_sel:
-    cmd.append('--nav-selector=' + nav_sel)
+**루프 시작 — 현재 페이지 스냅샷 획득:**
 
-r = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='ignore')
-print(r.stderr[-2000:] if len(r.stderr) > 2000 else r.stderr)
-if r.returncode != 0:
-    sys.exit(1)
-
-hier  = json.load(open('_tmp/screen_hierarchy.json', encoding='utf-8'))
-flat  = [s for s in hier.get('flat', []) if s.get('type') == 'screen']
-inv   = json.load(open('_tmp/screen_inventory.json', encoding='utf-8'))
-known = {s.get('route','') for s in inv}
-new_screens = [s for s in flat if s.get('route','') not in known]
-
-print('BFS 탐색 완료: ' + str(len(flat)) + '개 화면 발견')
-print('소스 분석 기존: ' + str(len(inv)) + '개 / BFS 신규: ' + str(len(new_screens)) + '개')
-"
+```
+!node {AI_NAV} --port={CDP_PORT} --workspace={CWD} snapshot
 ```
 
-### ✋ STEP 6-3-2: BFS 발견 화면 검토 + 피드백 (필수 체크포인트)
+**매 iteration 판단 순서:**
+
+1. 반환된 JSON의 `route` 값을 `screen_inventory.json` 목록과 비교:
+   - **매핑 O + 아직 캡처 안 됨** → 즉시 캡처:
+     ```
+     !node {AI_NAV} --port={CDP_PORT} --workspace={CWD} capture {screenId}
+     ```
+   - **매핑 X** → `new_screens`에 `{route, title, url}` 기록
+   - 현재 route를 `visited`에 추가
+
+2. `navigables` 목록에서 다음 목적지 선택:
+   - `type: "nav-link"` 중 `visited`에 없는 항목 우선
+   - `hasChildren: true` 항목은 클릭 후 서브메뉴가 펼쳐질 수 있음 — 클릭 후 snapshot 재확인
+   - 메뉴명으로 클릭:
+     ```
+     !node {AI_NAV} --port={CDP_PORT} --workspace={CWD} click "메뉴명"
+     ```
+   - 또는 href를 알고 있으면 직접 이동:
+     ```
+     !node {AI_NAV} --port={CDP_PORT} --workspace={CWD} goto "/경로"
+     ```
+
+3. 반환된 JSON이 새 snapshot → 1번으로 반복
+
+**종료 조건:**
+- `navigables`에 미방문 `nav-link`가 없음
+- 또는 연속 3회 `click` 후 route 변화 없음 (더 이상 이동 불가)
+
+### STEP 6-3-3: 탐색 결과 반영
+
+캡처된 화면의 `captureDir`를 screen_inventory에 업데이트하고,
+신규 발견 화면을 `source: 'bfs:ai'`로 추가한다.
 
 ```bash
 !python -c "
 import json, os
 
-hier  = json.load(open('_tmp/screen_hierarchy.json', encoding='utf-8'))
-flat  = [s for s in hier.get('flat', []) if s.get('type') == 'screen']
-inv   = json.load(open('_tmp/screen_inventory.json', encoding='utf-8'))
-known = {s.get('route','') for s in inv}
+inv      = json.load(open('_tmp/screen_inventory.json', encoding='utf-8'))
+cap_root = os.path.join('_tmp', 'captures')
 
-bfs_new = [s for s in flat if s.get('route','') not in known]
-bfs_dup = [s for s in flat if s.get('route','') in known]
+updated = 0
+for s in inv:
+    sid = s.get('screenId', '')
+    if not sid: continue
+    cap_dir = os.path.join(cap_root, sid)
+    if os.path.isdir(cap_dir) and any(f.endswith('.png') for f in os.listdir(cap_dir)):
+        s['captureDir'] = cap_dir.replace(chr(92), '/')
+        updated += 1
 
-print('소스 분석에 없는 신규 화면 (' + str(len(bfs_new)) + '개):')
-for i, s in enumerate(bfs_new, 1):
-    print('  ' + str(i).rjust(3) + '. ' + s['label'].ljust(30) + ' ' + s['route'])
-print('소스 분석 기존 화면 (BFS 재발견): ' + str(len(bfs_dup)) + '개')
-print()
-print('[피드백]')
-print('  이상없음  : \"계속\" (전체 캡처)')
-print('  일부 제외 : 제외 2,5')
-print('  버튼진입  : 진입 3 / 목록 첫번째 행 클릭')
-print('  추가      : 추가 / 팝업명 / /경로 / 진입방법')
+json.dump(inv, open('_tmp/screen_inventory.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
+print('captureDir 업데이트: ' + str(updated) + '개')
+captured_list = [s for s in inv if s.get('captureDir')]
+not_captured  = [s for s in inv if not s.get('captureDir')]
+for s in captured_list:
+    print('  [캡처O] ' + s['screenId'].ljust(30) + ' ' + s.get('route',''))
+if not_captured:
+    print('캡처 미완 (와이어프레임으로 처리): ' + str(len(not_captured)) + '개')
+    for s in not_captured:
+        print('  [와이어프레임] ' + s['screenId'].ljust(30) + ' ' + s.get('route',''))
 "
 ```
 
-피드백 반영 후 `_tmp/screen_confirmed.json` 생성. 기존 화면(BFS 재발견) + 신규 화면 모두 포함:
+탐색 중 발견한 `new_screens`(정적 분석에 없던 화면)가 있으면 아래 스크립트에서
+`new_screens` 리스트를 직접 채워 실행한다:
 
 ```bash
 !python -c "
-import json, os, datetime
+import json, os
 
-hier  = json.load(open('_tmp/screen_hierarchy.json', encoding='utf-8'))
-flat  = [s for s in hier.get('flat', []) if s.get('type') == 'screen']
+# Claude가 탐색 루프에서 수집한 신규 화면 목록을 아래에 채운다
+new_screens = []  # 예: [{'route': '/order/popup', 'title': '주문 팝업', 'url': 'http://...'}]
 
-# 사용자 피드백 반영
-excluded_routes = []    # 예: ['/admin/old/page']
-pre_actions_map = {}    # 예: {'3': [{'type':'click','selector':'table tbody tr:first-child','wait':1500}]}
-additions       = []    # 예: [{'label':'팝업명','route':'/path','preActions':[...]}]
+if not new_screens:
+    print('신규 화면 없음'); import sys; sys.exit(0)
 
-screens = []
-for i, s in enumerate(flat, 1):
-    screens.append({
-        'screenId':   s.get('screenId', s.get('id', '')),
-        'label':      s.get('label', ''),
-        'route':      s.get('route', ''),
-        'fullUrl':    s.get('fullUrl', ''),
-        'path':       s.get('path', []),
-        'tabs':       s.get('tabs', []),
-        'include':    s.get('route','') not in excluded_routes,
-        'preActions': pre_actions_map.get(str(i), []),
-        'notes':      '',
+inv  = json.load(open('_tmp/screen_inventory.json', encoding='utf-8'))
+plan = json.load(open('docs/05_설계서/_domain_plan.json', encoding='utf-8'))
+
+uis_max = {d['name']: d['uis']['start'] for d in plan['domains']}
+for s in inv:
+    dom = s.get('domain','')
+    if dom and s.get('uisId'):
+        uis_max[dom] = max(uis_max.get(dom, 0), s['uisId'] + 1)
+
+def assign_domain(route):
+    seg = [s for s in route.lstrip('/').split('/') if s]
+    if seg:
+        for d in plan['domains']:
+            if d['name'].lower() in seg[0].lower() or seg[0].lower() in d['name'].lower():
+                return d['name']
+    return plan['domains'][0]['name']
+
+existing_routes = {s.get('route','') for s in inv}
+added = 0
+for ns in new_screens:
+    route = ns.get('route', '')
+    if not route or route in existing_routes: continue
+    domain = assign_domain(route)
+    uis_id = uis_max.get(domain, 0)
+    uis_max[domain] = uis_id + 1
+    sid = route.replace('/', '_').strip('_') or ('bfs_screen_' + str(added + 1))
+    inv.append({
+        'route':          route,
+        'domain':         domain,
+        'entryFile':      '',
+        'componentFiles': [],
+        'uisId':          uis_id,
+        'screenId':       sid,
+        'screenName':     ns.get('title', sid),
+        'captureDir':     '',
+        'infDir':         '../../INF/',
+        'source':         'bfs:ai',
     })
+    existing_routes.add(route)
+    added += 1
 
-additions_full = []
-for j, a in enumerate(additions):
-    additions_full.append({
-        'screenId':   a.get('screenId', 'addition_' + str(j+1).zfill(3)),
-        'label':      a.get('label', ''),
-        'route':      a.get('route', ''),
-        'path':       [],
-        'tabs':       [],
-        'include':    True,
-        'preActions': a.get('preActions', []),
-        'notes':      a.get('notes', ''),
-    })
-
-os.makedirs('_tmp', exist_ok=True)
-confirmed = {
-    'confirmedAt':    datetime.datetime.now().isoformat(),
-    'totalScreens':   len([s for s in screens if s['include']]),
-    'totalAdditions': len(additions_full),
-    'screens':        screens,
-    'additions':      additions_full,
-}
-json.dump(confirmed, open('_tmp/screen_confirmed.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
-print('screen_confirmed.json 저장: ' + str(confirmed['totalScreens']) + '개 + 추가 ' + str(confirmed['totalAdditions']) + '개')
+json.dump(inv, open('_tmp/screen_inventory.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
+print(str(added) + '개 신규 화면 추가 (source: bfs:ai) → 총 ' + str(len(inv)) + '개')
 "
 ```
 
-> **확인 전 STEP 6-3-3 진행 금지.**
-
-### STEP 6-3-3: 캡처 실행
-
-```bash
-!python -c "
-import os, subprocess, sys, json
-
-env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
-           if '=' in l and not l.startswith('#'))
-plugin   = env.get('PLUGIN_PATH', '')
-cdp_port = env.get('PREVIEW_CDP_PORT', '9222')
-ws       = os.getcwd()
-
-script = os.path.join(plugin, 'scripts', 'bfs_navigator.js')
-confirmed_path = '_tmp/screen_confirmed.json'
-
-if not os.path.exists(confirmed_path):
-    print('[SKIP] screen_confirmed.json 없음 — STEP 6-3-2 먼저 실행'); sys.exit(0)
-
-confirmed = json.load(open(confirmed_path, encoding='utf-8'))
-total = confirmed.get('totalScreens',0) + confirmed.get('totalAdditions',0)
-print('캡처 대상: ' + str(total) + '개')
-
-r = subprocess.run(
-    ['node', script, '--confirmed=' + confirmed_path,
-     '--port=' + cdp_port, '--out=_tmp', '--workspace=' + ws],
-    capture_output=True, text=True, encoding='utf-8', errors='ignore')
-print(r.stderr[-2000:] if len(r.stderr) > 2000 else r.stderr)
-if r.returncode != 0:
-    sys.exit(1)
-"
-```
-
-### STEP 6-3-4: BFS 병합 + 신규 화면 처리
-
-screen_inventory.py를 재실행해 BFS 결과를 병합하고 신규 화면만 추려 ddd-ui-agent를 추가 실행한다.
-
-```bash
-!python -c "
-import os, subprocess, sys, json
-
-env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
-           if '=' in l and not l.startswith('#'))
-plugin = env.get('PLUGIN_PATH', '')
-script = os.path.join(plugin, 'scripts', 'screen_inventory.py')
-
-# BFS 결과 포함하여 재실행 (screen_hierarchy.json 있으면 자동 병합)
-prev = json.load(open('_tmp/screen_inventory.json', encoding='utf-8'))
-prev_routes = {s.get('route','') for s in prev}
-
-r = subprocess.run([sys.executable, script, os.getcwd()],
-                   capture_output=True, text=True, encoding='utf-8', errors='ignore')
-print(r.stdout)
-
-new_inv = json.load(open('_tmp/screen_inventory.json', encoding='utf-8'))
-bfs_only = [s for s in new_inv if s.get('source') == 'bfs' and s.get('route','') not in prev_routes]
-print('BFS 전용 신규 화면: ' + str(len(bfs_only)) + '개')
-for s in bfs_only:
-    print('  ' + s['screenId'].ljust(30) + ' ' + s['route'])
-"
-```
-
-신규 BFS 화면에 ddd-ui-agent 추가 실행 (배치 3개씩, 위 STEP 6-2와 동일 방식).
+신규 화면(`source: 'bfs:ai'`)에 ddd-ui-agent 추가 실행 (배치 3개씩, STEP 6-2와 동일 방식).
 
 ---
 
