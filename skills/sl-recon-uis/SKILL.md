@@ -46,11 +46,10 @@ else:
 
 ---
 
-### STEP 6-0: Chrome CDP 포트 확인 + 자동 실행 → BFS 메뉴 계층 탐색
+### STEP 6-0: Chrome 실행 + 로그인 대기
 
 Chrome이 아직 안 켜져 있으면 **자동으로 실행**하고 `PREVIEW_BASE_URL`로 이동한다.  
-로그인이 필요하면 **Chrome 창에서 직접 로그인**하면 감지 후 자동 재개된다.  
-이미 Chrome이 CDP 포트로 열려있으면 그대로 attach해서 진행한다.
+이미 CDP 포트로 열려있으면 기존 세션을 재사용한다.
 
 ```bash
 !python3 -c "
@@ -58,10 +57,8 @@ import os, subprocess, sys, socket, time, platform
 
 env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
            if '=' in l and not l.startswith('#'))
-plugin   = env.get('PLUGIN_PATH', '')
 cdp_port = env.get('PREVIEW_CDP_PORT', '9222')
 base_url = env.get('PREVIEW_BASE_URL', '')
-ws       = os.getcwd()
 
 def cdp_alive(port):
     try:
@@ -71,10 +68,11 @@ def cdp_alive(port):
     except:
         return False
 
-# ── Chrome 자동 실행 ──────────────────────────────────────────────────────────
-if not cdp_alive(cdp_port):
-    print(f'[bfs] Chrome CDP 포트 {cdp_port} 닫혀있음 → Chrome 자동 실행')
-
+if cdp_alive(cdp_port):
+    print(f'[OK] Chrome CDP 포트 {cdp_port} 이미 열려있음 — 기존 세션 재사용')
+    print('     로그인이 이미 되어 있다면 바로 다음 단계로 진행하세요.')
+else:
+    print(f'[bfs] Chrome 자동 실행 중 (CDP 포트: {cdp_port})')
     plat = platform.system()
     if plat == 'Windows':
         subprocess.Popen(
@@ -94,29 +92,70 @@ if not cdp_alive(cdp_port):
         )
 
     print('Chrome 시작 대기 중', end='', flush=True)
-    for _ in range(30):
+    for _ in range(20):
         time.sleep(1)
         print('.', end='', flush=True)
         if cdp_alive(cdp_port):
-            print(' 준비 완료!')
+            print(' 준비!')
             break
     else:
         print()
-        print('[ERROR] Chrome 30초 내 시작 안 됨.')
-        print('  Chrome이 설치되어 있는지 확인하거나, 직접 실행 후 재시도하세요.')
+        print('[ERROR] Chrome 시작 실패 — Chrome이 설치되어 있는지 확인하세요.')
         sys.exit(1)
-else:
-    print(f'[bfs] Chrome CDP 포트 {cdp_port} 이미 열려있음 — 기존 세션 재사용')
 
-# ── BFS 트리 추출 ─────────────────────────────────────────────────────────────
+    if base_url:
+        print(f'\\n[bfs] {base_url} 로 이동 중...')
+        # Playwright 없이 CDP HTTP API로 탭 이동
+        import urllib.request, json
+        try:
+            tabs = json.loads(urllib.request.urlopen(
+                f'http://localhost:{cdp_port}/json', timeout=3).read())
+            tab_id = tabs[0]['id'] if tabs else None
+            if tab_id:
+                urllib.request.urlopen(
+                    f'http://localhost:{cdp_port}/json/activate/{tab_id}', timeout=2)
+        except:
+            pass
+        print(f'  Chrome 창에서 {base_url} 에 접속된 것을 확인하세요.')
+        print('  (자동 이동 안 됐으면 주소창에 직접 입력하세요)')
+
+print()
+if base_url:
+    print('━' * 60)
+    print(f' Chrome 창에서 {base_url} 로그인을 완료하세요.')
+    print(' 로그인 완료 후 Claude에게 \"계속\" 이라고 말해주세요.')
+    print('━' * 60)
+else:
+    print('[주의] PREVIEW_BASE_URL 미설정 → 캡처 없이 BFS 탐색만 가능')
+    print('       계속 진행하려면 \"계속\" 이라고 말해주세요.')
+"
+```
+
+> 사용자가 **"계속"** 이라고 하면 STEP 6-0.5로 이동한다.  
+> Chrome을 닫지 않는 한 이후 STEP 6-1(탐색)·STEP 6-2(캡처)도 같은 세션 재사용.
+
+---
+
+### STEP 6-0.5: BFS 메뉴 계층 탐색 (정적 트리 추출 — 클릭 없음)
+
+로그인 완료 확인 후 메뉴 DOM을 **클릭 없이** 정적으로 분석해 계층 구조를 추출한다.
+
+```bash
+!python3 -c "
+import os, subprocess, sys
+
+env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
+           if '=' in l and not l.startswith('#'))
+plugin   = env.get('PLUGIN_PATH', '')
+cdp_port = env.get('PREVIEW_CDP_PORT', '9222')
+ws       = os.getcwd()
+
 script = os.path.join(plugin, 'scripts', 'bfs_navigator.js') if plugin else ''
 if not (script and os.path.exists(script)):
     print('[ERROR] bfs_navigator.js 없음 — PLUGIN_PATH 확인')
     sys.exit(1)
 
 os.makedirs('_tmp', exist_ok=True)
-print(f'\\n[bfs] --tree-only 탐색 시작 (base_url={base_url or \"project.env로부터 자동 이동\"})')
-
 r = subprocess.run(
     ['node', script,
      f'--port={cdp_port}',
@@ -129,7 +168,7 @@ r = subprocess.run(
 print(r.stderr[-3000:] if len(r.stderr) > 3000 else r.stderr)
 if r.returncode != 0:
     print('[ERROR] BFS 트리 추출 실패.')
-    print('  → 로그인이 필요한 경우: Chrome 창에서 직접 로그인 후 이 단계를 다시 실행하세요.')
+    print('  → 로그인이 완료됐는지 Chrome 창에서 확인 후 이 단계를 다시 실행하세요.')
     sys.exit(1)
 
 import json
@@ -138,15 +177,9 @@ print(f'\\n[결과] L1 메뉴 {hier[\"stats\"][\"l1Count\"]}개 / 전체 노드 
 "
 ```
 
-> **로그인 흐름:**
-> 1. STEP 6-0 실행 → Chrome 자동 실행 → `PREVIEW_BASE_URL` 자동 이동 (bfs_navigator 내부 처리)
-> 2. 로그인 페이지로 리디렉션된 경우 → Chrome 창에서 직접 로그인
-> 3. 로그인 완료 감지(URL 변경) → BFS 탐색 자동 재개
-> 4. 이후 Chrome을 닫지 않는 한 STEP 6-1~6-2 캡처도 같은 세션 재사용
-
 ---
 
-### ✋ STEP 6-0.5: 계층 검토 + 탐색 범위 선택 (필수 체크포인트)
+### ✋ STEP 6-0.7: 계층 검토 + 탐색 범위 선택 (필수 체크포인트)
 
 추출된 메뉴 계층을 사용자에게 출력하고, **어떤 범위를 탐색·캡처할지 확인**한다.
 
@@ -226,7 +259,8 @@ for s in scope_paths:
 "
 ```
 
-> **확인 전 STEP 6-1 절대 진행 금지.**
+> **확인 전 STEP 6-1 절대 진행 금지.**  
+> 이전 단계 요약: STEP 6-0(Chrome 실행) → 로그인 → STEP 6-0.5(트리 추출) → STEP 6-0.7(범위 선택)
 
 ---
 

@@ -694,19 +694,8 @@ async function captureConfirmed(page, cf, navFrame, navSel, confirmedData, cdpSe
       const isLoginPage = /login|signin|auth|sso/i.test(afterUrl);
       if (isLoginPage) {
         console.error(`[bfs] 로그인 페이지 감지됨: ${afterUrl}`);
-        console.error(`[bfs] 로그인 완료 후 30초 내 메인 페이지로 이동하세요...`);
-        // 최대 60초 대기: 로그인 완료 후 URL이 변경되면 진행
-        let waited = 0;
-        while (waited < 60000) {
-          await page.waitForTimeout(2000);
-          waited += 2000;
-          const nowUrl = page.url();
-          if (!/login|signin|auth|sso/i.test(nowUrl)) {
-            console.error(`[bfs] 로그인 완료 감지: ${nowUrl}`);
-            await page.waitForTimeout(2000);
-            break;
-          }
-        }
+        console.error(`[bfs] Chrome 창에서 로그인 완료 후 Claude에게 "계속"이라고 말해주세요.`);
+        console.error(`[bfs] (이 프로세스는 로그인 대기 없이 현재 상태로 진행합니다)`);
       }
     }
   }
