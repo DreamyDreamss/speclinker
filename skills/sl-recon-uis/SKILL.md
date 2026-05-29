@@ -284,13 +284,17 @@ process.stdout.write('uis_capture_map 저장: ' + map.length + '개\n');
 
 ### 6-2-3-A: menuPath[0] → 도메인 구조 자동생성 + 도메인 코드 추출
 
-> **도메인 코드 규칙**: `INF-BP-001`, `UIS-OR-001`, `SCH-MK-001` 형식.
-> JSP 파일명 접두어(bp/or/mk/st...)에서 자동 추출. 사용자가 STEP 6-2-4에서 확인/수정 가능.
+> **도메인 코드 규칙**: `INF-BRD-001`, `UIS-ORD-001`, `SCH-PRD-001` 형식.
+> 도메인명은 **LLM이 비즈니스 의미 기반으로 동적 생성** — 하드코딩 맵 없음.
+> 회사·프로젝트마다 도메인명이 다르므로 LLM 판단으로 어느 시스템에도 적용 가능.
+> 사용자가 STEP 6-2-4에서 확인/수정 가능.
+
+**Phase 1 — 도메인명 목록 추출**
 
 ```bash
 !python -c "
 import json, os, sys, re
-from collections import defaultdict, OrderedDict, Counter
+from collections import OrderedDict
 
 try:
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -308,44 +312,73 @@ for entry in cap_map:
         domain_screens[domain] = []
     domain_screens[domain].append(entry)
 
+domains_list = list(domain_screens.keys())
+os.makedirs('_tmp', exist_ok=True)
+json.dump(domains_list, open('_tmp/_bfs_domains_raw.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
+
+print('BFS 도메인 목록 (' + str(len(domains_list)) + '개):')
+for d in domains_list:
+    print('  - ' + d + ' (' + str(len(domain_screens[d])) + '개 화면)')
+print()
+print('→ _tmp/_bfs_domains_raw.json 저장 완료')
+"
+```
+
+**Phase 2 — LLM 도메인 코드 생성**
+
+`_tmp/_bfs_domains_raw.json`을 Read 도구로 읽어, 각 도메인명에 대해 **영어 약어(2~4자 대문자)**를 배정한 후 Write 도구로 `_tmp/domain_codes.json`을 생성하세요.
+
+배정 규칙:
+- 도메인의 **비즈니스 의미**를 영어로 번역 (예: 방송관리→BRD, 협력사관리→VND, 주문→ORD, 상품→PRD)
+- 도메인명이 이미 영문이면 앞 3자 대문자 사용
+- **중복 코드 불가** — 겹치면 숫자 suffix 추가 (예: ORD, ORD2)
+- 형식: `{"도메인명": "코드", ...}`
+
+> 이 단계는 Python 스크립트가 아니라 LLM이 직접 Write 도구로 파일을 생성합니다.
+
+**Phase 3 — ID 배정 + 산출물 저장**
+
+```bash
+!python -c "
+import json, os, sys, re
+from collections import OrderedDict
+
+try:
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+except AttributeError:
+    pass
+
+cap_map = json.load(open('_tmp/uis_capture_map.json', encoding='utf-8'))
+domain_codes = json.load(open('_tmp/domain_codes.json', encoding='utf-8'))
+
+domain_screens = OrderedDict()
+for entry in cap_map:
+    mp = entry.get('menuPath', [])
+    domain = mp[0] if mp else 'unknown'
+    if domain not in domain_screens:
+        domain_screens[domain] = []
+    domain_screens[domain].append(entry)
+
 def safe_label(s):
-    # 파일시스템 안전: / \\ : * ? \" < > | 제거, 공백→_ (Windows 호환)
     return re.sub(r'[/\\\\:*?\"<>|]', '', s).strip()
 
-def detect_code(domain_name, items):
-    # JSP 파일명 앞 2~3 알파벳이 도메인 약어 (bp/or/mk/st/ld/ad/bc/sy 등)
-    prefixes = []
-    for item in items:
-        sid = item.get('screenId', '') or item.get('activeRoute', '').split('/')[-1]
-        m = re.match(r'^([a-zA-Z]{2,3})', sid)
-        if m:
-            prefixes.append(m.group(1).upper())
-    if prefixes:
-        return Counter(prefixes).most_common(1)[0][0]
-    # fallback: 도메인명에서 자음/첫글자 조합 (한국어 → 영어 코드)
-    korean_map = {
-        '협력사': 'ST', '방송': 'BP', '상품': 'PR', '주문': 'OR', '고객': 'OR',
-        '프로모션': 'MK', '물류': 'LD', '전시': 'AD', '게시판': 'BC',
-        '시스템': 'SY', '정산': 'FI', '회원': 'MB', '배송': 'LD',
-    }
-    for k, v in korean_map.items():
-        if k in domain_name:
-            return v
-    # 최종 fallback: 도메인명 앞 2글자 (한글 포함, 구분 용도)
-    return domain_name[:2].upper()
+# LLM이 누락한 도메인 fallback: D01, D02...
+idx = 1
+for domain in domain_screens:
+    if domain not in domain_codes:
+        while ('D' + str(idx).zfill(2)) in domain_codes.values():
+            idx += 1
+        domain_codes[domain] = 'D' + str(idx).zfill(2)
+        idx += 1
 
-# 도메인 코드 결정 + ID 배정
-domain_codes = {}
 for domain, items in domain_screens.items():
-    code = detect_code(domain, items)
-    domain_codes[domain] = code
+    code = domain_codes[domain]
     for i, item in enumerate(items):
         item['domain'] = domain
         uid_num = i + 1
-        item['uisId'] = code + '-' + str(uid_num).zfill(3)      # 예: BP-001
+        item['uisId'] = code + '-' + str(uid_num).zfill(3)
         item['specDirName'] = ('UIS-' + code + '-' + str(uid_num).zfill(3)
                                + '_' + safe_label(item.get('screenLabel', 'screen')))
-        # captureDir 호환용 screenId (JSP 파일명) — 기존 캡처 경로 유지
         if not item.get('screenId'):
             ar = item.get('activeRoute', '')
             seg = [s for s in ar.rstrip('/').split('/') if s]
@@ -353,7 +386,6 @@ for domain, items in domain_screens.items():
 
 json.dump(cap_map, open('_tmp/uis_capture_map.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
 
-# _domain_plan.json 생성 (BFS 기반, 도메인 코드 포함)
 bfs_domains = []
 for domain, items in domain_screens.items():
     code = domain_codes[domain]
@@ -379,7 +411,7 @@ bfs_plan = {
 os.makedirs('docs/05_설계서', exist_ok=True)
 json.dump(bfs_plan, open('docs/05_설계서/_domain_plan.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
 
-print('도메인 자동 추출 완료 (BFS menuPath[0] + 도메인 코드):')
+print('도메인 자동 추출 완료 (BFS menuPath[0] + LLM 코드):')
 print()
 print('  도메인명'.ljust(20) + '코드'.ljust(6) + '화면 수')
 print('  ' + '-' * 35)
