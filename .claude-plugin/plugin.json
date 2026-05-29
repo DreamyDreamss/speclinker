@@ -1,7 +1,7 @@
 {
   "name": "speclinker",
-  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 REQ-ID 체이닝, UA 대시보드 통합. v2.32: /sl-recon-uis 도메인 필터(/sl-recon-uis 방송관리), --spec-only 모드, 타 도메인 보존",
-  "version": "2.32.0",
+  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 REQ-ID 체이닝, UA 대시보드 통합. v2.35: 의존성 자동설치(setup-deps.js) — playwright-core·Pillow·UA런타임deps SessionStart 원클릭, dist 재빌드 불필요",
+  "version": "2.35.0",
   "author": {
     "name": "DreamyDreamss"
   },
@@ -41,7 +41,7 @@
           {
             "type": "command",
             "command": "node",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/build-ua.js"]
+            "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/setup-deps.js"]
           }
         ]
       }

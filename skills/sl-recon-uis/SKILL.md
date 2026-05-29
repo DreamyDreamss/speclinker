@@ -20,7 +20,7 @@ triggers:
 2. STEP 6-2: BFS 전수 탐색 → `uis_capture_map.json` 생성
 3. STEP 6-2-3: BFS → 도메인 구조 자동생성 + 소스 파일 역매핑 (선택적 보강)
 4. ✋ STEP 6-2-4: 사용자 검토 (필수 체크포인트)
-5. STEP 6-3: UIS spec 생성 (브라우저 불필요, ddd-ui-agent 배치)
+5. STEP 6-3: UIS spec 생성 (ddd-ui-agent 배치 — **Phase 0.5에서 LLM이 이미지+소스 분석 → 블록 마커 생성 → annotate 실행**)
 6. STEP 6-4: api_hints 수집
 7. STEP 6-5: _TOC.md 생성
 

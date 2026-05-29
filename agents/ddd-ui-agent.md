@@ -67,6 +67,65 @@ model: claude-sonnet-4-6
 
 ---
 
+## Phase 0.5: 시각 블록 분석 + annotate (preview.png 존재 시)
+
+> **이 단계가 핵심이다.**  
+> DOM 기반 자동 감지(capture.js widgets)는 개별 버튼/input 단위라 SI 문서에 부적합하다.  
+> ddd-ui-agent가 직접 preview.png를 보고 **비즈니스 기능 단위 블록**을 정의한다.
+
+`captureDir/preview.png`가 존재하면 실행한다. 없으면 스킵 (§2 ASCII 와이어프레임으로 대체).
+
+### 0.5-A: preview.png 읽기 (이미지 시각 분석)
+
+Read 도구로 `{captureDir}/preview.png`를 읽는다.  
+Claude는 멀티모달로 이미지를 직접 볼 수 있다.
+
+### 0.5-B: 소스와 이미지를 교차 분석 → 블록 정의
+
+Phase 1~3을 미리 수행하는 것이 아니라, **이 단계에서 빠르게 화면 구조를 파악**한다:
+- 소스 파일 목록에서 JSP/JS 파일명 힌트로 기능 영역 유추
+- 이미지에서 시각적 섹션 경계(검색 패널, 그리드, 사이드바, 버튼 바 등) 식별
+- **spec에서 설명이 필요한 영역**만 선별 (레이아웃 표준 요소는 제외)
+
+### 0.5-C: preview_block_map.json 저장
+
+Write 도구로 `{captureDir}/preview_block_map.json`을 저장한다.
+
+```json
+[
+  {
+    "number": 1,
+    "label": "검색 조건 영역",
+    "bbox_pct": [0.0, 0.08, 1.0, 0.22]
+  },
+  {
+    "number": 2,
+    "label": "조회 결과 그리드",
+    "bbox_pct": [0.0, 0.24, 1.0, 0.72]
+  }
+]
+```
+
+**bbox_pct 규칙:**
+- `[left, top, right, bottom]` — 이미지 너비/높이 대비 비율 (0.0~1.0)
+- 이미지 크기를 몰라도 됨 — Python이 실제 픽셀 변환
+- **완벽한 정확도 불필요**: 해당 영역 안에 마커가 찍히면 충분
+- 블록 수: 5~12개 권장
+- 블록 타입 예시: 검색조건, 그리드/목록, 상세패널, 탭컨테이너, 버튼바, 팝업트리거영역
+
+**number는 §2 와이어프레임의 BL/WG `[N]` 번호와 반드시 일치해야 한다.**
+
+### 0.5-D: annotate_preview.py 실행
+
+```bash
+!python {PLUGIN_PATH}/scripts/annotate_preview.py --keep-originals {captureDir}
+```
+
+> annotate_preview.py가 `preview_block_map.json`을 자동 감지하여 블록 마커를 생성한다.  
+> 실패해도 spec.md 생성을 중단하지 않는다 (§0 preview_annotated.png 참조는 유지).
+
+---
+
 ## Phase 1: 파일 읽기 (진입파일 + 참조 컴포넌트 전부)
 
 **1-1. 진입 파일 읽기**  
@@ -316,8 +375,8 @@ revision_history:
 디스크립션 (번호 마커):
 ![[preview_annotated.png]]
 
-> `preview_annotated.png`가 없으면 /sl-recon-uis STEP 6-2 capture.js + annotate_preview.py 파이프라인이 미완료된 상태.
-> 그래도 §2 와이어프레임 안의 `[N]` 번호 + §4 위젯 표가 자기충족적 디스크립션 역할을 한다.
+> 마커는 ddd-ui-agent Phase 0.5에서 LLM 시각 분석으로 생성 (비즈니스 블록 단위).
+> `preview_annotated.png`가 없으면 §2 와이어프레임의 `[N]` 번호가 대체 역할을 한다.
 
 [HTML 미리보기 열기 →](preview.html)
 
@@ -427,6 +486,9 @@ flowchart LR
 ## Phase 7: Self-Critique
 
 ```
+[ ] preview.png가 있었다면 Phase 0.5에서 preview_block_map.json을 저장했는가?
+[ ] preview_block_map.json의 number가 §2/§3/§4의 [N] 번호와 일치하는가?
+[ ] annotate_preview.py를 실행했는가? (실패 무시, 실행 여부는 체크)
 [ ] spec.md에 §4 위젯 정의 표가 실제 소스 기반으로 작성됐는가? (placeholder 금지)
 [ ] §4 그리드 컬럼이 컴포넌트 파일에서 추출한 실제 field/headerName인가?
 [ ] §5 이벤트 표의 API 링크가 {infDir}INF-XXX.md 형식인가?

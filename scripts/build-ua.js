@@ -1,50 +1,68 @@
-﻿// STATUS: 완료
 #!/usr/bin/env node
+// STATUS: 완료
 /**
- * UA 코어 자동 빌드 — SessionStart 훅에서 호출
- * package.json 변경 시에만 재빌드 (매 세션 빠른 스킵)
+ * UA 코어 준비 — SessionStart 훅에서 호출
+ *
+ * dist/ 는 git에 커밋된 상태라 재컴파일 불필요.
+ * tree-sitter-* 등 네이티브 런타임 deps는 OS마다 바이너리가 달라
+ * 반드시 npm/pnpm install이 필요하다.
+ *
+ * 로직:
+ *   1. node_modules 없으면 → pnpm install (런타임 deps 설치)
+ *   2. dist/index.js 없으면 → pnpm build (보험, 일반적으로는 불필요)
+ *   3. 둘 다 있으면 → skip
  */
-const fs = require("fs");
-const path = require("path");
-const { execSync } = require("child_process");
+'use strict';
 
-const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT || path.resolve(__dirname, "..");
-const dataDir = process.env.CLAUDE_PLUGIN_DATA || path.join(require("os").homedir(), ".claude", "plugins", "data", "speclinker");
-const uaDir = path.join(pluginRoot, "ua");
-const distFile = path.join(uaDir, "packages", "core", "dist", "index.js");
-const bundledPkg = path.join(uaDir, "package.json");
-const storedPkg = path.join(dataDir, "ua-package.json");
+const fs   = require('fs');
+const path = require('path');
+const { execSync } = require('child_process');
 
-fs.mkdirSync(dataDir, { recursive: true });
+const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT || path.resolve(__dirname, '..');
+const uaDir      = path.join(pluginRoot, 'ua');
+const nmDir      = path.join(uaDir, 'node_modules');
+const distFile   = path.join(uaDir, 'packages', 'core', 'dist', 'index.js');
 
-function needsBuild() {
-  if (!fs.existsSync(distFile)) return true;
-  if (!fs.existsSync(storedPkg)) return true;
-  return fs.readFileSync(bundledPkg, "utf8") !== fs.readFileSync(storedPkg, "utf8");
+// pnpm | npm 감지
+function pkgManager() {
+  try { execSync('pnpm --version', { stdio: 'ignore' }); return 'pnpm'; } catch (_) {}
+  return 'npm';
 }
 
-if (!needsBuild()) {
-  console.log("[speclinker] UA 코어 최신 상태 — 빌드 스킵");
+const needsInstall = !fs.existsSync(nmDir) || fs.readdirSync(nmDir).length === 0;
+const needsBuild   = !fs.existsSync(distFile);
+
+if (!needsInstall && !needsBuild) {
+  console.log('[speclinker] UA 준비 완료 (skip)');
   process.exit(0);
 }
 
-console.log("[speclinker] UA 코어 빌드 시작...");
-try {
-  const opts = { cwd: uaDir, stdio: "inherit" };
+const pm   = pkgManager();
+const opts = { cwd: uaDir, stdio: 'inherit' };
 
-  // pnpm 우선, 없으면 npm
+if (needsInstall) {
+  console.log('[speclinker] UA 런타임 deps 설치 중 (tree-sitter 등)...');
   try {
-    execSync("pnpm --version", { stdio: "ignore" });
-    execSync("pnpm install", opts);
-    execSync("pnpm --filter @understand-anything/core build", opts);
-  } catch {
-    execSync("npm install", opts);
-    execSync("npm run build --workspace=packages/core", opts);
+    execSync(`${pm} install`, opts);
+    console.log('[speclinker] UA deps 설치 완료');
+  } catch (e) {
+    console.error('[speclinker] UA deps 설치 실패:', e.message);
+    process.exit(1);
   }
+}
 
-  fs.copyFileSync(bundledPkg, storedPkg);
-  console.log("[speclinker] UA 코어 빌드 완료");
-} catch (err) {
-  console.error("[speclinker] UA 코어 빌드 실패:", err.message);
-  process.exit(1);
+if (needsBuild) {
+  // dist/ 가 없는 경우만 (fresh clone 직후 등 비정상 상황)
+  console.log('[speclinker] UA dist 없음 — 빌드 실행...');
+  try {
+    if (pm === 'pnpm') {
+      execSync('pnpm --filter @understand-anything/core build', opts);
+    } else {
+      execSync('npm run build --workspace=packages/core', opts);
+    }
+    console.log('[speclinker] UA 빌드 완료');
+  } catch (e) {
+    console.error('[speclinker] UA 빌드 실패:', e.message);
+    process.exit(1);
+  }
 }

@@ -1,1 +1,9 @@
-{"name":"speclinker-runtime","version":"0.0.0","private":true}
+{
+  "name": "speclinker-runtime",
+  "version": "0.0.0",
+  "private": true,
+  "description": "speclinker plugin runtime dependencies",
+  "dependencies": {
+    "playwright-core": "latest"
+  }
+}
