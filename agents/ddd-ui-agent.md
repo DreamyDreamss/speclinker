@@ -42,20 +42,43 @@ model: claude-sonnet-4-6
 - 프로젝트 루트: `{절대경로}`
 - 프로젝트 Profile: `.speclinker/profile.yaml` (선택)
 - 기존 spec.md: `{경로}` (선택 — 없으면 전체 생성, 있으면 §5 패치)
+- 탭 인덱스: `{tabIndex}` (선택 — 있으면 탭 모드, 예: `2`)
+- 탭 레이블: `{tabLabel}` (탭 모드, 예: `"가격정보"`)
+- 탭 JS 파일: `{tabJsFile}` (탭 모드 — 이 파일만 읽기, 예: `pr201t02.js`)
+- 부모 화면ID: `{parentScreenId}` (탭 모드, 예: `pr201Form`)
+- JSP 파일: `{jspPath}` (탭 모드 — entryFile로 사용, 부모 JSP 절대경로)
 
 ### 실행 모드 결정
 
-`기존 spec.md` 경로가 전달됐고 해당 파일이 **실제로 존재**하면 **§5 패치 모드**로 실행한다.
+`기존 spec.md` 경로가 전달됐고 해당 파일이 **실제로 존재**하면 **§5 패치 모드**로 실행한다.  
+`tabIndex`가 전달되면 **탭 모드**로 실행한다 (§5 패치 모드와 병행 가능).
 
 | 모드 | 조건 | 동작 |
 |------|------|------|
 | **§5 패치 모드** | 기존 spec.md 존재 | §5 인터랙션 표만 소스 분석으로 채운다. §0~§4, §6~§9는 그대로 유지. `_inf_required.json` 출력. |
 | **전체 생성 모드** | spec.md 없음 | §0~§9 전체 spec.md를 새로 생성한다. |
+| **탭 모드** | `tabIndex` 전달됨 | `tabJsFile`만 읽는다. JSP에서 `<div id="tab{tabIndex}">` 섹션만 분석. 화면명에 탭명 포함. |
 
 > **§5 패치 모드에서 절대 하지 말아야 할 것:**  
 > - 기존 §0/§1/§2/§3/§4/§6/§7/§8/§9 내용 수정·삭제  
 > - spec.md 전체 재작성  
 > - generate_uis_spec.py가 채운 DOM 메타 데이터(bbox, selector 등) 제거
+
+### 탭 모드 동작 규칙
+
+`tabIndex`가 전달됐으면 아래 규칙을 **반드시** 적용한다:
+
+| 단계 | 일반 모드 | 탭 모드 |
+|------|---------|--------|
+| Phase 0 entryFile | 전달받은 `entryFile` | `jspPath` (부모 JSP) |
+| Phase 1 파일 읽기 | componentFiles 전부 | `tabJsFile` 1개만 + JSP의 `<div id="tab{tabIndex}">` 섹션 |
+| Phase 2 화면 ID | activeRoute 마지막 세그먼트 | `{parentScreenId}_tab{tabIndex}` (이미 결정됨) |
+| Phase 6 화면명 | menuPath 마지막 항목 | 전달받은 `screenLabel` 그대로 (`{부모명} - {tabLabel}` 형식) |
+| §1 소스 파일 표기 | entryFile | `{tabJsFile}` (탭 JS) + `{jspPath}` (탭 섹션) |
+| 다른 탭 JS 파일 | — | **읽지 않는다** — 탭 간 독립성 보장 |
+
+> **탭 모드 핵심**: JSP 파일 1개에 모든 탭 HTML이 있어도, 이 서브스펙은 `tab{tabIndex}` 한 탭만 담당한다.  
+> 다른 탭의 §5 인터랙션을 여기에 포함하면 spec이 중복된다.
 
 ### Profile 활용 (Phase 1 신규)
 
@@ -205,11 +228,12 @@ JSP 화면의 버튼은 HTML에 `id=` 만 있고, 실제 클릭 핸들러와 API
 - href URL: `<a href="/path">` (`#` 제외)
 - 탭 구조: `<div id="tab1">` / `li a[href="#tab1"]` → 탭 이름-ID 매핑 테이블 작성
 
-**Step B. 포함 JS 파일 목록 추출 → 전부 읽기**
-- `<script src=".../biz/{domain}/pr201t01.js">` 패턴에서 파일 경로 추출
+**Step B. 포함 JS 파일 목록 추출 → 읽기**
+- **탭 모드** (`tabIndex` 전달 시): `tabJsFile`만 읽는다. 다른 탭 JS 파일(`t01`~`t0N`) 읽기 금지.
+- 일반 모드: `<script src=".../biz/{domain}/pr201t01.js">` 패턴에서 파일 경로 추출 → 탭별 JS + 메인 폼 JS 전부 Read
 - 탭별 JS 파일(`pr201t01.js`=기초정보, `pr201t02.js`=배송및AS …)은 탭과 1:1 매핑
-- 메인 폼 JS(`pr201Form.js`)도 포함
-- 파일 수가 많으면 `t01`~`t0N`(탭 JS) + 메인 폼 JS 우선순위로 전부 Read
+- 메인 폼 JS(`pr201Form.js`)도 포함 (일반 모드)
+- 파일 수가 많으면 `t01`~`t0N`(탭 JS) + 메인 폼 JS 우선순위로 전부 Read (일반 모드)
 
 **Step C. JS 파일 → 버튼ID-URL 매핑 추출**
 ```
@@ -311,7 +335,7 @@ JSP 화면의 버튼은 HTML에 `id=` 만 있고, 실제 클릭 핸들러와 API
 ## Phase 5: 미리보기 자산 안내 (캡처는 sl-recon이 일괄 처리)
 
 `docs/05_설계서/{domain}/UI/{화면ID}/preview.png` 파일은 아래 4단계 폴백 순서로 채워진다.  
-**ddd-ui-agent는 캡처를 시도하지 않는다 — spec.md의 `![[preview.png]]` 라인만 유지하면 된다.**
+**ddd-ui-agent는 캡처를 시도하지 않는다 — spec.md의 `![[preview_annotated.png]]` 라인만 유지하면 된다.**
 
 | 우선 | 경로 | 처리 |
 |-----|------|------|
@@ -369,14 +393,10 @@ revision_history:
 
 ## §0 화면 미리보기
 
-원본 캡처:
-![[preview.png]]
-
-디스크립션 (번호 마커):
 ![[preview_annotated.png]]
 
-> 마커는 ddd-ui-agent Phase 0.5에서 LLM 시각 분석으로 생성 (비즈니스 블록 단위).
-> `preview_annotated.png`가 없으면 §2 와이어프레임의 `[N]` 번호가 대체 역할을 한다.
+> 번호 마커: Phase 0.5 LLM 시각 분석 (비즈니스 블록 단위).
+> `preview_annotated.png`가 없으면 §2 와이어프레임의 `[N]` 번호가 대체.
 
 [HTML 미리보기 열기 →](preview.html)
 
@@ -516,6 +536,13 @@ flowchart LR
     → 추출 안 됐으면 `-` (한국 SI 검수에서 가장 자주 누락 지적)
 [ ] §5 이벤트 표가 HTTP 코드·도메인 에러·화면 메시지·후속 행동 4컬럼으로 분리됐는가?
 [ ] frontmatter에 revision_history (선택)가 있는가? 최초 생성 시 `version: 1.0, author: ddd-ui-agent (auto)` 한 줄
+
+# 탭 모드 추가 체크 (tabIndex 전달 시)
+[ ] tabJsFile 1개만 읽었는가? (다른 탭 JS 파일을 읽었으면 §5가 해당 탭 범위를 초과함)
+[ ] JSP에서 `<div id="tab{tabIndex}">` 섹션만 분석했는가?
+[ ] 화면명에 탭 레이블이 포함됐는가? (`{부모명} - {tabLabel}` 형식)
+[ ] UIS-ID가 `UIS-{code}-{부모번호}-T{tabIndex}` 형식인가? (예: UIS-PRD-049-T01)
+[ ] §5에 다른 탭의 버튼·API가 포함되지 않았는가?
 ```
 
 ---

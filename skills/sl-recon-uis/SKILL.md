@@ -19,10 +19,12 @@ triggers:
 1. STEP 6-1: Chrome + 로그인 (브라우저 환경 준비)
 2. STEP 6-2: BFS 전수 탐색 → `uis_capture_map.json` 생성
 3. STEP 6-2-3: BFS → 도메인 구조 자동생성 + 소스 파일 역매핑 (선택적 보강)
-4. ✋ STEP 6-2-4: 사용자 검토 (필수 체크포인트)
-5. STEP 6-3: UIS spec 생성 (ddd-ui-agent 배치 — **Phase 0.5에서 LLM이 이미지+소스 분석 → 블록 마커 생성 → annotate 실행**)
-6. STEP 6-4: api_hints 수집
-7. STEP 6-5: _TOC.md 생성
+4. STEP 6-2-3-C: 탭 화면 자동 감지 → 탭 서브엔트리 추가 (`detect_tabs.py`)
+5. STEP 6-2-3-D: 탭 서브엔트리 캡처 (`capture_single_tab.js --tab=N`)
+6. ✋ STEP 6-2-4: 사용자 검토 (필수 체크포인트)
+7. STEP 6-3: UIS spec 생성 (ddd-ui-agent 배치 — **Phase 0.5에서 LLM이 이미지+소스 분석 → 블록 마커 생성 → annotate 실행**)
+8. STEP 6-4: api_hints 수집
+9. STEP 6-5: _TOC.md 생성
 
 ---
 
@@ -635,6 +637,149 @@ else:
 "
 ```
 
+### 6-2-3-C: 탭 화면 자동 감지 (detect_tabs.py)
+
+JSP 화면 중 다중탭 구조를 가진 화면을 감지하여 탭별 서브엔트리를 `uis_capture_map.json`에 추가한다.  
+`<script src="*t01.js">` + `<div id="tab1">` 교집합 패턴으로 탭 확정. 2탭 미만이면 스킵.
+
+```bash
+!python -c "
+import os, sys, subprocess, json, re
+
+try:
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+except AttributeError:
+    pass
+
+env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
+           if '=' in l and not l.startswith('#'))
+plugin = env.get('PLUGIN_PATH', '')
+script = os.path.join(plugin, 'scripts', 'detect_tabs.py') if plugin else ''
+ws = os.getcwd()
+
+if not (script and os.path.exists(script)):
+    print('[INFO] detect_tabs.py 없음 — 탭 감지 건너뜀')
+    sys.exit(0)
+
+r = subprocess.run([sys.executable, script, ws],
+                   capture_output=True, text=True, encoding='utf-8', errors='ignore')
+print(r.stdout[-3000:] if len(r.stdout) > 3000 else r.stdout)
+if r.returncode != 0:
+    print('[WARN] detect_tabs 실패 — 계속 진행')
+    print(r.stderr[-300:] if r.stderr else '')
+
+# 탭 서브엔트리 UIS ID 배정 (부모 uisId + '-T{탭번호}' 형식)
+if not (os.path.exists('_tmp/uis_capture_map.json') and os.path.exists('_tmp/domain_codes.json')):
+    sys.exit(0)
+
+cap_map = json.load(open('_tmp/uis_capture_map.json', encoding='utf-8'))
+domain_codes = json.load(open('_tmp/domain_codes.json', encoding='utf-8'))
+
+def safe_label(s):
+    return re.sub(r'[/\\\\:*?\"<>|]', '', s).strip()
+
+parent_idx = {e.get('screenId'): e for e in cap_map if not e.get('parentScreenId')}
+modified = 0
+
+for entry in cap_map:
+    if not entry.get('parentScreenId') or entry.get('uisId'):
+        continue
+    parent = parent_idx.get(entry.get('parentScreenId', ''))
+    if not parent:
+        continue
+    domain = parent.get('domain', '')
+    code = domain_codes.get(domain, 'XX')
+    parent_uid = parent.get('uisId', '001')
+    tab_idx = entry.get('tabIndex', 1)
+    entry['uisId'] = parent_uid + '-T' + str(tab_idx).zfill(2)
+    entry['domain'] = domain
+    tab_label = entry.get('tabLabel', 'tab' + str(tab_idx))
+    entry['specDirName'] = ('UIS-' + code + '-' + parent_uid
+                            + '-T' + str(tab_idx).zfill(2)
+                            + '_' + safe_label(tab_label))
+    modified += 1
+
+if modified:
+    json.dump(cap_map, open('_tmp/uis_capture_map.json', 'w', encoding='utf-8'),
+              ensure_ascii=False, indent=2)
+    tab_count = len([e for e in cap_map if e.get('parentScreenId')])
+    print('탭 서브엔트리 UIS ID 배정 완료: 전체 ' + str(tab_count) + '개 (신규 ' + str(modified) + '개)')
+"
+```
+
+### 6-2-3-D: 탭 서브엔트리 캡처
+
+`captureDir`가 없는 탭 서브엔트리를 `capture_single_tab.js --tab=N`으로 순차 캡처한다.  
+부모 화면의 `activeRoute` + `tabIndex`를 사용하여 특정 탭의 스크린샷을 취득한다.
+
+```bash
+!python -c "
+import json, os, sys, subprocess
+
+try:
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+except AttributeError:
+    pass
+
+env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
+           if '=' in l and not l.startswith('#'))
+plugin    = env.get('PLUGIN_PATH', '')
+base_url  = env.get('PREVIEW_BASE_URL', '').rstrip('/')
+cdp_port  = env.get('PREVIEW_CDP_PORT', '9222')
+capture_js = os.path.join(plugin, 'scripts', 'capture_single_tab.js') if plugin else ''
+ws = os.getcwd()
+
+if not (capture_js and os.path.exists(capture_js)):
+    print('[ERROR] capture_single_tab.js 없음'); sys.exit(1)
+
+cap_map = json.load(open('_tmp/uis_capture_map.json', encoding='utf-8'))
+tab_entries = [e for e in cap_map
+               if e.get('parentScreenId') and not e.get('captureDir')]
+
+if not tab_entries:
+    print('[INFO] 캡처 필요한 탭 서브엔트리 없음 — 이미 완료됐거나 탭 화면 없음')
+    sys.exit(0)
+
+parent_idx = {e.get('screenId'): e for e in cap_map if not e.get('parentScreenId')}
+print('탭 서브엔트리 캡처 시작: ' + str(len(tab_entries)) + '개')
+
+for entry in tab_entries:
+    parent     = parent_idx.get(entry.get('parentScreenId', ''), {})
+    active_route = parent.get('activeRoute', '') or entry.get('activeRoute', '')
+    screen_id  = entry.get('screenId', '')
+    tab_index  = str(entry.get('tabIndex', 1))
+    url        = base_url + active_route
+    print('  캡처: ' + screen_id + ' (tab' + tab_index + ') ← ' + url)
+
+    try:
+        result = subprocess.run(
+            ['node', capture_js,
+             '--url=' + url,
+             '--screenId=' + screen_id,
+             '--workspace=' + ws,
+             '--port=' + cdp_port,
+             '--tab=' + tab_index,
+             '--maxHeight=8000'],
+            capture_output=True, text=True, encoding='utf-8', errors='ignore', timeout=90
+        )
+        data = json.loads(result.stdout.strip())
+        if data.get('success'):
+            entry['captureDir']  = data['captureDir']
+            entry['captureFile'] = data['captureFile']
+            entry['widgetCount'] = data.get('widgetCount', 0)
+            print('    OK h=' + str(data.get('captureHeight','?')) + '  widgets=' + str(data.get('widgetCount',0)))
+        else:
+            print('    FAIL: ' + data.get('error', '?'))
+    except Exception as ex:
+        print('    ERROR: ' + str(ex))
+
+json.dump(cap_map, open('_tmp/uis_capture_map.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
+captured = len([e for e in tab_entries if e.get('captureDir')])
+print()
+print('탭 캡처 완료: ' + str(captured) + '/' + str(len(tab_entries)) + '개')
+"
+```
+
 ---
 
 ## ✋ STEP 6-2-4: 화면 목록 + 도메인 코드 검토 (필수 체크포인트)
@@ -769,15 +914,21 @@ for dom, items in sorted(by_domain.items()):
     [화면 1]
     메뉴경로: {menuPath.join(' > ')}
     라우트: {activeRoute}
-    진입 파일: {entryFile or "소스 미매핑 (캡처만)"}
+    진입 파일: {entryFile or jspPath(탭 모드) or "소스 미매핑 (캡처만)"}
     도메인: {domain}
-    UIS ID: UIS-{uisId}          ← 예: UIS-BP-001
+    UIS ID: UIS-{uisId}          ← 예: UIS-BP-001 / 탭 서브엔트리: UIS-BP-001-T01
     INF ID 범위: INF-{uisId} 대응  ← 예: INF-BP-001
     스펙 저장 경로: docs/05_설계서/{domain}/UI/{specDirName}/spec.md
     INF 디렉토리: docs/05_설계서/{domain}/INF/
     캡처 디렉토리: {captureDir}
     MODE: RECON
     워크스페이스: {현재 작업 디렉토리 절대경로}
+    ← 탭 서브엔트리 (parentScreenId 있음) 인 경우에만 아래 4줄 추가:
+    탭 인덱스: {tabIndex}           ← ddd-ui-agent 탭 모드 진입 트리거
+    탭 레이블: {tabLabel}
+    탭 JS 파일: {tabJsFile}         ← Phase 1에서 이 파일만 읽기 (다른 탭 JS 읽기 금지)
+    부모 화면ID: {parentScreenId}
+    JSP 파일: {jspPath}             ← 진입파일 (부모 JSP — 탭 섹션만 분석)
 
     [화면 2] ...
     [화면 3] ...

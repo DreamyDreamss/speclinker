@@ -1,7 +1,7 @@
 {
   "name": "speclinker",
-  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 REQ-ID 체이닝, UA 대시보드 통합. v2.35: 의존성 자동설치(setup-deps.js) — playwright-core·Pillow·UA런타임deps SessionStart 원클릭, dist 재빌드 불필요",
-  "version": "2.35.0",
+  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 REQ-ID 체이닝, UA 대시보드 통합. v2.36: 탭화면 자동분리 — detect_tabs.py(JSP탭감지)+capture_single_tab --tab=N+ddd-ui-agent탭모드로 탭별 UIS서브스펙 자동생성",
+  "version": "2.36.0",
   "author": {
     "name": "DreamyDreamss"
   },
