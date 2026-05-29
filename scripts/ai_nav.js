@@ -494,13 +494,14 @@ async function doCapture(page, screenId, cdpSession) {
   const widgetsPath = outPng.replace('.png', '_widgets.json');
   fs.writeFileSync(widgetsPath, JSON.stringify(widgets, null, 2));
 
-  // annotate_preview.py (있으면 실행)
+  // annotate_preview.py (있으면 실행) — screen 디렉토리를 positional arg로 전달
   const env = parseProjectEnv();
   const annotate = path.join(env.PLUGIN_PATH || '', 'scripts', 'annotate_preview.py');
   if (fs.existsSync(annotate)) {
     try {
+      const screenDir = path.dirname(outPng);
       execSync(
-        'python "' + annotate + '" "' + outPng + '" "' + widgetsPath + '"',
+        'python "' + annotate + '" "' + screenDir + '"',
         { stdio: 'pipe', cwd: WORKSPACE }
       );
     } catch (_) {}

@@ -282,12 +282,15 @@ process.stdout.write('uis_capture_map 저장: ' + map.length + '개\n');
 > - `_domain_plan.json` = BFS 완료 후 자동 생성. 사전에 존재할 필요 없음.
 > - 소스 역매핑 = `activeRoute` → controller/JSP 역추적 (선택적 보강).
 
-### 6-2-3-A: menuPath[0] → 도메인 구조 자동생성
+### 6-2-3-A: menuPath[0] → 도메인 구조 자동생성 + 도메인 코드 추출
+
+> **도메인 코드 규칙**: `INF-BP-001`, `UIS-OR-001`, `SCH-MK-001` 형식.
+> JSP 파일명 접두어(bp/or/mk/st...)에서 자동 추출. 사용자가 STEP 6-2-4에서 확인/수정 가능.
 
 ```bash
 !python -c "
-import json, os, sys
-from collections import defaultdict, OrderedDict
+import json, os, sys, re
+from collections import defaultdict, OrderedDict, Counter
 
 try:
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -305,51 +308,90 @@ for entry in cap_map:
         domain_screens[domain] = []
     domain_screens[domain].append(entry)
 
-# UIS-F ID 도메인별 순번 배정 (10 단위 gap)
-uis_cursor = 1
+def safe_label(s):
+    # 파일시스템 안전: / \\ : * ? \" < > | 제거, 공백→_ (Windows 호환)
+    return re.sub(r'[/\\\\:*?\"<>|]', '', s).strip()
+
+def detect_code(domain_name, items):
+    # JSP 파일명 앞 2~3 알파벳이 도메인 약어 (bp/or/mk/st/ld/ad/bc/sy 등)
+    prefixes = []
+    for item in items:
+        sid = item.get('screenId', '') or item.get('activeRoute', '').split('/')[-1]
+        m = re.match(r'^([a-zA-Z]{2,3})', sid)
+        if m:
+            prefixes.append(m.group(1).upper())
+    if prefixes:
+        return Counter(prefixes).most_common(1)[0][0]
+    # fallback: 도메인명에서 자음/첫글자 조합 (한국어 → 영어 코드)
+    korean_map = {
+        '협력사': 'ST', '방송': 'BP', '상품': 'PR', '주문': 'OR', '고객': 'OR',
+        '프로모션': 'MK', '물류': 'LD', '전시': 'AD', '게시판': 'BC',
+        '시스템': 'SY', '정산': 'FI', '회원': 'MB', '배송': 'LD',
+    }
+    for k, v in korean_map.items():
+        if k in domain_name:
+            return v
+    # 최종 fallback: 도메인명 앞 2글자 (한글 포함, 구분 용도)
+    return domain_name[:2].upper()
+
+# 도메인 코드 결정 + ID 배정
+domain_codes = {}
 for domain, items in domain_screens.items():
+    code = detect_code(domain, items)
+    domain_codes[domain] = code
     for i, item in enumerate(items):
         item['domain'] = domain
-        item['uisId'] = uis_cursor + i
+        uid_num = i + 1
+        item['uisId'] = code + '-' + str(uid_num).zfill(3)      # 예: BP-001
+        item['specDirName'] = ('UIS-' + code + '-' + str(uid_num).zfill(3)
+                               + '_' + safe_label(item.get('screenLabel', 'screen')))
+        # captureDir 호환용 screenId (JSP 파일명) — 기존 캡처 경로 유지
         if not item.get('screenId'):
             ar = item.get('activeRoute', '')
             seg = [s for s in ar.rstrip('/').split('/') if s]
             item['screenId'] = seg[-1] if seg else item.get('screenLabel', 'screen')
-    uis_cursor += len(items) + 10
 
 json.dump(cap_map, open('_tmp/uis_capture_map.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
 
-# _domain_plan.json 생성 (BFS 기반)
-uis_cursor = 1
+# _domain_plan.json 생성 (BFS 기반, 도메인 코드 포함)
 bfs_domains = []
 for domain, items in domain_screens.items():
+    code = domain_codes[domain]
     bfs_domains.append({
         'name': domain,
+        'code': code,
         'description': domain + ' (BFS 자동 추출)',
         'source': 'BFS',
-        'uis': {'start': uis_cursor, 'end': uis_cursor + len(items) + 9},
-        'inf': {'start': uis_cursor, 'end': uis_cursor + len(items) + 9},
-        'sch': {'start': uis_cursor, 'end': uis_cursor + len(items) + 9},
+        'uis': {'start': 1, 'end': len(items)},
+        'inf': {'start': 1, 'end': len(items)},
+        'sch': {'start': 1, 'end': len(items)},
         'rootPaths': [],
-        'screens': [e.get('screenId','') for e in items],
+        'screens': [e.get('specDirName', e.get('screenId','')) for e in items],
     })
-    uis_cursor += len(items) + 10
 
 bfs_plan = {
     'project': os.path.basename(os.getcwd()),
     'source': 'BFS',
     'generatedAt': __import__('datetime').datetime.now().isoformat(),
+    'idFormat': '{type}-{code}-{NNN:03d}',
     'domains': bfs_domains,
 }
 os.makedirs('docs/05_설계서', exist_ok=True)
 json.dump(bfs_plan, open('docs/05_설계서/_domain_plan.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
 
-print('도메인 자동 추출 완료 (BFS menuPath[0] 기준):')
+print('도메인 자동 추출 완료 (BFS menuPath[0] + 도메인 코드):')
+print()
+print('  도메인명'.ljust(20) + '코드'.ljust(6) + '화면 수')
+print('  ' + '-' * 35)
 for domain, items in domain_screens.items():
-    print('  ' + domain.ljust(25) + str(len(items)).rjust(3) + '개 화면')
+    code = domain_codes[domain]
+    sample = 'UIS-' + code + '-001 ~ UIS-' + code + '-' + str(len(items)).zfill(3)
+    print('  ' + domain.ljust(20) + code.ljust(6) + str(len(items)).rjust(3) + '개   ' + sample)
 print()
 print('총 ' + str(len(cap_map)) + '개 화면, ' + str(len(bfs_domains)) + '개 도메인')
 print('_domain_plan.json 생성 완료')
+print()
+print('[주의] 도메인 코드가 잘못됐으면 STEP 6-2-4에서 직접 수정 가능')
 "
 ```
 
@@ -422,9 +464,10 @@ else:
 
 ---
 
-## ✋ STEP 6-2-4: 화면 목록 검토 (필수 체크포인트)
+## ✋ STEP 6-2-4: 화면 목록 + 도메인 코드 검토 (필수 체크포인트)
 
-BFS로 발견된 전체 화면 목록을 출력하고 피드백을 받는다.
+BFS로 발견된 화면 목록과 자동 추출된 도메인 코드를 출력하고 피드백을 받는다.
+**도메인 코드가 잘못됐으면 여기서 수정한다 — INF/UIS/SCH ID 전체에 영향.**
 
 ```bash
 !python -c "
@@ -436,36 +479,55 @@ except AttributeError:
     pass
 
 cap_map = json.load(open('_tmp/uis_capture_map.json', encoding='utf-8'))
+plan    = json.load(open('docs/05_설계서/_domain_plan.json', encoding='utf-8'))
+
+code_map = {d['name']: d.get('code','??') for d in plan['domains']}
 from collections import defaultdict
 by_domain = defaultdict(list)
 for e in cap_map:
-    by_domain[e.get('domain', '?')].append(e)
+    by_domain[e.get('domain','?')].append(e)
 
-print('=' * 75)
+print('=' * 80)
 print('BFS 발견 화면 목록 (총 ' + str(len(cap_map)) + '개)')
-print('=' * 75)
+print('=' * 80)
+
+# 도메인 코드 요약
+print()
+print('[도메인 코드 요약]  ← 코드 변경 시: \"코드수정 방송관리 BM\"')
+print('  도메인명'.ljust(22) + '코드   ID 예시')
+print('  ' + '-' * 50)
+for d in plan['domains']:
+    code = d.get('code','??')
+    cnt  = len([e for e in cap_map if e.get('domain')==d['name']])
+    print('  ' + d['name'].ljust(22) + code.ljust(5) + '  UIS-' + code + '-001 ~ UIS-' + code + '-' + str(cnt).zfill(3)
+          + '  /  INF-' + code + '-001')
+
 idx = 0
 for domain, items in sorted(by_domain.items()):
+    code = code_map.get(domain, '??')
     print()
-    print('  [' + domain + '] ' + str(len(items)) + '개')
+    print('  [' + domain + '] (' + code + ')  ' + str(len(items)) + '개')
     for e in items:
         idx += 1
         mp    = ' > '.join(e.get('menuPath', []))
+        uid   = 'UIS-' + e.get('uisId', '?')
         route = e.get('activeRoute', '')
-        ef    = e.get('entryFile', '')
-        src   = '  ← ' + ef if ef else ''
-        print('    ' + str(idx).rjust(3) + '. ' + mp.ljust(45) + route[:40] + src)
+        ef    = e.get('entryFile','')
+        src   = ' ← ' + ef if ef else ''
+        print('    ' + str(idx).rjust(3) + '. ' + uid.ljust(14) + mp[:40].ljust(40) + route[:35] + src)
 
 print()
 print('[피드백 방법]')
-print('  이상없음    : \"계속\"')
-print('  제외        : 제외 3,7')
-print('  도메인수정  : 도메인 5 / newDomain')
-print('  화면명수정  : 수정 5 / 새화면명')
+print('  이상없음     : \"계속\"')
+print('  제외         : 제외 3,7')
+print('  도메인수정   : 도메인 5 / 새도메인명')
+print('  코드수정     : 코드수정 방송관리 BM   ← 도메인 코드 변경')
+print('  화면명수정   : 수정 5 / 새화면명')
 "
 ```
 
-사용자 피드백을 받아 `_tmp/uis_capture_map.json`을 직접 수정한다.
+사용자 피드백을 받아 `_tmp/uis_capture_map.json`과 `_domain_plan.json`을 직접 수정한다.
+**도메인 코드 변경 시**: `_domain_plan.json`의 `code` 수정 + `uis_capture_map.json`의 `uisId`/`specDirName` 일괄 재생성.
 
 > **확인 전 STEP 6-3 절대 진행 금지.**
 
@@ -487,6 +549,8 @@ except AttributeError:
     pass
 
 cap_map = json.load(open('_tmp/uis_capture_map.json', encoding='utf-8'))
+plan    = json.load(open('docs/05_설계서/_domain_plan.json', encoding='utf-8'))
+code_map = {d['name']: d.get('code','XX') for d in plan['domains']}
 
 from collections import defaultdict
 by_domain = defaultdict(list)
@@ -496,13 +560,15 @@ for e in cap_map:
 print('UIS 생성 대상: ' + str(len(cap_map)) + '개')
 print()
 for dom, items in sorted(by_domain.items()):
+    code    = code_map.get(dom, 'XX')
     batches = (len(items) + 2) // 3
-    print('  ' + dom.ljust(25) + str(len(items)).rjust(3) + '개  →  ' + str(batches) + '배치')
+    print('  [' + dom + '] (' + code + ')  ' + str(len(items)) + '개  →  ' + str(batches) + '배치')
     for e in items:
-        mp  = ' > '.join(e.get('menuPath', [])) or e.get('activeRoute','')
-        ef  = e.get('entryFile','')
-        src = ' [' + os.path.basename(ef) + ']' if ef else ' [캡처만]'
-        print('    UIS-F-' + str(e.get('uisId',0)).zfill(3) + '  ' + e.get('screenId','').ljust(25) + '  ' + mp[:35] + src)
+        uid     = 'UIS-' + e.get('uisId', '?')
+        spec_dn = e.get('specDirName', e.get('screenId',''))
+        ef      = e.get('entryFile','')
+        src     = ' [' + os.path.basename(ef) + ']' if ef else ' [캡처만]'
+        print('    ' + uid.ljust(15) + spec_dn[:45] + src)
 "
 ```
 
@@ -511,7 +577,7 @@ for dom, items in sorted(by_domain.items()):
 ```
 각 배치(같은 도메인 3개씩) → Agent 도구 호출:
   subagent_type: "speclinker:ddd-ui-agent"
-  description: "{domain} UIS 생성 ({screenId1}, ...)"
+  description: "{domain}({code}) UIS 생성 ({specDirName1}, ...)"
   prompt: |
     처리 대상:
 
@@ -520,7 +586,9 @@ for dom, items in sorted(by_domain.items()):
     라우트: {activeRoute}
     진입 파일: {entryFile or "소스 미매핑 (캡처만)"}
     도메인: {domain}
-    UIS-F ID: UIS-F-{uisId:03d}
+    UIS ID: UIS-{uisId}          ← 예: UIS-BP-001
+    INF ID 범위: INF-{uisId} 대응  ← 예: INF-BP-001
+    스펙 저장 경로: docs/05_설계서/{domain}/UI/{specDirName}/spec.md
     INF 디렉토리: docs/05_설계서/{domain}/INF/
     캡처 디렉토리: {captureDir}
     MODE: RECON
@@ -536,6 +604,12 @@ for dom, items in sorted(by_domain.items()):
     화면명은 menuPath 마지막 항목 사용. spec.md에 이미지 상대경로 삽입.
     widgets.json 기반으로 UI 컴포넌트 목록 작성.
     entryFile이 없으면 캡처 이미지만으로 UI 구조 분석.
+
+    [ID 형식 규칙]
+    - UIS-ID: UIS-{uisId}  (예: UIS-BP-001)
+    - INF 연결: INF-{uisId}  (예: INF-BP-001)
+    - spec.md frontmatter: UIS-ID: UIS-{uisId}
+    - 스펙 디렉토리명: {specDirName}  ← 반드시 이 이름으로 생성
 
 각 배치 완료 후 다음 배치 시작.
 ```

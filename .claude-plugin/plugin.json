@@ -1,7 +1,7 @@
 {
   "name": "speclinker",
-  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 REQ-ID 체이닝, UA 대시보드 통합. v2.29: sl-recon-uis BFS-First 재설계 — 정적분석 제거, menuPath[0]=도메인, E2E 스타일 전수탐색",
-  "version": "2.29.0",
+  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 REQ-ID 체이닝, UA 대시보드 통합. v2.30: 도메인 코드 기반 ID 체계(UIS-BP-001/INF-OR-001), 디렉토리명 ID+화면명, annotate 버그 수정",
+  "version": "2.30.0",
   "author": {
     "name": "DreamyDreamss"
   },
