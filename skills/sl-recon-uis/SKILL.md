@@ -26,6 +26,54 @@ triggers:
 
 ---
 
+## 실행 인수 파싱
+
+인수가 있으면 도메인 필터 / 실행 모드를 결정한다.
+
+| 인수 형식 | 설명 |
+|---------|------|
+| (없음) | 전체 BFS + 전체 UIS 생성 |
+| `방송관리` | 해당 GNB만 BFS + UIS 생성 (타 도메인 보존) |
+| `--spec-only 방송관리` | BFS 없이 기존 캡처 기반 UIS spec 재생성만 |
+
+**지금 실행된 인수를 확인하고 Write 도구로 `_tmp/_recon_uis_mode.json`을 생성하세요:**
+
+- 인수가 `--spec-only 방송관리` 형식 → `{"domain_filter": "방송관리", "spec_only": true}`
+- 인수가 `방송관리`만 → `{"domain_filter": "방송관리", "spec_only": false}`
+- 인수가 없음 → `{"domain_filter": null, "spec_only": false}`
+
+```bash
+!python -c "
+import json, os, sys
+try:
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+except AttributeError:
+    pass
+
+mode = json.load(open('_tmp/_recon_uis_mode.json', encoding='utf-8'))
+df   = mode.get('domain_filter')
+so   = mode.get('spec_only', False)
+
+if df:
+    tag = '[spec-only 재생성]' if so else '[도메인 필터]'
+    print(tag + ' 대상: ' + df)
+    if os.path.exists('_tmp/uis_capture_map.json'):
+        cap = json.load(open('_tmp/uis_capture_map.json', encoding='utf-8'))
+        other  = [e for e in cap if e.get('domain','') != df]
+        target = [e for e in cap if e.get('domain','') == df]
+        print('  기존 cap_map: 전체 ' + str(len(cap)) + '개 (타도메인 ' + str(len(other)) + '개 보존 / 대상 ' + str(len(target)) + '개 재탐색)')
+    if so:
+        print()
+        print('→ STEP 6-1, 6-2 스킵 — STEP 6-2-3으로 바로 이동')
+else:
+    print('[전체 모드] 모든 GNB BFS + 전체 UIS 생성')
+"
+```
+
+> `spec_only=true`이면 **STEP 6-1과 STEP 6-2를 건너뛰고 STEP 6-2-3으로 바로 이동**한다.
+
+---
+
 ## 실행 전 확인
 
 ```bash
@@ -167,14 +215,44 @@ print('AI_NAV='   + ai_nav)
 print('CDP_PORT=' + cdp_port)
 print('CWD='      + os.getcwd())
 
-cap_map = []
+# 도메인 필터 읽기
+mode = {}
+if os.path.exists('_tmp/_recon_uis_mode.json'):
+    mode = json.load(open('_tmp/_recon_uis_mode.json', encoding='utf-8'))
+domain_filter = mode.get('domain_filter')
+
+all_existing = []
 if os.path.exists('_tmp/uis_capture_map.json'):
-    cap_map = json.load(open('_tmp/uis_capture_map.json', encoding='utf-8'))
-    routes = [e.get('activeRoute','') for e in cap_map]
-    print('재개: ' + str(len(cap_map)) + '개 이미 캡처됨')
-    print('  visited_routes: ' + str(routes[:5]) + ('...' if len(routes) > 5 else ''))
+    all_existing = json.load(open('_tmp/uis_capture_map.json', encoding='utf-8'))
+
+if domain_filter:
+    other_entries  = [e for e in all_existing if e.get('domain','') != domain_filter]
+    target_entries = [e for e in all_existing if e.get('domain','') == domain_filter]
+    visited_other  = set(e.get('activeRoute','') for e in other_entries)
+
+    print('[도메인 필터] ' + domain_filter + ' 재탐색')
+    print('  타 도메인 보존: ' + str(len(other_entries)) + '개 (visited_routes에 사전 등록)')
+    print('  대상 도메인 재탐색: ' + str(len(target_entries)) + '개 (기존 항목 교체)')
+    print()
+    print('[BFS 초기화 지침]')
+    print('  - visited_routes 초기값: 타 도메인 routes ' + str(len(visited_other)) + '개')
+    print('  - capture_map 초기값: other_entries ' + str(len(other_entries)) + '개 보존')
+    print('  - 대상 GNB: ' + domain_filter + ' 만 탐색 (다른 L1 GNB는 클릭하되 스킵 처리)')
+
+    # BFS 루프가 읽을 수 있도록 other_entries 저장
+    import json as _j
+    os.makedirs('_tmp', exist_ok=True)
+    _j.dump(other_entries, open('_tmp/_bfs_other_entries.json', 'w', encoding='utf-8'),
+            ensure_ascii=False, indent=2)
+    _j.dump(list(visited_other), open('_tmp/_bfs_visited_other.json', 'w', encoding='utf-8'),
+            ensure_ascii=False, indent=2)
 else:
-    print('신규 탐색 시작')
+    if all_existing:
+        routes = [e.get('activeRoute','') for e in all_existing]
+        print('재개: ' + str(len(all_existing)) + '개 이미 캡처됨')
+        print('  visited_routes: ' + str(routes[:5]) + ('...' if len(routes) > 5 else ''))
+    else:
+        print('신규 탐색 시작')
 "
 ```
 
@@ -190,6 +268,22 @@ else:
 | `current_path` | list | BFS 현재 경로 — 클릭 depth 기반 갱신 |
 
 **재개 지원**: `_tmp/uis_capture_map.json`이 존재하면 로드해 `visited_routes`에 기존 `activeRoute` 추가.
+
+---
+
+**도메인 필터 초기화 (`_tmp/_recon_uis_mode.json`의 `domain_filter`가 있는 경우):**
+
+BFS 루프 시작 전:
+1. `_tmp/_bfs_other_entries.json` 로드 → `capture_map` 초기값으로 사용 (타 도메인 보존)
+2. `_tmp/_bfs_visited_other.json` 로드 → `visited_routes` 초기값에 추가 (타 도메인 재캡처 방지)
+3. `clicked_labels`에 대상 도메인(`domain_filter`)이 아닌 **모든 L1 GNB 레이블을 사전 등록** → BFS가 해당 GNB는 클릭하더라도 그 하위 메뉴는 탐색하지 않음
+
+**도메인 필터 BFS 규칙:**
+- 우선순위 1 (depth=0 L1 GNB): `label == domain_filter`인 항목만 실제 탐색. 다른 L1 GNB는 `clicked_labels`에 추가해 종료 판단에서 제외
+- LEAF 캡처 후 `entry.domain = domain_filter` 명시 설정
+- 루프 종료 조건 추가: `domain_filter` 하위 모든 LEAF가 `clicked_labels`에 있으면 즉시 종료
+
+**저장 시**: `capture_map` = other_entries(보존) + 새 domain_filter 캡처 결과 (합산해서 `_tmp/uis_capture_map.json` 저장)
 
 ---
 
@@ -301,22 +395,43 @@ try:
 except AttributeError:
     pass
 
+# 도메인 필터 읽기
+mode = {}
+if os.path.exists('_tmp/_recon_uis_mode.json'):
+    mode = json.load(open('_tmp/_recon_uis_mode.json', encoding='utf-8'))
+domain_filter = mode.get('domain_filter')
+
 cap_map = json.load(open('_tmp/uis_capture_map.json', encoding='utf-8'))
+
+# 도메인 필터가 있으면 해당 도메인 항목만 처리
+if domain_filter:
+    work_map = [e for e in cap_map if
+                e.get('domain', '') == domain_filter or
+                (not e.get('domain') and (e.get('menuPath', [''])[0] == domain_filter))]
+    print('[도메인 필터] ' + domain_filter + ': ' + str(len(work_map)) + '개 (전체 ' + str(len(cap_map)) + '개 중)')
+else:
+    work_map = cap_map
 
 # menuPath[0] = 도메인 (L1 GNB 카테고리)
 domain_screens = OrderedDict()
-for entry in cap_map:
+for entry in work_map:
     mp = entry.get('menuPath', [])
     domain = mp[0] if mp else 'unknown'
     if domain not in domain_screens:
         domain_screens[domain] = []
     domain_screens[domain].append(entry)
 
+# 도메인 필터: 이미 코드가 있으면 재사용
+if domain_filter and os.path.exists('_tmp/domain_codes.json'):
+    existing_codes = json.load(open('_tmp/domain_codes.json', encoding='utf-8'))
+    if domain_filter in existing_codes:
+        print('  코드 재사용: ' + domain_filter + ' = ' + existing_codes[domain_filter])
+
 domains_list = list(domain_screens.keys())
 os.makedirs('_tmp', exist_ok=True)
 json.dump(domains_list, open('_tmp/_bfs_domains_raw.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
 
-print('BFS 도메인 목록 (' + str(len(domains_list)) + '개):')
+print('처리 도메인 목록 (' + str(len(domains_list)) + '개):')
 for d in domains_list:
     print('  - ' + d + ' (' + str(len(domain_screens[d])) + '개 화면)')
 print()
@@ -327,6 +442,8 @@ print('→ _tmp/_bfs_domains_raw.json 저장 완료')
 **Phase 2 — LLM 도메인 코드 생성**
 
 `_tmp/_bfs_domains_raw.json`을 Read 도구로 읽어, 각 도메인명에 대해 **영어 약어(2~4자 대문자)**를 배정한 후 Write 도구로 `_tmp/domain_codes.json`을 생성하세요.
+
+**도메인 필터 모드인 경우**: 기존 `_tmp/domain_codes.json`이 있으면 Read 도구로 읽어 이미 코드가 있는 도메인은 재사용하고, 새 도메인만 추가 배정한다.
 
 배정 규칙:
 - 도메인의 **비즈니스 의미**를 영어로 번역 (예: 방송관리→BRD, 협력사관리→VND, 주문→ORD, 상품→PRD)
@@ -348,11 +465,25 @@ try:
 except AttributeError:
     pass
 
+# 도메인 필터 읽기
+mode = {}
+if os.path.exists('_tmp/_recon_uis_mode.json'):
+    mode = json.load(open('_tmp/_recon_uis_mode.json', encoding='utf-8'))
+domain_filter = mode.get('domain_filter')
+
 cap_map = json.load(open('_tmp/uis_capture_map.json', encoding='utf-8'))
 domain_codes = json.load(open('_tmp/domain_codes.json', encoding='utf-8'))
 
+# 처리 대상: 도메인 필터가 있으면 해당 도메인만
+if domain_filter:
+    work_map = [e for e in cap_map if
+                e.get('domain', '') == domain_filter or
+                (not e.get('domain') and e.get('menuPath', [''])[0] == domain_filter)]
+else:
+    work_map = cap_map
+
 domain_screens = OrderedDict()
-for entry in cap_map:
+for entry in work_map:
     mp = entry.get('menuPath', [])
     domain = mp[0] if mp else 'unknown'
     if domain not in domain_screens:
@@ -362,7 +493,7 @@ for entry in cap_map:
 def safe_label(s):
     return re.sub(r'[/\\\\:*?\"<>|]', '', s).strip()
 
-# LLM이 누락한 도메인 fallback: D01, D02...
+# 누락 도메인 fallback
 idx = 1
 for domain in domain_screens:
     if domain not in domain_codes:
@@ -386,10 +517,19 @@ for domain, items in domain_screens.items():
 
 json.dump(cap_map, open('_tmp/uis_capture_map.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
 
-bfs_domains = []
+# _domain_plan.json: 도메인 필터면 타 도메인 보존하고 대상 도메인만 교체
+plan_path = 'docs/05_설계서/_domain_plan.json'
+os.makedirs('docs/05_설계서', exist_ok=True)
+if domain_filter and os.path.exists(plan_path):
+    existing_plan = json.load(open(plan_path, encoding='utf-8'))
+    other_domains = [d for d in existing_plan.get('domains', []) if d['name'] != domain_filter]
+else:
+    other_domains = []
+
+new_domains = []
 for domain, items in domain_screens.items():
     code = domain_codes[domain]
-    bfs_domains.append({
+    new_domains.append({
         'name': domain,
         'code': code,
         'description': domain + ' (BFS 자동 추출)',
@@ -406,10 +546,9 @@ bfs_plan = {
     'source': 'BFS',
     'generatedAt': __import__('datetime').datetime.now().isoformat(),
     'idFormat': '{type}-{code}-{NNN:03d}',
-    'domains': bfs_domains,
+    'domains': other_domains + new_domains,
 }
-os.makedirs('docs/05_설계서', exist_ok=True)
-json.dump(bfs_plan, open('docs/05_설계서/_domain_plan.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
+json.dump(bfs_plan, open(plan_path, 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
 
 print('도메인 자동 추출 완료 (BFS menuPath[0] + LLM 코드):')
 print()
@@ -419,9 +558,11 @@ for domain, items in domain_screens.items():
     code = domain_codes[domain]
     sample = 'UIS-' + code + '-001 ~ UIS-' + code + '-' + str(len(items)).zfill(3)
     print('  ' + domain.ljust(20) + code.ljust(6) + str(len(items)).rjust(3) + '개   ' + sample)
+if domain_filter and other_domains:
+    print('  (타 도메인 ' + str(len(other_domains)) + '개 보존)')
 print()
-print('총 ' + str(len(cap_map)) + '개 화면, ' + str(len(bfs_domains)) + '개 도메인')
-print('_domain_plan.json 생성 완료')
+print('총 ' + str(len(cap_map)) + '개 화면, ' + str(len(other_domains) + len(new_domains)) + '개 도메인')
+print('_domain_plan.json 생성/갱신 완료')
 print()
 print('[주의] 도메인 코드가 잘못됐으면 STEP 6-2-4에서 직접 수정 가능')
 "
@@ -580,6 +721,12 @@ try:
 except AttributeError:
     pass
 
+# 도메인 필터 읽기
+mode = {}
+if os.path.exists('_tmp/_recon_uis_mode.json'):
+    mode = json.load(open('_tmp/_recon_uis_mode.json', encoding='utf-8'))
+domain_filter = mode.get('domain_filter')
+
 cap_map = json.load(open('_tmp/uis_capture_map.json', encoding='utf-8'))
 plan    = json.load(open('docs/05_설계서/_domain_plan.json', encoding='utf-8'))
 code_map = {d['name']: d.get('code','XX') for d in plan['domains']}
@@ -589,7 +736,13 @@ by_domain = defaultdict(list)
 for e in cap_map:
     by_domain[e.get('domain','unknown')].append(e)
 
-print('UIS 생성 대상: ' + str(len(cap_map)) + '개')
+# 도메인 필터 적용
+if domain_filter:
+    target_domains = {domain_filter: by_domain.get(domain_filter, [])}
+    print('[도메인 필터] ' + domain_filter + ' 만 UIS 생성 (전체 ' + str(len(cap_map)) + '개 중 ' + str(len(target_domains.get(domain_filter,[]))) + '개)')
+    by_domain = defaultdict(list, target_domains)
+else:
+    print('UIS 생성 대상: ' + str(len(cap_map)) + '개')
 print()
 for dom, items in sorted(by_domain.items()):
     code    = code_map.get(dom, 'XX')
@@ -711,8 +864,19 @@ try:
 except AttributeError:
     pass
 
+# 도메인 필터 읽기
+mode = {}
+if os.path.exists('_tmp/_recon_uis_mode.json'):
+    mode = json.load(open('_tmp/_recon_uis_mode.json', encoding='utf-8'))
+domain_filter = mode.get('domain_filter')
+
 plan = json.load(open('docs/05_설계서/_domain_plan.json', encoding='utf-8'))
-for d in plan['domains']:
+target_domains = plan['domains']
+if domain_filter:
+    target_domains = [d for d in plan['domains'] if d['name'] == domain_filter]
+    print('[도메인 필터] ' + domain_filter + ' _TOC.md 재생성')
+
+for d in target_domains:
     domain = d['name']
     ui_dir = 'docs/05_설계서/' + domain + '/UI'
     if not os.path.isdir(ui_dir):

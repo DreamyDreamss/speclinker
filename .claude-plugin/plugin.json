@@ -1,7 +1,7 @@
 {
   "name": "speclinker",
-  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 REQ-ID 체이닝, UA 대시보드 통합. v2.31: 도메인 코드 LLM 동적 생성(하드코딩 맵 제거), 3-Phase 구조(추출→LLM→배정)",
-  "version": "2.31.0",
+  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 REQ-ID 체이닝, UA 대시보드 통합. v2.32: /sl-recon-uis 도메인 필터(/sl-recon-uis 방송관리), --spec-only 모드, 타 도메인 보존",
+  "version": "2.32.0",
   "author": {
     "name": "DreamyDreamss"
   },
