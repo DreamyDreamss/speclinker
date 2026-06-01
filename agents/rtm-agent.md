@@ -136,12 +136,6 @@ RECON 모드에서는 REQ-F 대신 FUNC-ID를 키로 사용:
 
 Phase 3-B 스크립트를 재실행하여 screen-map.json을 갱신한다 (이미 최신이면 스킵).
 
-### R-5. si-graph 갱신
-
-```bash
-!node "$HOME/.claude/plugins/speclinker/scripts/ua_req_bridge.js" . 2>/dev/null || echo "skip"
-```
-
 ### R-6. 완료 보고 (RECON 모드)
 
 ```
@@ -258,7 +252,7 @@ for l in kg.get('layers',[]):
 
 ## Phase 3: linked-req-cache.json 생성
 
-**형식 (ua_req_bridge.js 호환):**
+**형식 (파일경로 → REQ-ID 배열):**
 
 ```json
 {
@@ -440,18 +434,7 @@ except: print('linked-req-cache.json 없음')
 
 ---
 
-## Phase 6: si-graph 갱신 트리거
-
-```bash
-!node "$HOME/.claude/plugins/speclinker/scripts/ua_req_bridge.js" . 2>/dev/null || echo "skip (ua_req_bridge 없음)"
-```
-
-→ knowledge-graph + linked-req-cache + 스펙 노드가 병합된 si-graph.json 생성  
-→ 대시보드에서 REQ→SRS→UIS→INF→SCH→코드 전체 체인 시각화
-
----
-
-## Phase 7: 완료 보고
+## Phase 6: 완료 보고
 
 ```
 ## rtm-agent 완료 보고
@@ -462,10 +445,7 @@ RTM 체인:
 파일:
 - docs/02_추적표/RTM_v1.0.md (전체 체인 갱신)
 - .understand-anything/linked-req-cache.json ({P}파일 → REQ 매핑)
-- .understand-anything/si-graph.json (갱신 완료)
 
 Constitutional 검증: {X}/6 원칙 통과
 보강 필요 항목: {내용 또는 "없음"}
-
-다음: run-dashboard.ps1 실행 → http://localhost:5173 대시보드 확인
 ```

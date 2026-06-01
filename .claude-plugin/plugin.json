@@ -1,6 +1,6 @@
 {
   "name": "speclinker",
-  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 REQ-ID 체이닝, UA 대시보드 통합. v2.41: scan_source.js 컨텍스트 경로 자동 감지(web.xml/Spring Boot/NestJS/FastAPI/.env), 클래스 레벨 /* 와일드카드 strip, INF path 브라우저 URL 일치",
+  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 FUNC-ID 체이닝. v2.41: scan_source.js 컨텍스트 경로 자동 감지(web.xml/Spring Boot/NestJS/FastAPI/.env), 클래스 레벨 /* 와일드카드 strip, INF path 브라우저 URL 일치",
   "version": "2.41.0",
   "author": {
     "name": "DreamyDreamss"
@@ -18,11 +18,7 @@
     "./skills/sl-rtm",
     "./skills/sl-dev",
     "./skills/sl-test",
-    "./skills/sl-viewer",
-    "./ua/skills/understand",
-    "./ua/skills/understand-domain",
-    "./ua/skills/understand-diff",
-    "./ua/skills/understand-dashboard"
+    "./skills/sl-viewer"
   ],
   "agents": [
     "./agents/spec-agent.md",
@@ -38,11 +34,7 @@
     "./agents/test-agent.md",
     "./agents/profile-agent.md",
     "./agents/convention-learner.md",
-    "./agents/meta-extractor.md",
-    "./ua/agents/architecture-analyzer.md",
-    "./ua/agents/domain-analyzer.md",
-    "./ua/agents/file-analyzer.md",
-    "./ua/agents/project-scanner.md"
+    "./agents/meta-extractor.md"
   ],
   "hooks": {
     "SessionStart": [

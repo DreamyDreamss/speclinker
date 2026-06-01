@@ -187,12 +187,6 @@ if script and os.path.exists(script):
 else:
     print('req_scan.py 없음 — PLUGIN_PATH를 project.env에서 확인하세요')
 "
-!node -e "
-const p=require('path'),f=require('fs');
-const env=Object.fromEntries(f.readFileSync('project.env','utf-8').split(/\\r?\\n/).filter(l=>l.includes('=')&&!l.startsWith('#')).map(l=>{const[k,...v]=l.split('=');return[k.trim(),v.join('=').trim()]}));
-const bridge=p.join(env.PLUGIN_PATH||'','scripts','ua_req_bridge.js');
-if(f.existsSync(bridge)){require('child_process').execSync('node '+JSON.stringify(bridge)+' .',{stdio:'inherit'})}else{console.log('ua_req_bridge.js 없음')}
-"
 ```
 
 ---

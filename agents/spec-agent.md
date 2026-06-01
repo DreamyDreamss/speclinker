@@ -352,10 +352,6 @@ RTM과 설계서를 기반으로 FUNC_MAP.md를 생성한다.
 
 > RECON 모드의 linked-req-cache는 rtm-agent가 별도로 생성하므로 여기서 다루지 않는다.
 
-```bash
-!node "$HOME/.claude/plugins/speclinker/scripts/ua_req_bridge.js" . 2>/dev/null || echo "skip"
-```
-
 ### C-5. Phase-C 완료 보고
 
 ```
