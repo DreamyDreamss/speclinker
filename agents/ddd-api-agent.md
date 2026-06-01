@@ -32,11 +32,12 @@ model: claude-sonnet-4-6
 
 ```
 파일 목록:
-- {filePath_1} → INF-{infStart_1:03d} ~ INF-{infEnd_1:03d}
-- {filePath_2} → INF-{infStart_2:03d} ~ INF-{infEnd_2:03d}  (없으면 생략)
-- {filePath_3} → INF-{infStart_3:03d} ~ INF-{infEnd_3:03d}  (없으면 생략)
+- {filePath_1} → INF-{domainCode}-{infIdStart_1:03d} 부터 순번 채번
+- {filePath_2} → INF-{domainCode}-{infIdStart_2:03d} 부터 순번 채번  (없으면 생략)
+- {filePath_3} → INF-{domainCode}-{infIdStart_3:03d} 부터 순번 채번  (없으면 생략)
 
 도메인: {domain}
+도메인 코드: {domainCode}          ← INF-{CODE}-NNN 형식의 CODE
 도메인 설명: {domainDescription}
 관련 레이어: {layer}
 MODE: {RECON | GENESIS}
@@ -56,7 +57,7 @@ MODE: {RECON | GENESIS}
 
 Profile이 없거나 `framework: unknown`이면 기존 fallback 패턴(아래 Phase 2-A의 어노테이션 카탈로그) 사용.
 
-각 파일을 **순서대로 처리**한다. INF 번호는 파일별 배정 범위를 독립적으로 사용한다.
+각 파일을 **순서대로 처리**한다. INF 번호는 `infIdStart`부터 순번으로 채번하며, 범위 상한 없이 엔드포인트 수만큼 생성한다.
 
 ---
 
@@ -191,8 +192,8 @@ Profile이 없거나 `framework: unknown`이면 기존 fallback 패턴(아래 Ph
 
 추출 직후 `{METHOD} {path}` 기준으로 **중복 경로를 제거**한다. 동일 경로가 여러 컨트롤러에 있으면 더 상세한 쪽 1개만 유지한다.
 
-엔드포인트 1개 = `INF-{NNN}.md` 1개. 배정 범위 안에서 순번으로 채번.  
-실제 엔드포인트 수만큼만 생성한다.
+엔드포인트 1개 = `INF-{CODE}-{NNN}.md` 1개. `infIdStart`부터 순번으로 채번.  
+실제 엔드포인트 수만큼만 생성한다. 범위 상한 없음.
 
 ### 2-B: 응답 스키마 작성 규칙
 
@@ -209,10 +210,11 @@ Profile이 없거나 `framework: unknown`이면 기존 fallback 패턴(아래 Ph
 
 ```markdown
 ---
-inf-id: INF-{NNN}
+inf-id: INF-{CODE}-{NNN}
 method: {GET|POST|PUT|DELETE}
 path: {/api/path}
 domain: {도메인}
+domain-code: {CODE}
 req-f: {FUNC-DOMAIN-NNN | REQ-F-NNN | [TBD]}
 srs-f: {SRS-F-NNN | [TBD]}
 screens: []
@@ -221,7 +223,7 @@ tables:
   - TABLE_NAME_B
 ---
 
-# INF-{NNN}: {METHOD} {path} — {기능명}
+# INF-{CODE}-{NNN}: {METHOD} {path} — {기능명}
 
 > **근거 소스:** `{파일경로}:{라인번호 범위}`
 
@@ -325,8 +327,8 @@ print('_tmp/INF-{NNN}_sch_required.json 저장')
 
 ```
 처리 파일 목록:
-- {filePath_1}: INF {N}건 생성 (INF-{infStart_1:03d}~INF-{actual_end_1:03d})
-- {filePath_2}: INF {N}건 생성 (INF-{infStart_2:03d}~INF-{actual_end_2:03d})
+- {filePath_1}: INF {N}건 생성 (INF-{CODE}-{infIdStart_1:03d} ~ INF-{CODE}-{actual_end_1:03d})
+- {filePath_2}: INF {N}건 생성 (INF-{CODE}-{infIdStart_2:03d} ~ INF-{CODE}-{actual_end_2:03d})
 총 엔드포인트: {총 N}개
 _sch_required.json 출력: {M}개 (테이블 있는 INF만)
 ```

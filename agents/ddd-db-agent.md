@@ -34,7 +34,7 @@ INF 생성 단계에서 `resolve_call_chain.py`가 미리 만들어 둔 **sch_dr
 
 호출자(sl-recon)가 전달한 입력:
 - `도메인`: 처리 대상 도메인명 (예: `auth`, `order`)
-- `SCH 범위`: SCH-NNN 시작/끝
+- `도메인 코드`: 2~4자 대문자 코드 (예: `ORD`, `BRD`) — SCH-{CODE}-NNN 형식에 사용
 - `INF 디렉토리`: `docs/05_설계서/{도메인}/INF/`
 - **`사전추출 SCH draft 경로`**: `_tmp/sch_draft/{도메인}/` ← 1차 신호
 - `프로젝트 Profile`: `.speclinker/profile.yaml` (선택 — `backend.persistence.technologies` 로 ORM/SQL 전략 선택)
@@ -215,9 +215,9 @@ for root in roots:
 
 | SCH-ID  | 테이블명 | INF-ID |
 |---------|---------|--------|
-| SCH-001 | [users](./auth/DB_auth.md#SCH-001) | INF-001 |
-| SCH-002 | [sessions](./auth/DB_auth.md#SCH-002) | INF-001, INF-003 |
-| SCH-011 | [bi_daily_summary](./dashboard/DB_dashboard.md#SCH-011) | INF-011 |
+| SCH-AUTH-001 | [users](./auth/DB_auth.md#SCH-AUTH-001) | INF-AUTH-001 |
+| SCH-AUTH-002 | [sessions](./auth/DB_auth.md#SCH-AUTH-002) | INF-AUTH-001, INF-AUTH-003 |
+| SCH-DSH-001 | [bi_daily_summary](./dashboard/DB_dashboard.md#SCH-DSH-001) | INF-DSH-001 |
 
 ## 도메인별 파일 목록
 
@@ -229,9 +229,10 @@ for root in roots:
 
 **파서 주의사항:**
 - 헤더: `| SCH-ID | 테이블명 | INF-ID |` (정확히 이 텍스트)
-- 1열: `SCH-NNN` (순수 ID — 링크 없음)
-- 2열: `[테이블명](./도메인/DB_도메인.md#SCH-NNN)` (Obsidian 링크)
-- 3열: `INF-NNN` (여러 개면 쉼표 구분)
+- 1열: `SCH-{CODE}-NNN` (순수 ID — 링크 없음, 예: `SCH-ORD-001`)
+- 2열: `[테이블명](./도메인/DB_도메인.md#SCH-{CODE}-NNN)` (Obsidian 링크)
+- 3열: `INF-{CODE}-NNN` (여러 개면 쉼표 구분)
+- SCH 순번: 기존 `SCH-{CODE}-*.md` 스캔 후 max+1 자동 채번 (범위 사전 배정 없음)
 - **이 파일에 DDL이나 컬럼 목록을 절대 작성하지 않는다**
 
 ### 3-2. 도메인 상세 파일 (`docs/05_설계서/{도메인}/DB_{도메인}.md`)
@@ -241,10 +242,10 @@ for root in roots:
 **각 테이블 항목 필수 구조:**
 
 ```markdown
-## SCH-001: users
+## SCH-{CODE}-001: users
 
-> GENESIS: **REQ-F:** [REQ-F-001](../../01_요구사항정의서/RD_v1.0.md#REQ-F-001) | **SRS-F:** [SRS-F-001](../../03_기능명세서/SRS_v1.0.md#SRS-F-001) | **API:** [INF-001](./INF/INF-001.md) | **화면:** [UIS-F-001](./UI/UIS-F-001/spec.md)
-> RECON: **FUNC-ID:** [FUNC-{도메인}-001](../../00_FUNC/FUNC_v1.0.md) | **SRS-F:** [TBD] | **API:** [INF-001](./INF/INF-001.md) | **화면:** [UIS-F-001](./UI/UIS-F-001/spec.md)
+> GENESIS: **REQ-F:** [REQ-F-001](../../01_요구사항정의서/RD_v1.0.md#REQ-F-001) | **SRS-F:** [SRS-F-001](../../03_기능명세서/SRS_v1.0.md#SRS-F-001) | **API:** [INF-{CODE}-001](./INF/INF-{CODE}-001.md) | **화면:** [UIS-{CODE}-001](./UI/UIS-{CODE}-001_화면명/spec.md)
+> RECON: **FUNC-ID:** [FUNC-{도메인}-001](../../00_FUNC/FUNC_v1.0.md) | **SRS-F:** [TBD] | **API:** [INF-{CODE}-001](./INF/INF-{CODE}-001.md) | **화면:** [UIS-{CODE}-001](./UI/UIS-{CODE}-001_화면명/spec.md)
 
 **근거 소스:** `{모델/ORM 파일 경로:라인번호}`
 

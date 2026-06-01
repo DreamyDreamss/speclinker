@@ -1,7 +1,7 @@
 {
   "name": "speclinker",
-  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 FUNC-ID 체이닝. v2.41: scan_source.js 컨텍스트 경로 자동 감지(web.xml/Spring Boot/NestJS/FastAPI/.env), 클래스 레벨 /* 와일드카드 strip, INF path 브라우저 URL 일치",
-  "version": "2.41.0",
+  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 FUNC-ID 체이닝. v2.42: INF/SCH/UIS 도메인 코드 기반 독립 순번(INF-BRD-001), 범위 사전 배정 폐기. /sl-recon-inf 제거 → link_uis_inf.py를 /sl-recon-uis STEP 6-3-B로 통합. v2.41: scan_source.js 컨텍스트 경로 자동 감지(web.xml/Spring Boot/NestJS/FastAPI/.env), 클래스 레벨 /* 와일드카드 strip, INF path 브라우저 URL 일치",
+  "version": "2.42.0",
   "author": {
     "name": "DreamyDreamss"
   },
@@ -10,7 +10,6 @@
     "./skills/sl-genesis",
     "./skills/sl-recon",
     "./skills/sl-recon-uis",
-    "./skills/sl-recon-inf",
     "./skills/sl-recon-doc",
     "./skills/sl-aidd",
     "./skills/sl-analyze",

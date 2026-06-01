@@ -22,9 +22,9 @@ triggers:
 4. STEP 6-2-3-C: 탭 화면 자동 감지 → 탭 서브엔트리 추가 (`detect_tabs.py`)
 5. STEP 6-2-3-D: 탭 서브엔트리 캡처 (`capture_single_tab.js --tab=N`)
 6. ✋ STEP 6-2-4: 사용자 검토 (필수 체크포인트)
-7. STEP 6-3: UIS spec 생성 (ddd-ui-agent 배치 — **Phase 0.5에서 LLM이 이미지+소스 분석 → 블록 마커 생성 → annotate 실행**)
-8. STEP 6-4: api_hints 수집
-9. STEP 6-5: _TOC.md 생성
+7. STEP 6-3: UIS spec 생성 (ddd-ui-agent 배치)
+8. STEP 6-3-B: UIS ↔ INF 링크 연결 (`link_uis_inf.py`)
+9. STEP 6-4: _TOC.md 생성
 
 ---
 
@@ -740,9 +740,6 @@ for domain, items in domain_screens.items():
             'name': domain, 'code': code,
             'description': domain + ' (BFS 발견, INF 없음)',
             'source': 'BFS-only',
-            'uis': {'start': 1, 'end': len(items)},
-            'inf': {'start': 0, 'end': 0},
-            'sch': {'start': 0, 'end': 0},
             'rootPaths': [],
             'screens': [e.get('specDirName', e.get('screenId','')) for e in items],
             'bfsScreenCount': len(items),
@@ -1149,56 +1146,35 @@ for dom, items in sorted(by_domain.items()):
 
 ---
 
-## STEP 6-4: api_hints 수집
+## STEP 6-3-B: UIS ↔ INF 링크 연결 (link_uis_inf.py)
 
-UIS spec.md에서 API 호출 패턴을 수집한다.
+UIS spec.md의 raw URL을 이미 생성된 INF 파일 링크로 교체한다.
 
 ```bash
 !python -c "
-import os, re, json
-
+import os, sys, subprocess
 try:
-    import sys
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 except AttributeError:
     pass
-
-cap_map = json.load(open('_tmp/uis_capture_map.json', encoding='utf-8'))
-
-hints_all = {}
-for e in cap_map:
-    sid    = e.get('screenId','')
-    domain = e.get('domain','')
-    if not (sid and domain): continue
-
-    spec = 'docs/05_설계서/' + domain + '/UI/' + sid + '/spec.md'
-    if not os.path.exists(spec):
-        continue
-
-    body = open(spec, encoding='utf-8').read()
-    for line in body.splitlines():
-        m = re.search(r'(GET|POST|PUT|DELETE|PATCH)\s+\|.*?\|.*?(/[^\s|]+)', line, re.I)
-        if m:
-            key = m.group(1).upper() + ':' + m.group(2)
-            hints_all[key] = {'url': m.group(2), 'method': m.group(1).upper(),
-                              'screen': sid, 'domain': domain}
-
-    gaps = '_tmp/' + sid + '_inf_gaps.json'
-    if os.path.exists(gaps):
-        for g in json.load(open(gaps, encoding='utf-8')).get('gaps', []):
-            key = g['method'].upper() + ':' + g['url']
-            hints_all[key] = {'url': g['url'], 'method': g['method'].upper(),
-                              'screen': sid, 'domain': domain}
-
-result = list(hints_all.values())
-json.dump(result, open('_tmp/uis_api_hints.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
-print('api_hints: ' + str(len(result)) + '개')
+env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
+           if '=' in l and not l.startswith('#'))
+plugin = env.get('PLUGIN_PATH','')
+script = os.path.join(plugin, 'scripts', 'link_uis_inf.py') if plugin else ''
+if not (script and os.path.exists(script)):
+    print('[SKIP] link_uis_inf.py 없음 — PLUGIN_PATH 확인')
+else:
+    r = subprocess.run([sys.executable, script, os.getcwd()],
+                       capture_output=True, text=True, encoding='utf-8', errors='replace')
+    print(r.stdout)
+    if r.returncode != 0:
+        print('[WARN] link_uis_inf 오류:', r.stderr[:500])
 "
 ```
 
 ---
 
-## STEP 6-5: UI _TOC.md 생성
+## STEP 6-4: _TOC.md 생성
 
 ```bash
 !python -c "

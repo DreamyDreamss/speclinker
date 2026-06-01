@@ -109,25 +109,23 @@ except FileNotFoundError:
   "domains": [
     {
       "name": "catalog",
+      "code": "CTL",
       "label": "전시·검색",
       "description": "상품 전시, 카테고리, 검색 기능",
-      "rootPaths": ["src/catalog/", "src/search/"],
-      "inf": { "start": 1,  "end": 20 },
-      "sch": { "start": 1,  "end": 10 },
-      "uis": { "start": 1,  "end": 10 }
+      "rootPaths": ["src/catalog/", "src/search/"]
     },
     {
       "name": "order",
+      "code": "ORD",
       "label": "주문",
       "description": "주문 생성, 조회, 상태 관리",
-      "rootPaths": ["src/order/"],
-      "inf": { "start": 21, "end": 40 },
-      "sch": { "start": 11, "end": 20 },
-      "uis": { "start": 11, "end": 20 }
+      "rootPaths": ["src/order/"]
     }
   ]
 }
 ```
+
+> **ID 형식**: `INF-{CODE}-{NNN}`, `SCH-{CODE}-{NNN}`, `UIS-{CODE}-{NNN}` — 도메인별 독립 순번, 범위 사전 배정 없음.
 
 ### A-5. SAD 생성
 
