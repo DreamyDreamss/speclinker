@@ -148,11 +148,62 @@ def load_linked_func_cache(root):
             pass
     return {}
 
+def load_spec_graph(root):
+    """gen_obsidian_index.py가 생성한 spec_graph.json 로드."""
+    path = os.path.join(root, '_tmp', 'spec_graph.json')
+    if os.path.exists(path):
+        try:
+            return json.load(open(path, encoding='utf-8'))
+        except Exception:
+            pass
+    return {}
+
+def expand_linked_ids(ids_dict, spec_graph):
+    """spec_graph를 통해 UIS→INF→SCH 전이적 링크를 확장한다.
+    체인: UIS-A → INF-B (UIS.linked.inf) → SCH-C (INF.linked.sch)
+    역방향: INF → UIS (INF.linked.uis) 도 포함."""
+    inf_set = set(ids_dict.get('inf', []))
+    uis_set = set(ids_dict.get('uis', []))
+    sch_set = set(ids_dict.get('sch', []))
+
+    # UIS → linked INF
+    for uis_id in list(uis_set):
+        node = spec_graph.get(uis_id, {})
+        for inf_id in node.get('linked', {}).get('inf', []):
+            inf_set.add(inf_id)
+
+    # INF → linked UIS (역방향)
+    for inf_id in list(inf_set):
+        node = spec_graph.get(inf_id, {})
+        for uis_id in node.get('linked', {}).get('uis', []):
+            uis_set.add(uis_id)
+
+    # INF → linked SCH (전이적: UIS→INF→SCH 체인 완성)
+    for inf_id in list(inf_set):
+        node = spec_graph.get(inf_id, {})
+        for sch_id in node.get('linked', {}).get('sch', []):
+            sch_set.add(sch_id)
+
+    return {
+        **ids_dict,
+        'inf': sorted(inf_set),
+        'uis': sorted(uis_set),
+        'sch': sorted(sch_set),
+    }
+
 def make_bundle(func_id, root, env, func_map):
     entry = func_map[func_id]
-    inf_content = find_inf_content(root, entry['inf'])
-    sch_content = find_sch_content(root, entry['sch'])
-    uis_content = find_uis_content(root, entry['uis'])
+
+    # spec_graph로 링크 확장 (gen_obsidian_index 실행 후 사용 가능)
+    spec_graph = load_spec_graph(root)
+    ids = expand_linked_ids(
+        {k: entry[k] for k in ['req', 'srs', 'inf', 'sch', 'uis']},
+        spec_graph
+    )
+
+    inf_content = find_inf_content(root, ids['inf'])
+    sch_content = find_sch_content(root, ids['sch'])
+    uis_content = find_uis_content(root, ids['uis'])
 
     mode = env.get('MODE', 'GENESIS')
     if mode == 'RECON':
@@ -170,10 +221,11 @@ def make_bundle(func_id, root, env, func_map):
         'description' : entry['description'],
         'mode'        : mode,
         'status'      : entry['status'],
-        'ids'         : {k: entry[k] for k in ['req', 'srs', 'inf', 'sch', 'uis']},
+        'ids'         : ids,
         'spec_content': {'inf': inf_content, 'sch': sch_content, 'uis': uis_content},
         'annotation'  : annotation,
         'implemented_files': implemented_files,
+        'spec_graph_used': bool(spec_graph),
     }
 
 def main():

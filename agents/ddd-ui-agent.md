@@ -541,7 +541,7 @@ flowchart LR
 [ ] tabJsFile 1개만 읽었는가? (다른 탭 JS 파일을 읽었으면 §5가 해당 탭 범위를 초과함)
 [ ] JSP에서 `<div id="tab{tabIndex}">` 섹션만 분석했는가?
 [ ] 화면명에 탭 레이블이 포함됐는가? (`{부모명} - {tabLabel}` 형식)
-[ ] UIS-ID가 `UIS-{code}-{부모번호}-T{tabIndex}` 형식인가? (예: UIS-PRD-049-T01)
+[ ] UIS-ID가 `UIS-{부모uisId}-T{tabIndex}` 형식인가? (예: UIS-PRD-049-T01, specDirName: UIS-PRD-049-T01_기초정보)
 [ ] §5에 다른 탭의 버튼·API가 포함되지 않았는가?
 ```
 

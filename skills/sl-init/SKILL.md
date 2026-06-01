@@ -139,9 +139,7 @@ SOURCE_2_PATH=<절대경로2>
 # POC_MODE=true 일 때만 아래 옵션 적용
 # POC_MODE=false
 #
-# ── 슬라이스 옵션 (3종, 우선순위: SCREENS > DOMAINS > LIMIT) ──
-# POC_SCREENS=                     # 쉼표 구분 화면명 (예: Or701Form,LoginPage)
-#                                  # 지정 화면이 호출하는 API URL만 자동 추출 → INF/UIS/SCH 전부 슬라이스
+# ── 슬라이스 옵션 (2종, 우선순위: DOMAINS > LIMIT) ──
 # POC_DOMAINS=                     # 쉼표 구분 도메인 (예: auth,order). 도메인 단위로 처리
 # POC_FILE_LIMIT=                  # 도메인별 INF 컨트롤러 파일 수 제한 (예: 5) — alphabetical
 #

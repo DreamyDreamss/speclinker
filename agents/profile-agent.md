@@ -1,6 +1,6 @@
 ---
 name: profile-agent
-description: probe.json + UA knowledge-graph + 코드 샘플을 보고 .speclinker/profile.yaml 초안을 생성하는 전담 에이전트. 사용자 confirm 후 영구 저장되며, 모든 ddd-* 에이전트의 1차 입력이 된다.
+description: source_index.json(scan_source.js 산출물) + UA knowledge-graph + 코드 샘플을 보고 .speclinker/profile.yaml 초안을 생성하는 전담 에이전트. 사용자 confirm 후 영구 저장되며, 모든 ddd-* 에이전트의 1차 입력이 된다.
 model: claude-sonnet-4-6
 ---
 
@@ -10,7 +10,7 @@ model: claude-sonnet-4-6
 
 | 조건 | 동작 |
 |------|------|
-| `_tmp/probe.json` 없음 | 중단 → "probe.py 먼저 실행 필요 (sl-recon STEP 1.5)" |
+| `_tmp/source_index.json` 없음 | 중단 → "/sl-recon STEP 1(scan_source.js) 먼저 실행 필요" |
 | `.speclinker/profile.yaml` 이미 존재 + `--reprofile` 없음 | **즉시 종료** (영구 저장 정책 — 자동 갱신 금지) |
 | UA knowledge-graph 없음 | 경고 + probe.json 신호만으로 계속 (정확도 감소 가능) |
 | 코드 샘플 로드 실패 (권한·경로 문제) | 경고 + 가용한 샘플만으로 계속 |
@@ -21,7 +21,7 @@ model: claude-sonnet-4-6
 
 ## 역할
 
-`sl-recon`이 STEP 1.5(probe)와 STEP 1(UA) 직후에 1회 호출한다.  
+`sl-recon`이 STEP 1(scan_source.js) 완료 직후 1회 호출한다.  
 **프로젝트의 기술 스택·아키텍처·퍼시스턴스·통신 패턴을 명시적 contract**(`profile.yaml`)로 끌어내는 일을 한다.
 
 **중요**: 이 에이전트가 만든 profile은 영구 저장되고 자동 갱신되지 않는다. 사람이 확인·수정 후 confirm해야 후속 단계 진행. SI 사업의 결정론 요구를 충족하기 위함이다.
@@ -36,7 +36,7 @@ model: claude-sonnet-4-6
 호출자(sl-recon)가 전달한 값:
 
 - `워크스페이스`: 절대 경로
-- `probe.json 경로`: `_tmp/probe.json` (Phase 0.2 산출물)
+- `source_index 경로`: `_tmp/source_index.json` (scan_source.js 산출물)
 - `UA knowledge-graph 경로`: `.understand-anything/knowledge-graph.json` (있을 때만)
 - `MODE`: RECON (이 에이전트는 RECON 전용)
 - `기존 profile.yaml 존재 여부`: 있으면 갱신 의도 없으면 신규 생성
@@ -45,32 +45,36 @@ model: claude-sonnet-4-6
 
 ---
 
-## Phase 1: probe.json 1차 신호 흡수
+## Phase 1: source_index.json 1차 신호 흡수
 
 ```bash
-!cat _tmp/probe.json | python3 -c "
-import json, sys
-d = json.load(sys.stdin)
-ind = d.get('indicators', {})
-print('=== probe indicators ===')
-print(f'  backend lang     : {ind.get(\"likely_backend_lang\")}')
-print(f'  backend framework: {ind.get(\"likely_backend_framework\")}')
-print(f'  persistence      : {ind.get(\"likely_persistence\")}')
-print(f'  frontend         : {ind.get(\"likely_frontend_framework\")}')
-print(f'  batch            : {ind.get(\"likely_batch\")}')
-print(f'  arch hints       : {ind.get(\"architecture_hints\")}')
-print()
-print('=== manifests ===')
-for k, v in d.get('manifests', {}).items():
-    print(f'  {k}: {len(v)} 개')
-print()
-print('=== directory_keywords (top 20) ===')
-for k, c in list(d.get('directory_keywords', {}).items())[:20]:
-    print(f'  {k}: {c}')
+!python3 -c "
+import json, sys, os
+try:
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+except AttributeError:
+    pass
+if not os.path.exists('_tmp/source_index.json'):
+    print('[FAIL] source_index.json 없음 — /sl-recon STEP 1 먼저 실행')
+    sys.exit(1)
+idx = json.load(open('_tmp/source_index.json', encoding='utf-8'))
+stats  = idx.get('typeStats', {})
+langs  = idx.get('langStats', {})
+files  = idx.get('files', [])
+routes = [r for f in files for r in f.get('routes', [])]
+api_routes  = [r for r in routes if r.get('kind') == 'api']
+form_routes = [r for r in routes if r.get('kind') == 'form']
+print('=== source_index 신호 ===')
+print(f'  총 파일 수: {len(files)}')
+print(f'  언어 분포: {dict(list(langs.items())[:5])}')
+print(f'  타입 분포: {dict(list(stats.items())[:8])}')
+print(f'  API 라우트: {len(api_routes)}개  |  Form 라우트: {len(form_routes)}개')
+ctrl_types = [t for t in stats if t in (\"controller\", \"router\", \"endpoint\")]
+print(f'  컨트롤러/라우터 타입: {ctrl_types}')
 "
 ```
 
-probe의 `indicators`는 **단정이 아닌 신호**다. 다음 단계에서 검증한다.
+source_index의 typeStats·langStats는 **단정이 아닌 신호**다. 다음 단계에서 코드 직접 확인으로 검증한다.
 
 ---
 

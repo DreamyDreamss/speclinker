@@ -370,7 +370,7 @@ print(json.dumps(available))
 "
 ```
 
-**POC 모드 도메인 필터** (POC_SCREENS 설정 시, ddd-db-agent 호출 전 실행):
+**POC 모드 도메인 필터** (`POC_DOMAINS` 설정 시, ddd-db-agent 호출 전 실행):
 
 ```bash
 !python3 -c "
@@ -378,28 +378,21 @@ import json, os
 env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
            if '=' in l and not l.startswith('#'))
 poc_mode    = env.get('POC_MODE','false').lower() == 'true'
-poc_screens = [s.strip() for s in env.get('POC_SCREENS','').split(',') if s.strip()]
+poc_domains = [s.strip() for s in env.get('POC_DOMAINS','').split(',') if s.strip()]
 
-if not poc_mode or not poc_screens:
+if not poc_mode or not poc_domains:
     print('일반 모드 — 전체 도메인 SCH 생성')
 else:
-    inv_path = '_tmp/screen_inventory.json'
     plan_path = 'docs/05_설계서/_domain_plan.json'
-    if os.path.exists(inv_path):
-        inv = json.load(open(inv_path, encoding='utf-8'))
-        active = list({s.get('domain') for s in inv if s.get('domain')})
-        plan = json.load(open(plan_path, encoding='utf-8'))
-        orig = len(plan['domains'])
-        filtered = [d for d in plan['domains'] if d['name'] in active]
-        if filtered and len(filtered) < orig:
-            plan['domains'] = filtered
-            json.dump(plan, open(plan_path, 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
-            print(f'🧪 POC SCH 필터: {[d[\"name\"] for d in filtered]} ({orig}개 → {len(filtered)}개)')
-            print('  복원: _domain_plan.json.full.json → _domain_plan.json 복사')
-        else:
-            print(f'POC SCH: 활성 도메인 {active} (전체와 동일하거나 필터 불필요)')
+    plan = json.load(open(plan_path, encoding='utf-8'))
+    orig = len(plan['domains'])
+    filtered = [d for d in plan['domains'] if d['name'] in poc_domains]
+    if filtered and len(filtered) < orig:
+        plan['domains'] = filtered
+        json.dump(plan, open(plan_path, 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
+        print(f'POC SCH 필터: {[d[\"name\"] for d in filtered]} ({orig}개 → {len(filtered)}개)')
     else:
-        print('[WARN] screen_inventory.json 없음 — POC SCH 필터 건너뜀')
+        print(f'POC SCH: 활성 도메인 {poc_domains} (전체와 동일하거나 필터 불필요)')
 "
 ```
 
@@ -470,8 +463,13 @@ LLM 재호출 없이 스크립트가 처리 — 토큰 절약.
 import os, sys, subprocess
 env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8') if '=' in l and not l.startswith('#'))
 plugin = env.get('PLUGIN_PATH','')
-script = os.path.join(plugin, 'scripts', 'link_inf_sch.py') if plugin else ''
-if script and os.path.exists(script):
+script = ''
+for name in ('link_inf_sch.py', 'link_inf_sch_new.py'):
+    candidate = os.path.join(plugin, 'scripts', name) if plugin else ''
+    if candidate and os.path.exists(candidate) and os.path.getsize(candidate) > 100:
+        script = candidate
+        break
+if script:
     subprocess.run([sys.executable, script, '.'], check=False)
 else:
     print('link_inf_sch.py 없음 — PLUGIN_PATH 확인')
