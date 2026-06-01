@@ -1,7 +1,7 @@
 {
   "name": "speclinker",
-  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 FUNC-ID 체이닝. v2.42: INF/SCH/UIS 도메인 코드 기반 독립 순번(INF-BRD-001), 범위 사전 배정 폐기. /sl-recon-inf 제거 → link_uis_inf.py를 /sl-recon-uis STEP 6-3-B로 통합. v2.41: scan_source.js 컨텍스트 경로 자동 감지(web.xml/Spring Boot/NestJS/FastAPI/.env), 클래스 레벨 /* 와일드카드 strip, INF path 브라우저 URL 일치",
-  "version": "2.42.1",
+  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 FUNC-ID 체이닝. v2.43: Tree-sitter AST 파서 도입(Java 컨트롤러 전용) — 다중경로 @RequestMapping 배열 지원, 메서드 바디 정확도 개선. resolve_call_chain.py Java 클래스 인덱스 O(1) 조회. v2.42: INF/SCH/UIS 도메인 코드 기반 독립 순번(INF-BRD-001), 범위 사전 배정 폐기.",
+  "version": "2.43.0",
   "author": {
     "name": "DreamyDreamss"
   },

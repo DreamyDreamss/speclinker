@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * scan_source.js — Tree-sitter 불필요한 경량 소스 스캐너
+ * scan_source.js — AST 기반 소스 스캐너 (Tree-sitter 우선, regex fallback)
  *
- * UA knowledge-graph 대체. annotation/decorator 기반 정적 분석으로
- * 컨트롤러·서비스·DAO·배치 파일을 탐지하고 라우트를 추출한다.
+ * annotation/decorator 기반 정적 분석으로 컨트롤러·서비스·DAO·배치 파일을 탐지하고
+ * 라우트를 추출한다.
  *
  * Usage:
  *   node scan_source.js --workspace=. [--out=_tmp/source_index.json]
@@ -22,6 +22,25 @@
  *     routes, imports, injected }
  */
 'use strict';
+
+// ── Tree-sitter 선택적 로드 (미설치 시 regex fallback) ──────────────────────
+let TsParser, JavaGrammar, PythonGrammar, TsTypescriptGrammar;
+try {
+  TsParser = require('tree-sitter');
+  try { JavaGrammar       = require('tree-sitter-java');                      } catch(_) {}
+  try { PythonGrammar     = require('tree-sitter-python');                    } catch(_) {}
+  try { TsTypescriptGrammar = require('tree-sitter-typescript').typescript;   } catch(_) {}
+} catch(_) {}
+
+const TS_JAVA_OK = !!(TsParser && JavaGrammar);
+const TS_PY_OK   = !!(TsParser && PythonGrammar);
+const TS_TS_OK   = !!(TsParser && TsTypescriptGrammar);
+
+// 파서 인스턴스 재사용 (파일마다 new Parser() 생성 금지 — 성능 핵심)
+let _javaParser, _pyParser, _tsParser;
+function getJavaParser()  { if (!_javaParser)  { _javaParser  = new TsParser(); _javaParser.setLanguage(JavaGrammar);          } return _javaParser;  }
+function getPyParser()    { if (!_pyParser)    { _pyParser    = new TsParser(); _pyParser.setLanguage(PythonGrammar);           } return _pyParser;    }
+function getTsParser()    { if (!_tsParser)    { _tsParser    = new TsParser(); _tsParser.setLanguage(TsTypescriptGrammar);     } return _tsParser;    }
 
 const fs   = require('fs');
 const path = require('path');
@@ -75,38 +94,219 @@ function collectFiles(dir, result = []) {
 
 /**
  * @Controller 메서드 바디 추출 — annotIndex 이후 첫 '{' 부터 매칭 '}' 까지.
- * 중괄호 depth 카운팅으로 중첩 클래스·람다도 안전하게 처리.
+ * 문자열 리터럴·주석 내부 중괄호를 올바르게 스킵한다 (regex fallback용).
  */
 function extractMethodBody(content, annotIndex) {
   let i = annotIndex;
   let parenDepth = 0;
 
-  // 어노테이션·메서드 시그니처를 지나 첫 '{' 탐지
+  // 어노테이션·메서드 시그니처를 지나 첫 '{' 탐지 (문자열 스킵)
   while (i < content.length) {
     const ch = content[i];
-    if (ch === '(') parenDepth++;
-    else if (ch === ')') parenDepth--;
-    else if (ch === '{' && parenDepth === 0) break;
-    else if (ch === ';' && parenDepth === 0) return ''; // abstract/interface
+    if (ch === '"' || ch === "'") {
+      const q = ch; i++;
+      while (i < content.length && content[i] !== q) { if (content[i] === '\\') i++; i++; }
+    } else if (ch === '(') { parenDepth++; }
+    else if (ch === ')') { parenDepth--; }
+    else if (ch === '{' && parenDepth === 0) { break; }
+    else if (ch === ';' && parenDepth === 0) { return ''; } // abstract/interface
     i++;
   }
   if (i >= content.length) return '';
 
-  // 중괄호 depth 카운팅으로 바디 추출
+  // 중괄호 depth 카운팅 (문자열·주석 스킵)
   let depth = 0;
   const start = i;
   for (let j = i; j < content.length; j++) {
     const ch = content[j];
-    if (ch === '{') depth++;
+    if (ch === '"' || ch === "'") {
+      const q = ch; j++;
+      while (j < content.length && content[j] !== q) { if (content[j] === '\\') j++; j++; }
+    } else if (ch === '/' && content[j + 1] === '/') {
+      while (j < content.length && content[j] !== '\n') j++;
+    } else if (ch === '/' && content[j + 1] === '*') {
+      j += 2;
+      while (j < content.length && !(content[j] === '*' && content[j + 1] === '/')) j++;
+      j++;
+    } else if (ch === '{') { depth++; }
     else if (ch === '}') { depth--; if (depth === 0) return content.slice(start, j + 1); }
   }
   return '';
 }
 
 // jwork + Spring 범용 JSON 응답 시그널 — 메서드 바디 안에서 이 중 하나라도 있으면 api
-// ※ @ResponseBody는 바디 외부(선언부)에 있으므로 별도 탐지 (CLASS_RESPONSE_BODY / METHOD_RESPONSE_BODY)
+// ※ @ResponseBody는 바디 외부(선언부)에 있으므로 별도 탐지
 const API_BODY_SIGNALS = /GridResultUtil|AjaxMessageMapRenderer|ResponseEntity/;
 const METHOD_RESPONSE_BODY = /@ResponseBody/;
+
+// ── Tree-sitter Java AST 헬퍼 ─────────────────────────────────────────────────
+
+/** annotation / marker_annotation 노드에서 이름 추출 */
+function tsAnnotName(node) {
+  for (const ch of node.children) {
+    if (ch.type === 'identifier') return ch.text;
+  }
+  return '';
+}
+
+/**
+ * annotation 노드에서 경로 문자열 목록 반환.
+ * @RequestMapping("/p"), @RequestMapping(value="/p"),
+ * @RequestMapping({"/a","/b"}), @RequestMapping("relPath") 모두 처리.
+ *
+ * 포함: '/' 시작(절대경로) OR '/' 없는 상대 경로 세그먼트 (예: "st001mForm")
+ * 제외: "application/json" 같은 미디어 타입 (슬래시 포함하되 앞에 없음)
+ */
+function tsAnnotPaths(node) {
+  const result = [];
+  for (const s of node.descendantsOfType('string_literal')) {
+    const val = s.text.replace(/^["'`]|["'`]$/g, '');
+    if (!val) continue;
+    const isAbsPath    = val.startsWith('/');
+    const isRelSegment = !val.includes('/') && !val.includes('=') && !val.includes(';');
+    if (isAbsPath || isRelSegment) result.push(val);
+  }
+  return result;
+}
+
+/**
+ * Tree-sitter Java AST 기반 파서.
+ * 성공 시 parseJava와 동일한 구조 반환, 실패 시 null (regex fallback 유도).
+ */
+function parseJavaAST(content, filePath) {
+  try {
+    const parser = getJavaParser();
+    const tree   = parser.parse(content);
+    const root   = tree.rootNode;
+
+    let pkg = '', className = '';
+    const imports   = [];
+    const injected  = [];
+    const annotations = [];
+    const routes    = [];
+
+    // package
+    const pkgDecl = root.descendantsOfType('package_declaration')[0];
+    if (pkgDecl) {
+      pkg = pkgDecl.text.replace(/^package\s+/, '').replace(/\s*;\s*$/, '');
+    }
+
+    // imports
+    for (const n of root.descendantsOfType('import_declaration')) {
+      imports.push(n.text.replace(/^import\s+(static\s+)?/, '').replace(/\s*;\s*$/, ''));
+    }
+
+    // top-level class (첫 번째)
+    const classDecl = root.descendantsOfType('class_declaration')[0];
+    if (!classDecl) return null;
+
+    // class name
+    const classIdent = classDecl.children.find(n => n.type === 'identifier');
+    if (classIdent) className = classIdent.text;
+
+    // class-level annotations
+    let baseMapping = '';
+    let isAllApi    = false;
+    const classMods = classDecl.children.find(n => n.type === 'modifiers');
+    if (classMods) {
+      for (const ch of classMods.children) {
+        if (ch.type !== 'annotation' && ch.type !== 'marker_annotation') continue;
+        const name = tsAnnotName(ch);
+        if (!name) continue;
+        annotations.push('@' + name);
+        if (name === 'RestController' || name === 'ResponseBody') isAllApi = true;
+        if (name === 'RequestMapping') {
+          const paths = tsAnnotPaths(ch);
+          if (paths.length) baseMapping = paths[0].replace(/\/\*$/, '');
+        }
+      }
+    }
+
+    // method declarations (direct children of class body)
+    const classBody = classDecl.children.find(n => n.type === 'class_body');
+    if (classBody) {
+      for (const member of classBody.children) {
+        // field injection
+        if (member.type === 'field_declaration') {
+          const fMods = member.children.find(n => n.type === 'modifiers');
+          if (fMods && fMods.children.some(m =>
+            (m.type === 'annotation' || m.type === 'marker_annotation') && tsAnnotName(m) === 'Autowired'
+          )) {
+            // type is the node after modifiers
+            const typeNode = member.children.find(n => n !== fMods && n.type.endsWith('type'));
+            if (typeNode) injected.push(typeNode.text.replace(/<[^>]*>/g, '').trim());
+          }
+          continue;
+        }
+
+        if (member.type !== 'method_declaration') continue;
+
+        const mMods = member.children.find(n => n.type === 'modifiers');
+        if (!mMods) continue;
+        const methodName = member.children.find(n => n.type === 'identifier')?.text || '';
+
+        for (const mod of mMods.children) {
+          if (mod.type !== 'annotation' && mod.type !== 'marker_annotation') continue;
+          const aName = tsAnnotName(mod);
+          const verbMatch = aName.match(/^(Get|Post|Put|Delete|Patch|Request)Mapping$/);
+          if (!verbMatch) continue;
+
+          const verbMap = { Get:'GET', Post:'POST', Put:'PUT', Delete:'DELETE', Patch:'PATCH', Request:'ANY' };
+          const verb = verbMap[verbMatch[1]];
+          const subPaths = tsAnnotPaths(mod);
+          if (subPaths.length === 0) subPaths.push('');
+
+          let kind = 'api';
+          if (!isAllApi) {
+            const hasRespBody = mMods.children.some(m =>
+              (m.type === 'annotation' || m.type === 'marker_annotation') && tsAnnotName(m) === 'ResponseBody'
+            );
+            if (hasRespBody) {
+              kind = 'api';
+            } else {
+              const bodyNode = member.children.find(n => n.type === 'block');
+              const bodyText = bodyNode ? bodyNode.text : '';
+              kind = API_BODY_SIGNALS.test(bodyText) ? 'api' : 'form';
+            }
+          }
+
+          for (const sp of subPaths) {
+            const fullPath = (baseMapping + '/' + sp).replace(/\/+/g, '/') || '/';
+            routes.push({ method: verb, path: fullPath, handlerMethod: methodName, kind });
+          }
+        }
+      }
+    }
+
+    // constructor injection: first constructor params
+    const ctorDecl = classBody?.children.find(n => n.type === 'constructor_declaration');
+    if (ctorDecl) {
+      const params = ctorDecl.descendantsOfType('formal_parameter');
+      for (const p of params) {
+        const typeNode = p.children.find(n => n.type.endsWith('type'));
+        if (typeNode) {
+          const typeName = typeNode.text.replace(/<[^>]*>/g, '').trim();
+          if (typeName && !injected.includes(typeName)) injected.push(typeName);
+        }
+      }
+    }
+
+    // type determination (same logic as regex parser)
+    const fp  = filePath.replace(/\\/g, '/').toLowerCase();
+    const bn  = path.basename(filePath, path.extname(filePath)).toLowerCase();
+    const hasA = (arr) => annotations.some(a => arr.some(x => a.toLowerCase().startsWith(x.toLowerCase())));
+
+    let type = 'other';
+    if      (hasA(JAVA_DAO_ANNOTS)  || /dao|mapper|repository/i.test(className)) type = 'dao';
+    else if (hasA(JAVA_SVC_ANNOTS)  || /service/i.test(className))                type = 'service';
+    else if (hasA(JAVA_CTRL_ANNOTS))                                               type = 'controller';
+    else if (JAVA_BATCH_NAMES.test(bn) || JAVA_BATCH_DIRS.test(fp))               type = 'batch';
+
+    return { pkg, className, annotations: [...new Set(annotations)], routes, imports, injected, type };
+  } catch (_) {
+    return null; // tree-sitter 파싱 실패 → regex fallback
+  }
+}
 
 const JAVA_CTRL_ANNOTS = [
   '@RestController', '@Controller', '@RequestMapping',
@@ -117,7 +317,19 @@ const JAVA_DAO_ANNOTS  = ['@Repository', '@Mapper', '@Dao'];
 const JAVA_BATCH_NAMES = /batch|job|scheduler|task|worker|consumer|processor|jobbean|step/i;
 const JAVA_BATCH_DIRS  = /batch|job|jobs|scheduler|schedule/i;
 
+// 컨트롤러 후보 빠른 판별 — @Controller / @RestController 있으면 AST 파싱 가치 있음
+const CTRL_QUICK_RE = /@(?:Rest)?Controller\b/;
+
+/** Java 파서 진입점 — 컨트롤러 후보만 tree-sitter, 나머지는 regex (성능 최적화) */
 function parseJava(content, filePath) {
+  if (TS_JAVA_OK && CTRL_QUICK_RE.test(content)) {
+    const result = parseJavaAST(content, filePath);
+    if (result) return result;
+  }
+  return parseJavaRegex(content, filePath);
+}
+
+function parseJavaRegex(content, filePath) {
   const annotations = [];
   const routes      = [];
   const imports     = [];
@@ -528,6 +740,7 @@ function main() {
   if (!sourcePaths.length) sourcePaths.push({ path: WORKSPACE, label: 'src' });
 
   console.log('[scan_source] 스캔 시작');
+  console.log(`  파서: ${TS_JAVA_OK ? 'tree-sitter(Java)' : 'regex'} / ${TS_PY_OK ? 'tree-sitter(Python)' : 'regex'} / ${TS_TS_OK ? 'tree-sitter(TS)' : 'regex'}`);
   sourcePaths.forEach(s => console.log(`  소스: [${s.label}] ${s.path}`));
 
   const contextPath = detectContextPath(sourcePaths, env);

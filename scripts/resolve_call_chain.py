@@ -208,12 +208,32 @@ def has_layer_signal(fqn_or_path: str, layers: tuple) -> bool:
 # 언어별 import 파싱
 # ──────────────────────────────────────────────
 
-def extract_java_imports(content, source_root, follow_layers=None, skip_layers=None):
+def build_java_class_index(source_root):
+    """
+    source_root 하위의 모든 .java 파일을 단 1회 walk해서
+    { ClassName: [abs_path, ...] } 인덱스를 반환한다.
+
+    대규모 프로젝트(1,000+ 파일)에서 파일당 os.walk 대신 O(1) 조회를 가능하게 한다.
+    """
+    _SKIP = frozenset(('.git', 'node_modules', '__pycache__', '.gradle', 'target', 'build', 'dist', 'out'))
+    index = {}
+    for root, dirs, files in os.walk(source_root):
+        dirs[:] = [d for d in dirs if d not in _SKIP and not d.startswith('.')]
+        for fname in files:
+            if fname.endswith('.java'):
+                classname = os.path.splitext(fname)[0]
+                fp = norm(os.path.join(root, fname))
+                index.setdefault(classname, []).append(fp)
+    return index
+
+
+def extract_java_imports(content, source_root, follow_layers=None, skip_layers=None, class_index=None):
     """
     Java import 문에서 연관 파일 경로 목록 반환.
 
     follow_layers / skip_layers: 호출자가 Profile 합성 결과를 전달할 수 있다.
     None이면 DEFAULT 사용 (기존 동작).
+    class_index: build_java_class_index() 결과 (있으면 O(1) 조회, 없으면 os.walk fallback).
     """
     files = []
     fl = tuple(follow_layers) if follow_layers else DEFAULT_FOLLOW_LAYERS
@@ -222,25 +242,25 @@ def extract_java_imports(content, source_root, follow_layers=None, skip_layers=N
     for m in re.finditer(r'^import\s+([\w.]+);', content, re.M):
         fqn = m.group(1)
         parts = fqn.split('.')
-        # 외부 라이브러리 제외 (org.*, java.*, lombok.* 등)
-        # 프로젝트 내부 패키지 판별: source_root 하위에 파일이 실제 존재하는지 확인
         class_name = parts[-1]
 
-        # 레이어 필터: 세그먼트 단위로 FOLLOW에 속하고 SKIP에 없어야 따라감
-        # fqn 전체를 보므로 패키지(domain/service)뿐 아니라 클래스명(OrderService)도 신호로 인식
         if not has_layer_signal(fqn, fl):
             continue
         if has_layer_signal(fqn, sl):
             continue
 
-        # source_root 하위 전체에서 {ClassName}.java 검색
-        for root, dirs, fnames in os.walk(source_root):
-            # node_modules, .git 등 건너뜀
-            dirs[:] = [d for d in dirs if not d.startswith('.') and d != 'node_modules']
-            for fname in fnames:
-                if fname == class_name + '.java':
-                    candidate = os.path.join(root, fname)
-                    files.append(norm(candidate))
+        if class_index is not None:
+            # O(1) 클래스명 조회 (사전 인덱스 사용)
+            for candidate in class_index.get(class_name, []):
+                files.append(candidate)
+        else:
+            # fallback: os.walk (인덱스 없는 경우)
+            for root, dirs, fnames in os.walk(source_root):
+                dirs[:] = [d for d in dirs if not d.startswith('.') and d != 'node_modules']
+                for fname in fnames:
+                    if fname == class_name + '.java':
+                        candidate = os.path.join(root, fname)
+                        files.append(norm(candidate))
     return files
 
 
@@ -323,10 +343,11 @@ def detect_language(file_path):
             '.vue': 'ts', '.svelte': 'ts'}.get(ext, 'unknown')
 
 
-def extract_imports(file_path, workspace_root, follow_layers=None, skip_layers=None):
+def extract_imports(file_path, workspace_root, follow_layers=None, skip_layers=None, class_index=None):
     """파일에서 연관 서비스/DAO 파일 목록 반환 (언어 자동 감지).
 
     follow_layers / skip_layers: 호출자(resolve_chain)가 Profile 합성 결과 전달 가능.
+    class_index: Java 전용 사전 인덱스 (build_java_class_index 결과).
     """
     if not os.path.exists(file_path):
         return []
@@ -337,7 +358,7 @@ def extract_imports(file_path, workspace_root, follow_layers=None, skip_layers=N
 
     lang = detect_language(file_path)
     if lang == 'java':
-        return extract_java_imports(content, workspace_root, follow_layers, skip_layers)
+        return extract_java_imports(content, workspace_root, follow_layers, skip_layers, class_index)
     elif lang == 'python':
         return extract_python_imports(content, file_path, workspace_root, follow_layers, skip_layers)
     elif lang in ('ts', 'js'):
@@ -667,17 +688,15 @@ def extract_query_schema(query_file):
 # call chain 해결 (Controller → Service → DAO → Query)
 # ──────────────────────────────────────────────
 
-def resolve_chain(controller_path, workspace_root, max_depth=2):
+def resolve_chain(controller_path, workspace_root, max_depth=2, class_index=None):
     """
     컨트롤러 → 서비스 → DAO (최대 2홉) + 쿼리 파일까지 반환
     반환: { "service": [...], "dao": [...], "query": [...] }
 
     Profile yaml이 있으면 strategy 합성으로 follow/skip layers를 동적 결정.
-    없으면 DEFAULT 값 사용 (회귀 0).
+    class_index: build_java_class_index() 결과 (Java 대규모 프로젝트 성능 개선).
     """
-    # Profile + strategy 합성 (1회만 호출)
     fl, sl, strategy_max_depth = load_effective_layers(workspace_root)
-    # strategy의 max_depth가 더 크면 그것 사용 (Hexagonal은 4까지 필요)
     if strategy_max_depth > max_depth:
         max_depth = strategy_max_depth
 
@@ -691,7 +710,7 @@ def resolve_chain(controller_path, workspace_root, max_depth=2):
             return
         visited.add(norm(file_path))
 
-        related = extract_imports(file_path, workspace_root, fl, sl)
+        related = extract_imports(file_path, workspace_root, fl, sl, class_index)
         for rf in related:
             if norm(rf) in visited:
                 continue
@@ -899,9 +918,18 @@ def main():
     inventory = json.load(open(inventory_path, encoding='utf-8'))
     # inventory는 배치 그룹 배열 (list of list) 또는 flat list (이전 버전 호환)
     if inventory and isinstance(inventory[0], dict):
-        # flat list → 3개씩 그룹핑
         BATCH = 3
         inventory = [inventory[i:i+BATCH] for i in range(0, len(inventory), BATCH)]
+
+    # Java 프로젝트이면 클래스 인덱스를 1회 빌드 (파일당 os.walk 대신 O(1) 조회)
+    all_items_flat = [item for group in inventory for item in group]
+    first_fp = all_items_flat[0].get('filePath', '') if all_items_flat else ''
+    class_index = None
+    if first_fp.endswith('.java'):
+        print('Java 클래스 인덱스 빌드 중...')
+        class_index = build_java_class_index(workspace_root)
+        total_cls = sum(len(v) for v in class_index.values())
+        print(f'  → {total_cls} 파일 인덱싱 완료 (O(1) 조회 활성화)')
 
     total_files = 0
     total_schemas = 0
@@ -912,7 +940,7 @@ def main():
             fp = item.get('filePath', '')
             abs_fp = fp if os.path.isabs(fp) else os.path.join(workspace_root, fp)
 
-            chain = resolve_chain(abs_fp, workspace_root)
+            chain = resolve_chain(abs_fp, workspace_root, class_index=class_index)
             item['relatedFiles'] = chain
 
             n = len(chain['service']) + len(chain['dao']) + len(chain['query'])

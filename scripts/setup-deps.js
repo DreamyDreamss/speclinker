@@ -7,8 +7,8 @@
  *
  * 체크 항목:
  *   1. playwright-core  (npm)  — ai_nav.js / capture.js CDP 연결
- *   2. Pillow           (pip)  — annotate_preview.py 마커 이미지 생성
- *   3. UA core          (build) — build-ua.js에 위임
+ *   2. tree-sitter      (npm)  — scan_source.js AST 파싱 (미설치 시 regex fallback)
+ *   3. Pillow           (pip)  — annotate_preview.py 마커 이미지 생성
  */
 'use strict';
 
@@ -74,16 +74,21 @@ if (!pyCmd) {
   }
 }
 
-// ── 3. UA core 빌드 — build-ua.js에 위임 ─────────────────────────────────────
-try {
-  const buildUa = path.join(PLUGIN_ROOT, 'scripts', 'build-ua.js');
-  if (fs.existsSync(buildUa)) {
-    // 같은 프로세스 내에서 실행 (stdio inherit)
-    execSync(`node "${buildUa}"`, {
+// ── 3. tree-sitter (선택적 — 미설치 시 scan_source.js가 regex로 fallback) ────
+const nmTreeSitter = path.join(PLUGIN_ROOT, 'node_modules', 'tree-sitter');
+if (!fs.existsSync(nmTreeSitter)) {
+  log('tree-sitter 설치 중...');
+  try {
+    execSync('npm install', {
+      cwd: PLUGIN_ROOT,
       stdio: 'inherit',
-      env: { ...process.env, CLAUDE_PLUGIN_ROOT: PLUGIN_ROOT },
+      env: { ...process.env, PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1' },
     });
+    log('tree-sitter 설치 완료');
+  } catch (e) {
+    log('[WARN] tree-sitter 설치 실패 (regex fallback 사용): ' + e.message);
+    log('       수동: cd ' + PLUGIN_ROOT + ' && npm install');
   }
-} catch (e) {
-  log('[WARN] UA 빌드 실패: ' + e.message);
+} else {
+  log('tree-sitter OK (skip)');
 }
