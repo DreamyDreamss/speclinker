@@ -423,9 +423,125 @@ function parseJavaRegex(content, filePath) {
   return { pkg, className, annotations: [...new Set(annotations)], routes, imports, injected, type };
 }
 
-// ── Python 파서 ───────────────────────────────────────────────────────────────
+// ── Python 파서 ─────────────────────────────────────────────────────────────
 
+// FastAPI/Flask 라우터 어노테이션 빠른 판별
+const PY_ROUTE_QUICK_RE = /@(?:app|router|bp|blueprint|api)\./i;
+
+/**
+ * Tree-sitter Python AST 기반 파서.
+ * FastAPI/Flask 데코레이터를 정확히 파싱: 멀티라인, methods=[] 지원.
+ */
+function parsePythonAST(content, filePath) {
+  try {
+    const parser = getPyParser();
+    const tree   = parser.parse(content);
+    const root   = tree.rootNode;
+
+    const annotations = [];
+    const routes      = [];
+    const imports     = [];
+    let className = '';
+
+    // imports
+    for (const n of root.descendantsOfType('import_from_statement')) {
+      const parts = n.namedChildren;
+      if (parts.length >= 2) imports.push(parts[0].text + '.' + parts.slice(1).map(c => c.text).join(', '));
+    }
+    for (const n of root.descendantsOfType('import_statement')) {
+      imports.push(n.namedChildren.map(c => c.text).join(', '));
+    }
+
+    // class name
+    const classDef = root.descendantsOfType('class_definition')[0];
+    if (classDef) className = classDef.namedChildren[0]?.text || '';
+
+    // Django urlpatterns (regex fallback)
+    if (/urlpatterns\s*=/.test(content)) {
+      const urlPat = /path\s*\(\s*['"]([^'"]+)['"]/g;
+      let m;
+      while ((m = urlPat.exec(content)) !== null)
+        routes.push({ method: 'ANY', path: m[1], handlerMethod: '', kind: 'api' });
+    }
+
+    // decorated_definition → decorator(s) + function_definition
+    for (const decorated of root.descendantsOfType('decorated_definition')) {
+      const decorators = decorated.namedChildren.filter(n => n.type === 'decorator');
+      const funcDef    = decorated.namedChildren.find(n =>
+        n.type === 'function_definition' || n.type === 'async_function_definition'
+      );
+      const handlerName = funcDef?.namedChildren[0]?.text || '';
+
+      for (const dec of decorators) {
+        // dec.namedChildren[0] = call | attribute | identifier
+        const expr = dec.namedChildren[0];
+        if (!expr) continue;
+
+        const annotName = expr.type === 'call' ? expr.namedChildren[0]?.text : expr.text;
+        if (annotName) annotations.push('@' + annotName);
+
+        if (expr.type !== 'call') continue;
+
+        const funcAttr = expr.namedChildren[0]; // attribute: router.get
+        const argList  = expr.namedChildren[1]; // argument_list
+        if (!funcAttr || !argList) continue;
+
+        const verbMatch = funcAttr.text.match(/\.(?:route|get|post|put|delete|patch|head|options)$/i);
+        if (!verbMatch) continue;
+        const rawVerb = verbMatch[0].slice(1).toUpperCase();
+
+        let pathStr  = '';
+        let httpVerb = rawVerb === 'ROUTE' ? 'ANY' : rawVerb;
+
+        for (const arg of argList.namedChildren) {
+          if (!pathStr && arg.type === 'string') {
+            pathStr = arg.text.replace(/^["'`]|["'`]$/g, '');
+          } else if (arg.type === 'keyword_argument') {
+            const key = arg.namedChildren[0]?.text;
+            // methods=['POST','GET']
+            if (key === 'methods') {
+              const listNode = arg.namedChildren.find(n => n.type === 'list');
+              if (listNode) {
+                const firstStr = listNode.descendantsOfType('string')[0];
+                if (firstStr) httpVerb = firstStr.text.replace(/["']/g, '').toUpperCase();
+              }
+            }
+            // path="/route" or rule="/route"
+            if ((key === 'path' || key === 'rule') && !pathStr) {
+              const strNode = arg.namedChildren.find(n => n.type === 'string');
+              if (strNode) pathStr = strNode.text.replace(/^["'`]|["'`]$/g, '');
+            }
+          }
+        }
+
+        if (pathStr) routes.push({ method: httpVerb, path: pathStr, handlerMethod: handlerName, kind: 'api' });
+      }
+    }
+
+    const fp = filePath.replace(/\\/g, '/').toLowerCase();
+    const bn = path.basename(filePath, path.extname(filePath)).toLowerCase();
+    let type = 'other';
+    if (/views?|controller|handler/i.test(bn) || routes.length) type = 'controller';
+    else if (/service/i.test(bn))                                type = 'service';
+    else if (/repositor|dao|model/i.test(bn))                   type = 'dao';
+    else if (/batch|job|task|worker/i.test(bn) || /batch|jobs?/i.test(fp)) type = 'batch';
+
+    return { pkg: '', className, annotations: [...new Set(annotations)], routes, imports, injected: [], type };
+  } catch (_) {
+    return null;
+  }
+}
+
+/** Python 파서 진입점 — 라우터 후보만 tree-sitter, 나머지는 regex */
 function parsePython(content, filePath) {
+  if (TS_PY_OK && PY_ROUTE_QUICK_RE.test(content)) {
+    const result = parsePythonAST(content, filePath);
+    if (result) return result;
+  }
+  return parsePythonRegex(content, filePath);
+}
+
+function parsePythonRegex(content, filePath) {
   const annotations = [];
   const routes      = [];
   const imports     = [];
@@ -483,7 +599,149 @@ function parsePython(content, filePath) {
 
 // ── TypeScript / JavaScript 파서 ─────────────────────────────────────────────
 
+// NestJS 컨트롤러 빠른 판별
+const TS_NESTJS_QUICK_RE = /@(?:Controller|Get|Post|Put|Delete|Patch)\b/;
+
+/** tree-sitter-typescript 기반 NestJS/Express AST 파서 */
+function parseTypeScriptAST(content, filePath) {
+  try {
+    const parser = getTsParser();
+    const tree   = parser.parse(content);
+    const root   = tree.rootNode;
+
+    const annotations = [];
+    const routes      = [];
+    const imports     = [];
+    const injected    = [];
+    let className = '';
+
+    // imports
+    for (const n of root.descendantsOfType('import_statement')) {
+      const srcNode = n.descendantsOfType('string')[0];
+      if (srcNode) imports.push(srcNode.text.replace(/^["'`]|["'`]$/g, ''));
+    }
+
+    // class declaration
+    const classDecl = root.descendantsOfType('class_declaration')[0];
+    if (!classDecl) return null;
+
+    const classNameNode = classDecl.children.find(n => n.type === 'type_identifier');
+    if (classNameNode) className = classNameNode.text;
+
+    // class-level decorator (sibling in parent node, e.g. export_statement)
+    let ctrlPrefix = '';
+    const parent = classDecl.parent;
+    if (parent) {
+      const siblings = parent.namedChildren;
+      const classIdx = siblings.findIndex(n => n === classDecl);
+      for (let i = 0; i < classIdx; i++) {
+        const sib = siblings[i];
+        if (sib.type !== 'decorator') continue;
+        const name = tsDecName(sib);
+        if (name) annotations.push('@' + name);
+        if (/^Controller$/i.test(name)) {
+          const args = tsDecArgs(sib);
+          if (args.length) ctrlPrefix = args[0].replace(/\/+$/, '');
+        }
+      }
+    }
+
+    // class body: decorator nodes are siblings before method_definition
+    const classBody = classDecl.children.find(n => n.type === 'class_body');
+    if (classBody) {
+      let pendingDecs = [];
+      for (const member of classBody.namedChildren) {
+        if (member.type === 'decorator') {
+          pendingDecs.push(member);
+          continue;
+        }
+        if (member.type === 'method_definition') {
+          const methodName = member.children.find(n => n.type === 'property_identifier')?.text || '';
+          for (const dec of pendingDecs) {
+            const name = tsDecName(dec);
+            if (!name) continue;
+            const httpMatch = name.match(/^(Get|Post|Put|Delete|Patch|Head|Options|All)$/i);
+            if (!httpMatch) continue;
+            const verb = httpMatch[1].toUpperCase();
+            const args = tsDecArgs(dec);
+            const subPath = args[0] || '';
+            const fullPath = (ctrlPrefix + '/' + subPath).replace(/\/+/g, '/') || '/';
+            routes.push({ method: verb, path: fullPath, handlerMethod: methodName, kind: 'api' });
+          }
+        }
+        pendingDecs = [];
+      }
+    }
+
+    // Express router.get/post (regex — tree-sitter 대비 충분)
+    const expPat = /router\.(get|post|put|delete|patch)\s*\(\s*['"`]([^'"`]+)['"`]/g;
+    let m;
+    while ((m = expPat.exec(content)) !== null)
+      routes.push({ method: m[1].toUpperCase(), path: m[2], handlerMethod: '', kind: 'api' });
+
+    // injected types from constructor params
+    const ctorNode = classBody?.namedChildren.find(n =>
+      n.type === 'method_definition' &&
+      n.children.find(c => c.type === 'property_identifier')?.text === 'constructor'
+    );
+    if (ctorNode) {
+      const params = ctorNode.descendantsOfType('required_parameter')
+        .concat(ctorNode.descendantsOfType('optional_parameter'));
+      for (const p of params) {
+        const typeAnnot = p.children.find(n => n.type === 'type_annotation');
+        if (typeAnnot) {
+          const typeName = typeAnnot.text.replace(/^:\s*/, '').replace(/<[^>]*>/g, '').trim();
+          if (typeName) injected.push(typeName);
+        }
+      }
+    }
+
+    const fp = filePath.replace(/\\/g, '/').toLowerCase();
+    const bn = path.basename(filePath, path.extname(filePath)).toLowerCase();
+    let type = 'other';
+    if (annotations.some(a => /^@Controller/i.test(a)) || routes.length > 0 || /controller|handler|route/i.test(bn))
+      type = 'controller';
+    else if (annotations.some(a => /^@Injectable|^@Service/i.test(a)) || /service/i.test(bn))
+      type = 'service';
+    else if (/repositor|dao/i.test(bn))
+      type = 'dao';
+    else if (/processor|consumer|worker|job|batch/i.test(bn) || /batch|jobs?/i.test(fp))
+      type = 'batch';
+
+    return { pkg: '', className, annotations: [...new Set(annotations)], routes, imports, injected, type };
+  } catch (_) {
+    return null;
+  }
+}
+
+/** decorator 노드에서 이름 추출 (call_expression → identifier, 또는 직접 identifier) */
+function tsDecName(dec) {
+  const callExpr = dec.namedChildren.find(n => n.type === 'call_expression');
+  if (callExpr) return callExpr.namedChildren[0]?.text || '';
+  return dec.namedChildren.find(n => n.type === 'identifier')?.text || '';
+}
+
+/** decorator 노드에서 문자열 인수 목록 추출 */
+function tsDecArgs(dec) {
+  const callExpr = dec.namedChildren.find(n => n.type === 'call_expression');
+  if (!callExpr) return [];
+  const argsNode = callExpr.namedChildren.find(n => n.type === 'arguments');
+  if (!argsNode) return [];
+  return argsNode.namedChildren
+    .filter(n => n.type === 'string' || n.type === 'template_string')
+    .map(n => n.text.replace(/^["'`]|["'`]$/g, ''));
+}
+
+/** TypeScript 파서 진입점 — NestJS 후보만 tree-sitter, 나머지는 regex */
 function parseTypeScript(content, filePath) {
+  if (TS_TS_OK && TS_NESTJS_QUICK_RE.test(content)) {
+    const result = parseTypeScriptAST(content, filePath);
+    if (result) return result;
+  }
+  return parseTypeScriptRegex(content, filePath);
+}
+
+function parseTypeScriptRegex(content, filePath) {
   const annotations = [];
   const routes      = [];
   const imports     = [];
