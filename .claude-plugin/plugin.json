@@ -1,7 +1,7 @@
 {
   "name": "speclinker",
-  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 REQ-ID 체이닝, UA 대시보드 통합. v2.40: 전체 프로세스 취약점 8건 패치 (URL prefix 오버매칭, ID overflow 감지, @ResponseBody 클래스 수준 판별, _domain_plan.json screens[] 충돌 방지 등)",
-  "version": "2.40.0",
+  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 REQ-ID 체이닝, UA 대시보드 통합. v2.41: scan_source.js 컨텍스트 경로 자동 감지(web.xml/Spring Boot/NestJS/FastAPI/.env), 클래스 레벨 /* 와일드카드 strip, INF path 브라우저 URL 일치",
+  "version": "2.41.0",
   "author": {
     "name": "DreamyDreamss"
   },

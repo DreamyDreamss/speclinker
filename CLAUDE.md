@@ -59,6 +59,7 @@
 ### UA 인프라 에이전트 (독립 커맨드 — sl-recon STEP 1과 분리)
 
 > **v2.39 변경**: sl-recon STEP 1은 `scan_source.js` (제로-LLM 정적 스캔)로 교체됨.
+> **v2.41 변경**: scan_source.js 컨텍스트 경로 자동 감지(web.xml/Spring Boot/NestJS/FastAPI/.env 6종) + 클래스 레벨 `/*` 와일드카드 strip → INF path 필드가 처음부터 브라우저 URL과 일치. link_uis_inf.py /app/ 정규화·null url 가드·BOM 인코딩 fix.  
 > **v2.40 변경**: 전체 프로세스 취약점 8건 패치 — URL prefix 오버매칭(find_inf), ID overflow 감지, @ResponseBody 클래스·메서드 수준 판별, _domain_plan.json screens[] 복수 작성자 충돌 방지, GNB fallback 정규화, api_routes_lookup 키 정규화, Network 핸들러 cleanup 보장, screens 필드 없는 INF 자동 삽입.  
 > UA 에이전트는 아래 커맨드로 독립 실행 가능 (심층 분석 필요 시).
 
