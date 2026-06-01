@@ -172,6 +172,79 @@ if not skip:
 "
 ```
 
+### STEP 1 출력 예시 — `_tmp/source_index.json`
+
+> tree-sitter 파서 사용 시 (Java `@RestController`, Python FastAPI, NestJS `@Controller`) 아래 구조로 출력된다.  
+> regex fallback도 동일 스키마를 반환하므로 후속 단계에서 구분 불필요.
+
+```json
+{
+  "scannedAt": "2026-06-01T09:00:00.000Z",
+  "workspace": "/home/user/nkshop-bos-admin",
+  "contextPath": "/adm",
+  "langStats": { "java": 142, "typescript": 4, "python": 0 },
+  "typeStats": { "controller": 18, "service": 34, "dao": 41, "batch": 5, "other": 44 },
+  "files": [
+    {
+      "filePath": "/home/user/nkshop-bos-admin/src/main/java/com/nkshop/controller/order/OrderController.java",
+      "relPath": "src/main/java/com/nkshop/controller/order/OrderController.java",
+      "sourceLabel": "src",
+      "lang": "java",
+      "package": "com.nkshop.controller.order",
+      "className": "OrderController",
+      "type": "controller",
+      "annotations": ["@Controller", "@RequestMapping"],
+      "routes": [
+        { "method": "GET",  "path": "/adm/order/list",       "handlerMethod": "orderList",   "kind": "form" },
+        { "method": "POST", "path": "/adm/order/listAjax",   "handlerMethod": "listAjax",    "kind": "api"  },
+        { "method": "POST", "path": "/adm/order/saveStatus", "handlerMethod": "saveStatus",  "kind": "api"  }
+      ],
+      "imports": [
+        "com.nkshop.service.order.OrderService",
+        "org.springframework.web.bind.annotation.RequestMapping"
+      ],
+      "injected": ["OrderService"]
+    },
+    {
+      "filePath": "/home/user/nkshop-bos-admin/src/main/java/com/nkshop/service/order/OrderService.java",
+      "relPath": "src/main/java/com/nkshop/service/order/OrderService.java",
+      "sourceLabel": "src",
+      "lang": "java",
+      "package": "com.nkshop.service.order",
+      "className": "OrderService",
+      "type": "service",
+      "annotations": ["@Service"],
+      "routes": [],
+      "imports": ["com.nkshop.dao.order.OrderMapper"],
+      "injected": ["OrderMapper"]
+    },
+    {
+      "filePath": "/home/user/nkshop-bos-admin/src/main/java/com/nkshop/dao/order/OrderMapper.java",
+      "relPath": "src/main/java/com/nkshop/dao/order/OrderMapper.java",
+      "sourceLabel": "src",
+      "lang": "java",
+      "package": "com.nkshop.dao.order",
+      "className": "OrderMapper",
+      "type": "dao",
+      "annotations": ["@Mapper"],
+      "routes": [],
+      "imports": [],
+      "injected": []
+    }
+  ]
+}
+```
+
+**핵심 필드 설명:**
+
+| 필드 | 설명 |
+|------|------|
+| `contextPath` | web.xml·application.properties 등에서 자동 감지된 서블릿 컨텍스트 경로. 전체 route에 prepend됨 |
+| `type` | `controller` / `service` / `dao` / `batch` / `other` — 어노테이션 + 파일명 패턴으로 결정 |
+| `routes[].kind` | `form` = ModelAndView 뷰 반환, `api` = JSON 응답 (`@ResponseBody` 또는 메서드 바디 시그널 탐지) |
+| `routes[].path` | contextPath + classMapping + methodMapping 결합 후 `/+` 정규화 완료 |
+| `injected` | `@Autowired` 필드 + 생성자 파라미터 타입 — STEP 2 도메인 의존성 분석에 사용 |
+
 ---
 
 ## STEP 1.5 — 프로젝트 Profile 생성·로드

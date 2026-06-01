@@ -55,7 +55,7 @@
 | 코드 생성 | `agents/dev-agent.md` | Sonnet | 반복 실행 태스크 |
 | 테스트 | `agents/test-agent.md` | Sonnet | 반복 실행 태스크 |
 
-> **v2.39+**: sl-recon STEP 1은 `scan_source.js` (제로-LLM 정적 스캔). v2.41: 컨텍스트 경로 자동 감지(web.xml/Spring Boot/NestJS/FastAPI/.env 6종) + 클래스 레벨 `/*` 와일드카드 strip.
+> **v2.39+**: sl-recon STEP 1은 `scan_source.js` (제로-LLM 정적 스캔). v2.41: 컨텍스트 경로 자동 감지(web.xml/Spring Boot/NestJS/FastAPI/.env 6종) + 클래스 레벨 `/*` 와일드카드 strip. v2.44: STEP 1에 tree-sitter 파싱 결과 예시(source_index.json 스키마·필드 설명) 추가.
 
 모델 분리 전략: 단일 Opus 대비 약 60~70% 비용 절감 (Sonnet 에이전트 10개 중 5개)
 
