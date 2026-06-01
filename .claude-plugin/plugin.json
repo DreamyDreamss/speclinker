@@ -1,7 +1,7 @@
 {
   "name": "speclinker",
-  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 FUNC-ID 체이닝. v2.45: resolve_call_chain.py source_index.json 재활용으로 파일 재read·os.walk 제거(fast path/fallback 자동 분기). v2.44: STEP 1 tree-sitter 파싱 결과 예시 추가. v2.43: Tree-sitter AST 파서 도입(Java/Python/TS) + Java 클래스 인덱스 O(1) 조회.",
-  "version": "2.45.0",
+  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 FUNC-ID 체이닝. v2.46: dead code 정리 — UA 대시보드·ua_req_bridge.js 참조 제거, 0바이트 파일(link_inf_sch.py) 삭제. v2.45: resolve_call_chain.py source_index.json 재활용(fast path/fallback). v2.44: tree-sitter 파싱 결과 예시 추가.",
+  "version": "2.46.0",
   "author": {
     "name": "DreamyDreamss"
   },

@@ -173,7 +173,6 @@ Agent 도구 호출:
     3. SRS_v1.0.md의 SRS-F↔UIS-ID 매핑 → SRS 컬럼
     4. INF↔SCH 연결은 INF 파일의 `related_sch` 또는 테이블명 기반 추론
 
-    linked-req-cache.json 생성 후 ua_req_bridge.js를 실행하라.
     출력: `docs/00_FUNC/FUNC_MAP.md`
 
     결과 반환: "✅ FUNC_MAP {N}행 생성완료, linked-req-cache 저장" 1줄만.
@@ -222,7 +221,7 @@ else:
 ```bash
 !test -f .understand-anything/si-graph.json \
   && echo "si-graph.json 갱신 완료" \
-  || echo "ua_req_bridge.js 재실행 필요"
+  || echo "si-graph.json 없음 — STEP 9-0-1 build_si_graph.py 재실행 확인"
 ```
 
 완료 안내:
@@ -230,11 +229,6 @@ else:
 역분석 완료.
 
 생성 파일:
-[코드 이해]
-- .understand-anything/knowledge-graph.json
-- .understand-anything/domain-graph.json
-- .understand-anything/screen-map.json
-
 [아키텍처]
 - docs/04_아키텍처설계서/SAD_v1.0.md
 
