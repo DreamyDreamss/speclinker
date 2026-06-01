@@ -398,17 +398,20 @@ if poc_flag:
     print(f'🧪 POC 필터 적용됨 (POC_DOMAINS={poc_domains})')
 print()
 print('처리 대상 도메인:')
+print()
 for i, d in enumerate(plan['domains'], 1):
     code = d.get('code', '???')
     print(f'  {i}. {d[\"name\"]:15} [{code}]  {d[\"description\"][:40]}')
+    print(f'       INF-{code}-001  SCH-{code}-001  UIS-{code}-001  ...')
 print(f'\n총 {len(plan[\"domains\"])}개 도메인')
 
 if poc_mode and poc_domains:
     print()
-    print('🧪 POC 모드 — STEP 3 자동 확인. STEP 4로 진행합니다.')
+    print('POC 모드 — STEP 3 자동 확인. STEP 4로 진행합니다.')
 else:
     print()
-    print('수정 없으면 \"계속\", 수정 필요하면 변경 내용을 입력하세요.')
+    print('코드명이 잘못됐으면 지금 수정하세요 (예: "방송관리 코드를 BCD로 변경")')
+    print('수정 없으면 "계속"')
 "
 ```
 
