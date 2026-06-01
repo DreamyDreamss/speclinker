@@ -271,9 +271,35 @@ async function doSnapshot(page) {
 }
 
 // ── click ─────────────────────────────────────────────────────────────────────
-async function doClick(page, textOrSelector) {
+async function doClick(page, textOrSelector, cdpSession) {
   if (!textOrSelector) {
     return { command: 'click', success: false, error: '클릭 대상 미지정. Usage: click "메뉴명"' };
+  }
+
+  // 렌더링 시 XHR/Fetch URL 수집 (화면→INF→도메인 매핑용)
+  const apiHints = [];
+  const env = parseProjectEnv();
+  const baseUrl = env.PREVIEW_BASE_URL || '';
+  const baseOrigin = baseUrl
+    ? (() => { try { return new URL(baseUrl).origin; } catch (_) { return ''; } })()
+    : '';
+
+  let networkHandler = null;
+  if (cdpSession) {
+    try {
+      await cdpSession.send('Network.enable').catch(() => {});
+      networkHandler = (params) => {
+        const url  = params.request && params.request.url;
+        const type = params.type;  // 'XHR' | 'Fetch' | 'Document' | ...
+        if (!url || (type !== 'XHR' && type !== 'Fetch')) return;
+        if (baseOrigin && !url.startsWith(baseOrigin)) return;
+        try {
+          const p = normRoute(url);
+          if (p && !apiHints.includes(p)) apiHints.push(p);
+        } catch (_) {}
+      };
+      cdpSession.on('Network.requestWillBeSent', networkHandler);
+    } catch (_) {}
   }
 
   const isSel = /^[#.[]/.test(textOrSelector);
@@ -348,12 +374,22 @@ async function doClick(page, textOrSelector) {
   }
 
   if (!clicked) {
+    if (networkHandler && cdpSession) {
+      try { cdpSession.off('Network.requestWillBeSent', networkHandler); } catch (_) {}
+    }
     return { command: 'click', success: false, error: '요소를 찾을 수 없음: ' + textOrSelector };
   }
 
-  await page.waitForTimeout(2000);
-  const snap = await doSnapshot(page);
-  return { ...snap, command: 'click', clicked: textOrSelector };
+  // try-finally: doSnapshot() 예외 시에도 핸들러 반드시 해제
+  try {
+    await page.waitForTimeout(2000);
+    const snap = await doSnapshot(page);
+    return { ...snap, command: 'click', clicked: textOrSelector, apiHints };
+  } finally {
+    if (networkHandler && cdpSession) {
+      try { cdpSession.off('Network.requestWillBeSent', networkHandler); } catch (_) {}
+    }
+  }
 }
 
 // ── goto ──────────────────────────────────────────────────────────────────────
@@ -571,7 +607,7 @@ async function doStatus(page) {
   try {
     switch (COMMAND) {
       case 'snapshot': result = await doSnapshot(page);                     break;
-      case 'click':    result = await doClick(page, CMD_ARG);               break;
+      case 'click':    result = await doClick(page, CMD_ARG, cdpSession);    break;
       case 'goto':     result = await doGoto(page, CMD_ARG);                break;
       case 'capture':  result = await doCapture(page, CMD_ARG, cdpSession); break;
       case 'status':   result = await doStatus(page);                       break;

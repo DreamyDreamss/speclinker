@@ -56,14 +56,18 @@
 | 코드 생성 | `agents/dev-agent.md` | Sonnet | 반복 실행 태스크 |
 | 테스트 | `agents/test-agent.md` | Sonnet | 반복 실행 태스크 |
 
-### UA 인프라 에이전트 (sl-recon STEP 1 내부 호출)
+### UA 인프라 에이전트 (독립 커맨드 — sl-recon STEP 1과 분리)
 
-| 에이전트 | 역할 | 모델 |
-|--------|------|------|
-| `ua/agents/project-scanner.md` | 파일 구조·언어·프레임워크 스캔 | inherit |
-| `ua/agents/file-analyzer.md` | 노드·엣지 추출 (knowledge-graph 생성) | inherit |
-| `ua/agents/architecture-analyzer.md` | 레이어 분류 | inherit |
-| `ua/agents/domain-analyzer.md` | 도메인 플로우 분석 (domain-graph 생성) | inherit |
+> **v2.39 변경**: sl-recon STEP 1은 `scan_source.js` (제로-LLM 정적 스캔)로 교체됨.
+> **v2.40 변경**: 전체 프로세스 취약점 8건 패치 — URL prefix 오버매칭(find_inf), ID overflow 감지, @ResponseBody 클래스·메서드 수준 판별, _domain_plan.json screens[] 복수 작성자 충돌 방지, GNB fallback 정규화, api_routes_lookup 키 정규화, Network 핸들러 cleanup 보장, screens 필드 없는 INF 자동 삽입.  
+> UA 에이전트는 아래 커맨드로 독립 실행 가능 (심층 분석 필요 시).
+
+| 커맨드 | 에이전트 | 역할 |
+|--------|--------|------|
+| `/understand` | `ua/agents/project-scanner.md` + `file-analyzer.md` | 파일 구조·knowledge-graph 생성 |
+| `/understand-domain` | `ua/agents/domain-analyzer.md` | 도메인 플로우 분석 |
+| `/understand-diff` | `ua/agents/architecture-analyzer.md` | 아키텍처 레이어 분류 |
+| `/understand-dashboard` | — | UA 분석 결과 대시보드 조회 |
 
 모델 분리 전략: 단일 Opus 대비 약 60~70% 비용 절감 (Sonnet 에이전트 10개 중 5개)
 

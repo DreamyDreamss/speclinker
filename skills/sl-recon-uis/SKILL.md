@@ -13,7 +13,7 @@ triggers:
 **왜 BFS-First인가:**
 - 정적분석은 프레임워크(jwork, Spring MVC 등) URL 패턴을 모른다
 - 실제 앱에서 보이는 화면이 진실 — URL prefix, 권한 제한 화면, 동적 라우팅 모두 자동 대응
-- `menuPath[0]` (L1 GNB 카테고리) = 도메인 — 매핑 불필요
+- 화면 렌더링 시 발생하는 XHR/Fetch URL → INF path 매핑 → INF 도메인 결정론적 사용 (GNB 텍스트 해석 불필요)
 
 **실행 순서:**
 1. STEP 6-1: Chrome + 로그인 (브라우저 환경 준비)
@@ -72,7 +72,8 @@ else:
 "
 ```
 
-> `spec_only=true`이면 **STEP 6-1과 STEP 6-2를 건너뛰고 STEP 6-2-3으로 바로 이동**한다.
+> - `spec_only=true` → **STEP 6-1, 6-2 스킵 → STEP 6-2-3**  
+> - `static_fallback=true` (실행 전 확인에서 자동 설정) → **STEP 6-1, 6-2 스킵 → STEP 6-0 → STEP 6-2-3**
 
 ---
 
@@ -88,31 +89,191 @@ try:
 except AttributeError:
     pass
 
-errors = []
 if not os.path.exists('_tmp/recon_checkpoint.json'):
-    errors.append('[FAIL] recon_checkpoint.json 없음 -> /sl-recon 먼저 실행')
-if errors:
-    for e in errors: print(e)
+    print('[FAIL] recon_checkpoint.json 없음 -> /sl-recon 먼저 실행')
     sys.exit(1)
 
 env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
            if '=' in l and not l.startswith('#'))
 base_url = env.get('PREVIEW_BASE_URL', '')
+
+# mode json 로드/초기화
+mode = {}
+if os.path.exists('_tmp/_recon_uis_mode.json'):
+    mode = json.load(open('_tmp/_recon_uis_mode.json', encoding='utf-8'))
+
 if not base_url:
-    print('[FAIL] PREVIEW_BASE_URL 미설정')
-    print('  project.env에 PREVIEW_BASE_URL=http://localhost:8080 추가 후 재실행')
-    sys.exit(1)
-
-cap_exists = os.path.exists('_tmp/uis_capture_map.json')
-if cap_exists:
-    cap_map = json.load(open('_tmp/uis_capture_map.json', encoding='utf-8'))
-    print('[재개] 기존 캡처 ' + str(len(cap_map)) + '개 — BFS 재개 가능')
+    print('[INFO] PREVIEW_BASE_URL 미설정 → 정적 소스 분석 fallback 모드')
+    print('  /sl-recon STEP 4에서 생성된 screen_inventory_static.json 사용')
+    mode['static_fallback'] = True
+    os.makedirs('_tmp', exist_ok=True)
+    json.dump(mode, open('_tmp/_recon_uis_mode.json', 'w', encoding='utf-8'),
+              ensure_ascii=False, indent=2)
+    print()
+    print('→ STEP 6-1, 6-2 스킵 — STEP 6-0 (정적 fallback)으로 이동')
 else:
-    print('[신규] BFS 전수 탐색 시작')
+    mode['static_fallback'] = False
+    json.dump(mode, open('_tmp/_recon_uis_mode.json', 'w', encoding='utf-8'),
+              ensure_ascii=False, indent=2)
 
-print('[OK] PREVIEW_BASE_URL = ' + base_url)
+    cap_exists = os.path.exists('_tmp/uis_capture_map.json')
+    if cap_exists:
+        cap_map = json.load(open('_tmp/uis_capture_map.json', encoding='utf-8'))
+        print('[재개] 기존 캡처 ' + str(len(cap_map)) + '개 — BFS 재개 가능')
+    else:
+        print('[신규] BFS 전수 탐색 시작')
+
+    cfg_path = '_tmp/capture_config.json'
+    if os.path.exists(cfg_path):
+        cfg = json.load(open(cfg_path, encoding='utf-8'))
+        strategy = cfg.get('strategy', '?')
+        desc     = cfg.get('description', '')
+        print('[캡처 전략] strategy = ' + strategy + ' — ' + desc)
+    else:
+        print('[캡처 전략] capture_config.json 없음 → 기본: shell-iframe')
+
+    print('[OK] PREVIEW_BASE_URL = ' + base_url)
 "
 ```
+
+> `static_fallback=true`이면 **STEP 6-1, 6-2를 건너뛰고 STEP 6-0으로 이동**한다.
+
+---
+
+## 캡처 전략 탐지
+
+> BFS 실행 전 앱 구조에 맞는 캡처 전략을 탐지한다. `static_fallback=true`이면 스킵.
+
+```bash
+!python -c "
+import os, sys, subprocess, json
+
+try:
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+except AttributeError:
+    pass
+
+mode = json.load(open('_tmp/_recon_uis_mode.json', encoding='utf-8'))
+if mode.get('static_fallback') or mode.get('spec_only'):
+    print('[SKIP] 캡처 전략 탐지 불필요 (static_fallback 또는 spec_only 모드)')
+    sys.exit(0)
+
+if os.path.exists('_tmp/capture_config.json'):
+    cfg = json.load(open('_tmp/capture_config.json', encoding='utf-8'))
+    print('[재사용] capture_config.json strategy=' + cfg.get('strategy','?'))
+    sys.exit(0)
+
+env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
+           if '=' in l and not l.startswith('#'))
+plugin   = env.get('PLUGIN_PATH', '')
+cdp_port = env.get('PREVIEW_CDP_PORT', '9222')
+script   = os.path.join(plugin, 'scripts', 'detect_capture_strategy.js') if plugin else ''
+
+if not (script and os.path.exists(script)):
+    print('[WARN] detect_capture_strategy.js 없음 — 기본값 shell-iframe 사용')
+    os.makedirs('_tmp', exist_ok=True)
+    json.dump({'strategy': 'shell-iframe', 'description': '기본값'}, 
+              open('_tmp/capture_config.json', 'w', encoding='utf-8'))
+    sys.exit(0)
+
+r = subprocess.run(
+    ['node', script, '--workspace=.', '--port=' + cdp_port],
+    capture_output=True, text=True, encoding='utf-8', errors='replace'
+)
+print(r.stdout)
+if r.returncode != 0:
+    print('[WARN]', r.stderr[:300])
+
+cfg_path = '_tmp/capture_config.json'
+if os.path.exists(cfg_path):
+    cfg = json.load(open(cfg_path, encoding='utf-8'))
+    print('[캡처 전략] strategy = ' + cfg.get('strategy','?') + ' — ' + cfg.get('description',''))
+    print('  ※ 전략이 틀렸으면 _tmp/capture_config.json의 strategy를 직접 수정하세요:')
+    print('     shell-iframe | spa | mpa')
+"
+```
+
+---
+
+## STEP 6-0: 정적 Fallback (앱 미실행 시)
+
+> `_tmp/_recon_uis_mode.json`의 `static_fallback=true`일 때만 실행한다.  
+> `/sl-recon STEP 4`에서 이미 생성된 `_tmp/screen_inventory_static.json`을 직접 사용한다.  
+> `static_fallback=false`이면 이 STEP을 **완전히 건너뛰고 STEP 6-1로 이동**한다.
+
+```bash
+!python -c "
+import json, os, sys
+
+try:
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+except AttributeError:
+    pass
+
+mode = json.load(open('_tmp/_recon_uis_mode.json', encoding='utf-8'))
+if not mode.get('static_fallback'):
+    print('[SKIP] static_fallback=false — STEP 6-1로 이동')
+    sys.exit(0)
+
+# sl-recon STEP 4에서 생성된 form routes 인벤토리
+inv_path = '_tmp/screen_inventory_static.json'
+if not os.path.exists(inv_path):
+    print('[FAIL] screen_inventory_static.json 없음 — /sl-recon STEP 4 먼저 실행')
+    print('  힌트: /sl-recon을 실행하면 scan_source.js가 form routes를 자동 추출합니다')
+    sys.exit(1)
+
+inventory = json.load(open(inv_path, encoding='utf-8'))
+if not inventory:
+    print('[WARN] screen_inventory_static.json이 비어 있음')
+    print()
+    print('  가능한 원인:')
+    print('  1. React/Vue/Angular SPA 프로젝트 → @Controller(JSP) 없음, form routes 없음')
+    print('     해결: project.env에 PREVIEW_BASE_URL 설정 후 /sl-recon-uis 재실행 (BFS 모드)')
+    print('       예) PREVIEW_BASE_URL=http://localhost:3000')
+    print()
+    print('  2. @RestController만 사용하는 REST API 전용 백엔드 (프론트 분리 구조)')
+    print('     → 이 컴포넌트는 UIS 없음. /sl-recon-uis 불필요.')
+    print('     → 프론트엔드 소스가 별도 디렉토리에 있으면 SOURCE_2_PATH 추가 후 /sl-recon 재실행')
+    print()
+    print('  3. scan_source.js가 form routes 미감지 (@Controller 어노테이션 비표준)')
+    print('     → _tmp/source_index.json 직접 확인: routes[].kind 값 점검')
+    print()
+    print('  현재 진행 방법:')
+    print('  A. (권장) PREVIEW_BASE_URL 설정 → BFS 모드')
+    print('     project.env에 추가: PREVIEW_BASE_URL=http://localhost:8080')
+    print('     그 후 /sl-recon-uis 재실행')
+    print('  B. 이대로 진행 → uis_capture_map.json 빈 상태로 STEP 6-2-3 진행 (UIS 0개)')
+
+# screen_inventory_static.json → uis_capture_map.json 포맷 변환
+cap_map = []
+for item in inventory:
+    route = item.get('route', '')
+    segs  = [s for s in route.rstrip('/').split('/') if s]
+    label = item.get('screenId') or (segs[-1] if segs else 'screen')
+    cap_map.append({
+        'menuPath'       : segs,
+        'screenLabel'    : label,
+        'activeRoute'    : route,
+        'contentRoute'   : route,
+        'isIframeApp'    : False,
+        'captureDir'     : '',
+        'captureFile'    : '',
+        'widgetCount'    : 0,
+        'domain'         : item.get('domain', segs[0] if segs else 'unknown'),
+        'screenId'       : label,
+        'entryFile'      : item.get('entryFile', ''),
+        'static_fallback': True,
+    })
+
+json.dump(cap_map, open('_tmp/uis_capture_map.json', 'w', encoding='utf-8'),
+          ensure_ascii=False, indent=2)
+print('uis_capture_map.json 생성 완료: ' + str(len(cap_map)) + '개 화면')
+print()
+print('→ STEP 6-2-3으로 이동 (BFS 없이 도메인 구조 자동생성)')
+"
+```
+
+> 정적 fallback 완료 후 **STEP 6-2-3으로 바로 이동**한다. STEP 6-1, 6-2는 건너뛴다.
 
 ---
 
@@ -346,9 +507,13 @@ screenId 생성: `activeRoute`의 마지막 세그먼트 (예: `/app/order/pay/o
   "isIframeApp": 캡처결과.isIframeApp,
   "captureDir":  "캡처결과.captureDir",
   "captureFile": "캡처결과.captureFile",
-  "widgetCount": 캡처결과.widgetCount
+  "widgetCount": 캡처결과.widgetCount,
+  "apiHints":    클릭결과.apiHints
 }
 ```
+
+> `apiHints`는 `click` 커맨드 결과의 `apiHints` 필드 값. 화면 렌더링 시 호출된 XHR/Fetch URL 목록.
+> STEP 6-2-3에서 INF path와 매칭하여 이 화면의 도메인을 결정하는 데 사용된다.
 
 즉시 파일 저장 (매 캡처 후):
 ```
@@ -371,31 +536,73 @@ process.stdout.write('uis_capture_map 저장: ' + map.length + '개\n');
 
 ---
 
-## STEP 6-2-3: BFS 결과 → 도메인 구조 자동생성 + 소스 역매핑
+## STEP 6-2-3: BFS 결과 → INF 매핑으로 도메인 결정 + ID 배정
 
 > **설계 원칙**:
-> - 도메인 = `menuPath[0]` (L1 GNB 카테고리). 정적분석 도메인과 무관.
-> - `_domain_plan.json` = BFS 완료 후 자동 생성. 사전에 존재할 필요 없음.
-> - 소스 역매핑 = `activeRoute` → controller/JSP 역추적 (선택적 보강).
+> - 도메인 = BFS 캡처 시 XHR/Fetch URL → 기존 INF `path:` 매칭 → INF의 도메인 (결정론적)
+> - fallback: API 호출 없는 화면은 `menuPath[0]` (GNB L1) 사용
+> - `_domain_plan.json`의 도메인 구조는 `/sl-recon`에서 확정됨 — BFS는 이를 재사용하고 `screens[]`만 갱신
+> - 소스 역매핑 = `activeRoute` → controller/JSP 역추적 (선택적 보강)
 
-### 6-2-3-A: menuPath[0] → 도메인 구조 자동생성 + 도메인 코드 추출
+### 6-2-3-A: INF path 인덱스 구축 + URL→domain 결정 + UIS ID 배정
 
-> **도메인 코드 규칙**: `INF-BRD-001`, `UIS-ORD-001`, `SCH-PRD-001` 형식.
-> 도메인명은 **LLM이 비즈니스 의미 기반으로 동적 생성** — 하드코딩 맵 없음.
-> 회사·프로젝트마다 도메인명이 다르므로 LLM 판단으로 어느 시스템에도 적용 가능.
-> 사용자가 STEP 6-2-4에서 확인/수정 가능.
-
-**Phase 1 — 도메인명 목록 추출**
+**Phase 1 — INF path 인덱스 구축 + 화면 domain 결정**
 
 ```bash
 !python -c "
 import json, os, sys, re
-from collections import OrderedDict
+from collections import defaultdict
 
 try:
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 except AttributeError:
     pass
+
+# _domain_plan.json에서 기존 도메인 구조 로드 (sl-recon이 생성한 것)
+plan_path = 'docs/05_설계서/_domain_plan.json'
+if not os.path.exists(plan_path):
+    print('[FAIL] _domain_plan.json 없음 — /sl-recon 먼저 실행')
+    sys.exit(1)
+
+plan = json.load(open(plan_path, encoding='utf-8'))
+domain_code_map = {d['name']: d.get('code', '') for d in plan.get('domains', [])}
+
+# GNB 텍스트 → 도메인명 정규화 매핑 (공백 제거 + 소문자 → 정확한 도메인명)
+# "방송 관리" → "방송관리", "Order Mgmt" → "ordermgmt" 등 불일치 방지
+def normalize_label(s):
+    return re.sub(r'[\s_\-]', '', s).lower()
+
+gnb_to_domain = {}
+for d in plan.get('domains', []):
+    gnb_to_domain[normalize_label(d['name'])] = d['name']
+
+def resolve_domain_from_gnb(gnb_text):
+    """GNB 레이블을 정규화해 _domain_plan.json의 도메인명과 매칭. 없으면 원본 반환."""
+    if not gnb_text:
+        return 'unknown'
+    key = normalize_label(gnb_text)
+    return gnb_to_domain.get(key, gnb_text)  # 정확 도메인명 없으면 GNB 원본 사용
+
+# INF path → domain 인덱스 구축
+inf_path_map = {}  # '/api/order/list' → '주문'
+for d in plan.get('domains', []):
+    domain = d['name']
+    inf_dir = os.path.join('docs', '05_설계서', domain, 'INF')
+    if not os.path.isdir(inf_dir):
+        continue
+    for fname in os.listdir(inf_dir):
+        if not fname.endswith('.md'):
+            continue
+        try:
+            content = open(os.path.join(inf_dir, fname), encoding='utf-8').read()
+            pm = re.search(r'^path:\s*(\S+)', content, re.M)
+            if pm:
+                inf_path_map[pm.group(1)] = domain
+        except Exception:
+            pass
+
+print('INF path 인덱스: ' + str(len(inf_path_map)) + '개 ('
+      + str(len(domain_code_map)) + '개 도메인)')
 
 # 도메인 필터 읽기
 mode = {}
@@ -405,57 +612,59 @@ domain_filter = mode.get('domain_filter')
 
 cap_map = json.load(open('_tmp/uis_capture_map.json', encoding='utf-8'))
 
-# 도메인 필터가 있으면 해당 도메인 항목만 처리
-if domain_filter:
-    work_map = [e for e in cap_map if
-                e.get('domain', '') == domain_filter or
-                (not e.get('domain') and (e.get('menuPath', [''])[0] == domain_filter))]
-    print('[도메인 필터] ' + domain_filter + ': ' + str(len(work_map)) + '개 (전체 ' + str(len(cap_map)) + '개 중)')
-else:
-    work_map = cap_map
+matched = 0
+fallback = 0
+for entry in cap_map:
+    # 도메인 필터: 타 도메인 항목은 건드리지 않음
+    if domain_filter and entry.get('domain') and entry.get('domain') != domain_filter:
+        continue
+    # 정적 fallback 항목은 domain 이미 설정됨
+    if entry.get('static_fallback') and entry.get('domain'):
+        continue
 
-# menuPath[0] = 도메인 (L1 GNB 카테고리)
-domain_screens = OrderedDict()
-for entry in work_map:
-    mp = entry.get('menuPath', [])
-    domain = mp[0] if mp else 'unknown'
-    if domain not in domain_screens:
-        domain_screens[domain] = []
-    domain_screens[domain].append(entry)
+    api_hints = entry.get('apiHints', [])
+    if not api_hints:
+        # API 호출 없는 화면 → menuPath[0] fallback (정규화 매칭)
+        mp = entry.get('menuPath', [])
+        gnb = mp[0] if mp else ''
+        entry['domain'] = entry.get('domain') or resolve_domain_from_gnb(gnb)
+        fallback += 1
+        continue
 
-# 도메인 필터: 이미 코드가 있으면 재사용
-if domain_filter and os.path.exists('_tmp/domain_codes.json'):
-    existing_codes = json.load(open('_tmp/domain_codes.json', encoding='utf-8'))
-    if domain_filter in existing_codes:
-        print('  코드 재사용: ' + domain_filter + ' = ' + existing_codes[domain_filter])
+    # URL → INF 매칭 (정확 일치 2점, suffix 매칭 1점)
+    domain_votes = defaultdict(int)
+    for hint_url in api_hints:
+        clean_url = hint_url.split('?')[0]  # 쿼리스트링 제거
+        if clean_url in inf_path_map:
+            domain_votes[inf_path_map[clean_url]] += 2
+        else:
+            for inf_path, dom in inf_path_map.items():
+                if clean_url.endswith(inf_path) or inf_path.endswith(clean_url.lstrip('/')):
+                    domain_votes[dom] += 1
+                    break
 
-domains_list = list(domain_screens.keys())
-os.makedirs('_tmp', exist_ok=True)
-json.dump(domains_list, open('_tmp/_bfs_domains_raw.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
+    if domain_votes:
+        entry['domain'] = max(domain_votes, key=domain_votes.get)
+        matched += 1
+    else:
+        # INF 매칭 실패 → menuPath[0] fallback (정규화 매칭)
+        mp = entry.get('menuPath', [])
+        gnb = mp[0] if mp else ''
+        entry['domain'] = entry.get('domain') or resolve_domain_from_gnb(gnb)
+        fallback += 1
 
-print('처리 도메인 목록 (' + str(len(domains_list)) + '개):')
-for d in domains_list:
-    print('  - ' + d + ' (' + str(len(domain_screens[d])) + '개 화면)')
-print()
-print('→ _tmp/_bfs_domains_raw.json 저장 완료')
+json.dump(cap_map, open('_tmp/uis_capture_map.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
+print('도메인 결정: INF 매칭 ' + str(matched) + '개 / GNB fallback ' + str(fallback) + '개')
+if fallback > 0:
+    print('[INFO] GNB fallback 화면: STEP 6-2-4에서 도메인 수동 확인 권장')
+if not inf_path_map:
+    print('[WARN] INF 파일이 없어 전체 GNB fallback — /sl-recon STEP 4 완료 후 재실행 권장')
 "
 ```
 
-**Phase 2 — LLM 도메인 코드 생성**
+> INF 파일이 0개이면 전체 fallback(menuPath[0]). STEP 6-2-4에서 수동 확인.
 
-`_tmp/_bfs_domains_raw.json`을 Read 도구로 읽어, 각 도메인명에 대해 **영어 약어(2~4자 대문자)**를 배정한 후 Write 도구로 `_tmp/domain_codes.json`을 생성하세요.
-
-**도메인 필터 모드인 경우**: 기존 `_tmp/domain_codes.json`이 있으면 Read 도구로 읽어 이미 코드가 있는 도메인은 재사용하고, 새 도메인만 추가 배정한다.
-
-배정 규칙:
-- 도메인의 **비즈니스 의미**를 영어로 번역 (예: 방송관리→BRD, 협력사관리→VND, 주문→ORD, 상품→PRD)
-- 도메인명이 이미 영문이면 앞 3자 대문자 사용
-- **중복 코드 불가** — 겹치면 숫자 suffix 추가 (예: ORD, ORD2)
-- 형식: `{"도메인명": "코드", ...}`
-
-> 이 단계는 Python 스크립트가 아니라 LLM이 직접 Write 도구로 파일을 생성합니다.
-
-**Phase 3 — ID 배정 + 산출물 저장**
+**Phase 2 — UIS ID + specDirName 배정 + _domain_plan.json screens[] 갱신**
 
 ```bash
 !python -c "
@@ -467,48 +676,47 @@ try:
 except AttributeError:
     pass
 
-# 도메인 필터 읽기
+plan_path = 'docs/05_설계서/_domain_plan.json'
+plan = json.load(open(plan_path, encoding='utf-8'))
+domain_code_map = {d['name']: d.get('code', '') for d in plan.get('domains', [])}
+
 mode = {}
 if os.path.exists('_tmp/_recon_uis_mode.json'):
     mode = json.load(open('_tmp/_recon_uis_mode.json', encoding='utf-8'))
 domain_filter = mode.get('domain_filter')
 
 cap_map = json.load(open('_tmp/uis_capture_map.json', encoding='utf-8'))
-domain_codes = json.load(open('_tmp/domain_codes.json', encoding='utf-8'))
-
-# 처리 대상: 도메인 필터가 있으면 해당 도메인만
-if domain_filter:
-    work_map = [e for e in cap_map if
-                e.get('domain', '') == domain_filter or
-                (not e.get('domain') and e.get('menuPath', [''])[0] == domain_filter)]
-else:
-    work_map = cap_map
-
-domain_screens = OrderedDict()
-for entry in work_map:
-    mp = entry.get('menuPath', [])
-    domain = mp[0] if mp else 'unknown'
-    if domain not in domain_screens:
-        domain_screens[domain] = []
-    domain_screens[domain].append(entry)
 
 def safe_label(s):
     return re.sub(r'[/\\\\:*?\"<>|]', '', s).strip()
 
-# 누락 도메인 fallback
+# 도메인별 화면 그룹화
+domain_screens = OrderedDict()
+for entry in cap_map:
+    if domain_filter and entry.get('domain') != domain_filter:
+        continue
+    domain = entry.get('domain', 'unknown')
+    if domain not in domain_screens:
+        domain_screens[domain] = []
+    domain_screens[domain].append(entry)
+
+# 미지정 도메인 코드 fallback (D01, D02 ...)
 idx = 1
+used_codes = set(domain_code_map.values())
 for domain in domain_screens:
-    if domain not in domain_codes:
-        while ('D' + str(idx).zfill(2)) in domain_codes.values():
+    if domain not in domain_code_map or not domain_code_map[domain]:
+        while ('D' + str(idx).zfill(2)) in used_codes:
             idx += 1
-        domain_codes[domain] = 'D' + str(idx).zfill(2)
+        domain_code_map[domain] = 'D' + str(idx).zfill(2)
+        used_codes.add(domain_code_map[domain])
         idx += 1
+        print('[WARN] 미매핑 도메인: ' + domain + ' → 임시 코드 ' + domain_code_map[domain])
 
 for domain, items in domain_screens.items():
-    code = domain_codes[domain]
+    code = domain_code_map.get(domain, 'XX')
     for i, item in enumerate(items):
-        item['domain'] = domain
         uid_num = i + 1
+        item['domain'] = domain
         item['uisId'] = code + '-' + str(uid_num).zfill(3)
         item['specDirName'] = ('UIS-' + code + '-' + str(uid_num).zfill(3)
                                + '_' + safe_label(item.get('screenLabel', 'screen')))
@@ -519,54 +727,41 @@ for domain, items in domain_screens.items():
 
 json.dump(cap_map, open('_tmp/uis_capture_map.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
 
-# _domain_plan.json: 도메인 필터면 타 도메인 보존하고 대상 도메인만 교체
-plan_path = 'docs/05_설계서/_domain_plan.json'
-os.makedirs('docs/05_설계서', exist_ok=True)
-if domain_filter and os.path.exists(plan_path):
-    existing_plan = json.load(open(plan_path, encoding='utf-8'))
-    other_domains = [d for d in existing_plan.get('domains', []) if d['name'] != domain_filter]
-else:
-    other_domains = []
-
-new_domains = []
+# _domain_plan.json: 도메인 구조(코드/rootPaths 등)는 건드리지 않고 screens[]만 갱신
+domain_lookup = {d['name']: d for d in plan.get('domains', [])}
 for domain, items in domain_screens.items():
-    code = domain_codes[domain]
-    new_domains.append({
-        'name': domain,
-        'code': code,
-        'description': domain + ' (BFS 자동 추출)',
-        'source': 'BFS',
-        'uis': {'start': 1, 'end': len(items)},
-        'inf': {'start': 1, 'end': len(items)},
-        'sch': {'start': 1, 'end': len(items)},
-        'rootPaths': [],
-        'screens': [e.get('specDirName', e.get('screenId','')) for e in items],
-    })
+    if domain in domain_lookup:
+        domain_lookup[domain]['screens'] = [e.get('specDirName', e.get('screenId','')) for e in items]
+        domain_lookup[domain]['bfsScreenCount'] = len(items)
+    else:
+        # BFS에서 새로 발견된 도메인 (INF 없는 순수 UI 도메인) → plan에 추가
+        code = domain_code_map.get(domain, 'XX')
+        plan['domains'].append({
+            'name': domain, 'code': code,
+            'description': domain + ' (BFS 발견, INF 없음)',
+            'source': 'BFS-only',
+            'uis': {'start': 1, 'end': len(items)},
+            'inf': {'start': 0, 'end': 0},
+            'sch': {'start': 0, 'end': 0},
+            'rootPaths': [],
+            'screens': [e.get('specDirName', e.get('screenId','')) for e in items],
+            'bfsScreenCount': len(items),
+        })
+        print('[NEW] BFS 전용 도메인 추가: ' + domain + ' (' + code + ') — INF 연결 없음')
 
-bfs_plan = {
-    'project': os.path.basename(os.getcwd()),
-    'source': 'BFS',
-    'generatedAt': __import__('datetime').datetime.now().isoformat(),
-    'idFormat': '{type}-{code}-{NNN:03d}',
-    'domains': other_domains + new_domains,
-}
-json.dump(bfs_plan, open(plan_path, 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
+json.dump(plan, open(plan_path, 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
 
-print('도메인 자동 추출 완료 (BFS menuPath[0] + LLM 코드):')
+print('UIS ID 배정 완료:')
 print()
 print('  도메인명'.ljust(20) + '코드'.ljust(6) + '화면 수')
 print('  ' + '-' * 35)
 for domain, items in domain_screens.items():
-    code = domain_codes[domain]
+    code = domain_code_map.get(domain, 'XX')
     sample = 'UIS-' + code + '-001 ~ UIS-' + code + '-' + str(len(items)).zfill(3)
     print('  ' + domain.ljust(20) + code.ljust(6) + str(len(items)).rjust(3) + '개   ' + sample)
-if domain_filter and other_domains:
-    print('  (타 도메인 ' + str(len(other_domains)) + '개 보존)')
 print()
-print('총 ' + str(len(cap_map)) + '개 화면, ' + str(len(other_domains) + len(new_domains)) + '개 도메인')
-print('_domain_plan.json 생성/갱신 완료')
-print()
-print('[주의] 도메인 코드가 잘못됐으면 STEP 6-2-4에서 직접 수정 가능')
+print('_domain_plan.json screens[] 갱신 완료 (도메인 구조 보존)')
+print('[주의] 도메인이 잘못됐으면 STEP 6-2-4에서 직접 수정 가능')
 "
 ```
 
@@ -694,7 +889,7 @@ for entry in cap_map:
     entry['uisId'] = parent_uid + '-T' + str(tab_idx).zfill(2)
     entry['domain'] = domain
     tab_label = entry.get('tabLabel', 'tab' + str(tab_idx))
-    entry['specDirName'] = ('UIS-' + code + '-' + parent_uid
+    entry['specDirName'] = ('UIS-' + parent_uid
                             + '-T' + str(tab_idx).zfill(2)
                             + '_' + safe_label(tab_label))
     modified += 1

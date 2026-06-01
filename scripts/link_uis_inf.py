@@ -67,7 +67,7 @@ def build_inf_index(workspace):
 
 
 def find_inf(url, method, inf_idx):
-    """URL + method → INF-ID 매칭. 부분 prefix 허용."""
+    """URL + method → INF-ID 매칭. 정확 일치 우선, prefix는 경계 기반 최장 일치."""
     u = url.lower()
     m = (method or '').upper()
     # 정확 매칭
@@ -75,12 +75,23 @@ def find_inf(url, method, inf_idx):
         return inf_idx[(m, u)]
     if u in inf_idx:
         return inf_idx[u]
-    # prefix 매칭
+    # 최장 prefix 매칭 — path segment 경계(/or끝)에서만 허용하여 오버매칭 방지
+    # 예: /api/order 인덱스가 /api/orders 요청에 오매칭되지 않도록
+    best_val = None
+    best_len = 0
     for key, val in inf_idx.items():
         k = key[1] if isinstance(key, tuple) else key
-        if isinstance(k, str) and len(k) > 4 and (k == u or u.startswith(k) or k.startswith(u)):
-            return val
-    return None
+        if not isinstance(k, str) or len(k) <= 4:
+            continue
+        # u가 k의 segment-boundary prefix인지 확인
+        if u.startswith(k) and (len(k) == len(u) or u[len(k)] == '/'):
+            if len(k) > best_len:
+                best_val, best_len = val, len(k)
+        # k가 u의 segment-boundary prefix인지 확인
+        elif k.startswith(u) and (len(u) == len(k) or k[len(u)] == '/'):
+            if len(k) > best_len:
+                best_val, best_len = val, len(k)
+    return best_val
 
 
 def patch_spec(spec_path, url_to_inf):
@@ -108,6 +119,46 @@ def patch_spec(spec_path, url_to_inf):
         with open(spec_path, 'w', encoding='utf-8') as f:
             f.write(body)
     return patched, ''
+
+
+def update_inf_screens(workspace, screen_id, url_to_inf):
+    """매칭된 INF 파일의 screens[] 필드에 screen_id 추가."""
+    for url, (inf_id, matched_domain) in url_to_inf.items():
+        inf_path = os.path.join(workspace, 'docs', '05_설계서', matched_domain, 'INF', f'{inf_id}.md')
+        if not os.path.exists(inf_path):
+            continue
+        try:
+            body = open(inf_path, encoding='utf-8').read()
+
+            # 인라인 형식: screens: [] 또는 screens: ["UIS-001"]
+            m_inline = re.search(r'^(screens:\s*\[)(.*?)(\])', body, re.M)
+            # 블록 형식: screens:\n  - UIS-001
+            m_block  = re.search(r'^(screens:)((?:\n[ \t]+-[^\n]*)+)', body, re.M)
+
+            if m_inline:
+                raw = m_inline.group(2)
+                existing = [s.strip().strip('"\'') for s in raw.split(',') if s.strip()]
+                if screen_id not in existing:
+                    existing.append(screen_id)
+                    new_val = ', '.join(f'"{s}"' for s in existing)
+                    body = body[:m_inline.start()] + f'screens: [{new_val}]' + body[m_inline.end():]
+                    open(inf_path, 'w', encoding='utf-8').write(body)
+            elif m_block:
+                lines = m_block.group(2).split('\n')
+                existing = [l.strip().lstrip('- ').strip('"\'') for l in lines if l.strip().startswith('-')]
+                if screen_id not in existing:
+                    existing.append(screen_id)
+                    new_block = ''.join(f'\n  - {s}' for s in existing)
+                    body = body[:m_block.start()] + 'screens:' + new_block + body[m_block.end():]
+                    open(inf_path, 'w', encoding='utf-8').write(body)
+            else:
+                # screens 필드 자체 없음 — YAML frontmatter 닫는 --- 직전에 삽입
+                parts = body.split('---', 2)
+                if len(parts) >= 3:
+                    parts[1] = parts[1].rstrip('\n') + f'\nscreens: ["{screen_id}"]\n'
+                    open(inf_path, 'w', encoding='utf-8').write('---'.join(parts))
+        except Exception:
+            pass
 
 
 def process_screen(workspace, screen_id, inf_idx):
@@ -159,6 +210,7 @@ def process_screen(workspace, screen_id, inf_idx):
             print(f'[ERROR] {screen_id} spec.md 패치 실패: {err}')
         else:
             print(f'[OK] {screen_id}: {patched}개 URL → INF 링크 교체 ({spec_path})')
+        update_inf_screens(workspace, screen_id, url_to_inf)
 
     # inf_required 갱신 — 매칭된 것 제거
     req['inf_required'] = unmatched
