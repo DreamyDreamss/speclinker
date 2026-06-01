@@ -205,6 +205,89 @@ def has_layer_signal(fqn_or_path: str, layers: tuple) -> bool:
 
 
 # ──────────────────────────────────────────────
+# source_index.json 기반 빠른 인덱스 구성
+# ──────────────────────────────────────────────
+
+def build_index_from_source_index(source_index_data):
+    """
+    scan_source.js가 생성한 source_index.json 데이터에서 두 인덱스를 구성한다.
+    파일을 다시 read하지 않고 chain resolution에 필요한 모든 정보를 추출한다.
+
+    Returns:
+        class_index  : {ClassName: [abs_path, ...]}  — Java/Kotlin 전용
+        imports_map  : {abs_path: {'lang': str, 'imports': [str]}}  — 전 언어
+    """
+    class_index = {}
+    imports_map = {}
+
+    for entry in source_index_data.get('files', []):
+        fp       = norm(entry.get('filePath', ''))
+        lang     = entry.get('lang', '')
+        cls_name = entry.get('className', '')
+        imports  = entry.get('imports', []) or []
+
+        if not fp:
+            continue
+
+        # Java/Kotlin: 파일명 기준으로 인덱싱 (build_java_class_index 와 동일 전략).
+        # className(AST) 대신 파일명을 쓰는 이유:
+        #   interface/abstract 파일은 scan_source.js 가 className='' 로 저장하기 때문.
+        #   import 문은 파일명(PrdAppInstService)을 참조하므로 파일명이 SSoT.
+        if lang in ('java', 'kotlin'):
+            fname_key = os.path.splitext(os.path.basename(fp))[0]
+            if fname_key:
+                class_index.setdefault(fname_key, []).append(fp)
+
+        imports_map[fp] = {'lang': lang, 'imports': imports}
+
+    return class_index, imports_map
+
+
+def _resolve_java_imports_from_index(imports_list, class_index, fl, sl):
+    """
+    source_index.json 에 저장된 FQN imports 목록에서 파일 재read 없이 연관 파일 경로 반환.
+    extract_java_imports() 와 동일한 follow_layers/skip_layers 필터를 적용한다.
+    """
+    files = []
+    for fqn in imports_list:
+        if not has_layer_signal(fqn, fl):
+            continue
+        if has_layer_signal(fqn, sl):
+            continue
+        class_name = fqn.split('.')[-1]
+        if '*' in class_name:   # wildcard import 스킵
+            continue
+        for candidate in class_index.get(class_name, []):
+            files.append(candidate)
+    return files
+
+
+def _resolve_ts_imports_from_index(file_path, imports_list, workspace_root, fl, sl):
+    """
+    source_index.json 에 저장된 TS/JS module 경로에서 파일 재read 없이 연관 파일 경로 반환.
+    extract_ts_imports() 와 동일 로직 — 파일 content 없이 imports 목록만 사용.
+    """
+    files = []
+    base_dir = os.path.dirname(file_path)
+    for module in imports_list:
+        if not (module.startswith('.') or module.startswith('/')):
+            continue   # 외부 패키지 스킵
+        candidate_base = os.path.normpath(os.path.join(base_dir, module))
+        for ext in ('.ts', '.tsx', '.js', '.jsx', ''):
+            p = candidate_base + ext if ext else candidate_base
+            if os.path.isfile(p):
+                if has_layer_signal(p, fl) and not has_layer_signal(p, sl):
+                    files.append(norm(p))
+                break
+            idx_p = os.path.join(candidate_base, 'index' + ext) if ext else None
+            if idx_p and os.path.isfile(idx_p):
+                if has_layer_signal(idx_p, fl) and not has_layer_signal(idx_p, sl):
+                    files.append(norm(idx_p))
+                break
+    return files
+
+
+# ──────────────────────────────────────────────
 # 언어별 import 파싱
 # ──────────────────────────────────────────────
 
@@ -688,13 +771,15 @@ def extract_query_schema(query_file):
 # call chain 해결 (Controller → Service → DAO → Query)
 # ──────────────────────────────────────────────
 
-def resolve_chain(controller_path, workspace_root, max_depth=2, class_index=None):
+def resolve_chain(controller_path, workspace_root, max_depth=2, class_index=None,
+                  imports_map=None):
     """
     컨트롤러 → 서비스 → DAO (최대 2홉) + 쿼리 파일까지 반환
     반환: { "service": [...], "dao": [...], "query": [...] }
 
     Profile yaml이 있으면 strategy 합성으로 follow/skip layers를 동적 결정.
-    class_index: build_java_class_index() 결과 (Java 대규모 프로젝트 성능 개선).
+    class_index  : build_java_class_index() 또는 build_index_from_source_index() 결과.
+    imports_map  : build_index_from_source_index() 결과 — 있으면 파일 재read 없이 처리.
     """
     fl, sl, strategy_max_depth = load_effective_layers(workspace_root)
     if strategy_max_depth > max_depth:
@@ -705,12 +790,26 @@ def resolve_chain(controller_path, workspace_root, max_depth=2, class_index=None
     dao_files = []
     query_files = []
 
+    def _get_related(file_path):
+        """imports_map 우선 사용, 없으면 파일 직접 read."""
+        fp_norm = norm(file_path)
+        if imports_map and fp_norm in imports_map:
+            entry      = imports_map[fp_norm]
+            lang       = entry['lang']
+            imp_list   = entry['imports']
+            if lang in ('java', 'kotlin'):
+                return _resolve_java_imports_from_index(imp_list, class_index or {}, fl, sl)
+            elif lang in ('typescript', 'javascript'):
+                return _resolve_ts_imports_from_index(fp_norm, imp_list, workspace_root, fl, sl)
+            # Python / 기타: 파일 수가 적고 포맷 차이 가능성 → 안전하게 file read
+        return extract_imports(file_path, workspace_root, fl, sl, class_index)
+
     def traverse(file_path, depth):
         if depth == 0 or norm(file_path) in visited:
             return
         visited.add(norm(file_path))
 
-        related = extract_imports(file_path, workspace_root, fl, sl, class_index)
+        related = _get_related(file_path)
         for rf in related:
             if norm(rf) in visited:
                 continue
@@ -921,11 +1020,29 @@ def main():
         BATCH = 3
         inventory = [inventory[i:i+BATCH] for i in range(0, len(inventory), BATCH)]
 
-    # Java 프로젝트이면 클래스 인덱스를 1회 빌드 (파일당 os.walk 대신 O(1) 조회)
     all_items_flat = [item for group in inventory for item in group]
     first_fp = all_items_flat[0].get('filePath', '') if all_items_flat else ''
+
     class_index = None
-    if first_fp.endswith('.java'):
+    imports_map = None
+
+    # ① source_index.json 있으면 파일 재read 없이 두 인덱스를 한 번에 구성
+    source_index_path = os.path.join(workspace_root, '_tmp', 'source_index.json')
+    if os.path.exists(source_index_path):
+        try:
+            source_index_data = json.load(open(source_index_path, encoding='utf-8'))
+            class_index, imports_map = build_index_from_source_index(source_index_data)
+            n_cls   = sum(len(v) for v in class_index.values())
+            n_files = len(imports_map)
+            print(f'source_index.json 로드 완료 — 파일 재read 없이 chain 해석')
+            print(f'  → 클래스 인덱스 {n_cls}개, import 맵 {n_files}파일')
+        except Exception as e:
+            print(f'[WARN] source_index.json 로드 실패, 파일 직접 read fallback: {e}')
+            class_index = None
+            imports_map = None
+
+    # ② source_index.json 없을 때 Java면 클래스 인덱스만 별도 빌드 (기존 동작)
+    if class_index is None and first_fp.endswith('.java'):
         print('Java 클래스 인덱스 빌드 중...')
         class_index = build_java_class_index(workspace_root)
         total_cls = sum(len(v) for v in class_index.values())
@@ -940,7 +1057,8 @@ def main():
             fp = item.get('filePath', '')
             abs_fp = fp if os.path.isabs(fp) else os.path.join(workspace_root, fp)
 
-            chain = resolve_chain(abs_fp, workspace_root, class_index=class_index)
+            chain = resolve_chain(abs_fp, workspace_root, class_index=class_index,
+                                  imports_map=imports_map)
             item['relatedFiles'] = chain
 
             n = len(chain['service']) + len(chain['dao']) + len(chain['query'])
