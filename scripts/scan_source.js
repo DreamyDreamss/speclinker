@@ -140,32 +140,34 @@ function parseJava(content, filePath) {
   while ((m = annotPat.exec(preClass)) !== null) annotations.push(m[0]);
 
   // class-level @RequestMapping path
+  // 끝의 /* 는 Spring MVC DispatcherServlet 와일드카드 — 실제 URL 세그먼트가 아니므로 제거
   let baseMapping = '';
   const baseMM = preClass.match(/@RequestMapping\s*\(\s*(?:value\s*=\s*)?["']([^"']+)["']/);
-  if (baseMM) baseMapping = baseMM[1];
+  if (baseMM) baseMapping = baseMM[1].replace(/\/\*$/, '');
 
   // @RestController 또는 클래스 수준 @ResponseBody이면 전체 api
   const isRestController     = annotations.some(a => /^@RestController(\(|$)/.test(a));
   const isClassResponseBody  = annotations.some(a => /^@ResponseBody(\(|$)/.test(a));
   const isAllApi = isRestController || isClassResponseBody;
 
-  // method-level HTTP mappings
+  // method-level HTTP mappings — 클래스 선언 이후 구간만 스캔 (클래스 레벨 어노테이션 중복 방지)
+  const methodContent = classPos > 0 ? content.slice(classPos) : content;
   const methodPat = /@(Get|Post|Put|Delete|Patch|Request)Mapping\s*\(\s*(?:value\s*=\s*)?["']([^"']+)["']/g;
-  while ((m = methodPat.exec(content)) !== null) {
+  while ((m = methodPat.exec(methodContent)) !== null) {
     const verb     = m[1] === 'Request' ? 'ANY' : m[1].toUpperCase();
     const subPath  = m[2];
     const fullPath = (baseMapping + '/' + subPath).replace(/\/+/g, '/');
-    // find method name after annotation
-    const afterAnnot = content.slice(m.index, m.index + 300);
+    // find method name after annotation (methodContent 기준 인덱스 사용)
+    const afterAnnot = methodContent.slice(m.index, m.index + 300);
     const handlerM  = afterAnnot.match(/(?:public|private|protected)?\s+\w+\s+(\w+)\s*\(/);
 
     let kind = 'api';
     if (!isAllApi) {
       // @Controller (클래스 수준 @ResponseBody 없음): 메서드별 판별
-      // 1. 메서드 선언부(@ResponseBody 어노테이션)
-      const declArea = content.slice(Math.max(0, m.index - 300), m.index + 50);
-      // 2. 메서드 바디 (GridResultUtil, AjaxMessageMapRenderer, ResponseEntity)
-      const body = extractMethodBody(content, m.index);
+      // m.index는 methodContent 기준이므로 content 절대 위치로 변환
+      const absIdx = (classPos > 0 ? classPos : 0) + m.index;
+      const declArea = content.slice(Math.max(0, absIdx - 300), absIdx + 50);
+      const body = extractMethodBody(content, absIdx);
       if (METHOD_RESPONSE_BODY.test(declArea) || API_BODY_SIGNALS.test(body)) {
         kind = 'api';
       } else {
@@ -336,6 +338,178 @@ function parseProjectEnv() {
   );
 }
 
+// ── 컨텍스트 경로 자동 감지 ──────────────────────────────────────────────────
+//
+// 탐지 우선순위:
+//  1. project.env  CONTEXT_PATH (명시적 오버라이드)
+//  2. web.xml      DispatcherServlet <url-pattern>   (Spring MVC)
+//  3. application.properties / yml                   (Spring Boot)
+//  4. main.ts      app.setGlobalPrefix(...)           (NestJS)
+//  5. main.py/app.py  FastAPI(root_path=...) / include_router(prefix=...)
+//  6. .env         CONTEXT_PATH / APP_PREFIX / BASE_PATH / API_PREFIX
+
+function normalizeContextPath(cp) {
+  cp = (cp || '').trim().replace(/^['"`]|['"`]$/g, '');
+  if (!cp) return '';
+  if (!cp.startsWith('/')) cp = '/' + cp;
+  cp = cp.replace(/\/+$/, '');
+  return cp === '/' ? '' : cp;
+}
+
+/** 우선순위 경로 목록으로 설정 파일 검색. 없으면 재귀 fallback(depth 5). */
+function findConfigFile(root, filename) {
+  const QUICK = [
+    'src/main/webapp/WEB-INF',
+    'src/main/resources',
+    'src/main/resources/config',
+    'src',
+    'config',
+    '.',
+  ];
+  for (const sub of QUICK) {
+    const c = path.join(root, sub, filename);
+    if (fs.existsSync(c)) return c;
+  }
+  // 재귀 fallback
+  function walk(dir, d) {
+    if (d > 5) return null;
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return null; }
+    for (const e of entries) if (e.name === filename && e.isFile()) return path.join(dir, e.name);
+    for (const e of entries)
+      if (e.isDirectory() && !SKIP_DIRS.has(e.name)) { const f = walk(path.join(dir, e.name), d + 1); if (f) return f; }
+    return null;
+  }
+  return walk(root, 0);
+}
+
+function parseWebXmlPrefix(fpath) {
+  try {
+    const content = fs.readFileSync(fpath, 'utf-8');
+    const blocks = content.match(/<servlet-mapping[\s\S]*?<\/servlet-mapping>/g) || [];
+    for (const block of blocks) {
+      // 블록 내 모든 url-pattern 수집
+      const urlPat = /<url-pattern>\s*([^<]+?)\s*<\/url-pattern>/g;
+      let m;
+      while ((m = urlPat.exec(block)) !== null) {
+        const p = m[1].trim();
+        // /prefix/* 형태만 (DispatcherServlet prefix 매핑) — /* 전체 와일드카드 제외
+        if (p.startsWith('/') && p.endsWith('/*') && p !== '/*') {
+          const stripped = p.slice(0, -2); // /app/* → /app
+          if (stripped && stripped !== '/') return stripped;
+        }
+      }
+    }
+  } catch {}
+  return '';
+}
+
+function parseSpringBootContextPath(fpath) {
+  try {
+    const content = fs.readFileSync(fpath, 'utf-8');
+    // properties: server.servlet.context-path=/app
+    let m = content.match(/server\.servlet\.context-path\s*=\s*([^\s\n\r]+)/);
+    if (m) return normalizeContextPath(m[1]);
+    // yml: context-path: /app  (들여쓰기 불문)
+    m = content.match(/context-path:\s*([^\s\n\r]+)/);
+    if (m) return normalizeContextPath(m[1]);
+  } catch {}
+  return '';
+}
+
+function parseNestGlobalPrefix(fpath) {
+  try {
+    const content = fs.readFileSync(fpath, 'utf-8');
+    const m = content.match(/setGlobalPrefix\s*\(\s*['"`]([^'"`]+)['"`]/);
+    if (m) return normalizeContextPath(m[1]);
+  } catch {}
+  return '';
+}
+
+function parseFastApiPrefix(fpath) {
+  try {
+    const content = fs.readFileSync(fpath, 'utf-8');
+    // FastAPI(root_path="/api")
+    let m = content.match(/root_path\s*=\s*['"]([^'"]+)['"]/);
+    if (m) return normalizeContextPath(m[1]);
+    // include_router(router, prefix="/api/v1")
+    m = content.match(/include_router\s*\([^)]*?prefix\s*=\s*['"]([^'"]+)['"]/);
+    if (m) return normalizeContextPath(m[1]);
+  } catch {}
+  return '';
+}
+
+function parseDotEnvPrefix(fpath) {
+  try {
+    const content = fs.readFileSync(fpath, 'utf-8');
+    const m = content.match(/^(?:CONTEXT_PATH|APP_PREFIX|BASE_PATH|API_PREFIX)\s*=\s*([^\n\r]+)/m);
+    if (m) return normalizeContextPath(m[1]);
+  } catch {}
+  return '';
+}
+
+function detectContextPath(sourcePaths, env) {
+  // 1. project.env 명시적 오버라이드
+  if (env.CONTEXT_PATH) {
+    const cp = normalizeContextPath(env.CONTEXT_PATH);
+    if (cp) { console.log(`  [context-path] project.env CONTEXT_PATH="${cp}"`); return cp; }
+  }
+
+  const tried = new Set();
+  const roots = [WORKSPACE, ...sourcePaths.map(s => s.path)];
+
+  for (const root of roots) {
+    // 2. web.xml (Spring MVC)
+    const webXml = findConfigFile(root, 'web.xml');
+    if (webXml && !tried.has(webXml)) {
+      tried.add(webXml);
+      const cp = parseWebXmlPrefix(webXml);
+      if (cp) { console.log(`  [context-path] web.xml="${cp}" (${path.relative(WORKSPACE, webXml)})`); return cp; }
+    }
+
+    // 3. Spring Boot properties / yml
+    for (const fname of ['application.properties', 'application.yml', 'application.yaml']) {
+      const f = findConfigFile(root, fname);
+      if (f && !tried.has(f)) {
+        tried.add(f);
+        const cp = parseSpringBootContextPath(f);
+        if (cp) { console.log(`  [context-path] ${path.basename(f)}="${cp}"`); return cp; }
+      }
+    }
+
+    // 4. NestJS main.ts
+    const mainTs = findConfigFile(root, 'main.ts');
+    if (mainTs && !tried.has(mainTs)) {
+      tried.add(mainTs);
+      const cp = parseNestGlobalPrefix(mainTs);
+      if (cp) { console.log(`  [context-path] NestJS main.ts globalPrefix="${cp}"`); return cp; }
+    }
+
+    // 5. FastAPI main.py / app.py
+    for (const fname of ['main.py', 'app.py']) {
+      const f = findConfigFile(root, fname);
+      if (f && !tried.has(f)) {
+        tried.add(f);
+        const cp = parseFastApiPrefix(f);
+        if (cp) { console.log(`  [context-path] FastAPI ${fname} prefix="${cp}"`); return cp; }
+      }
+    }
+
+    // 6. .env 계열
+    for (const fname of ['.env', '.env.local', '.env.production']) {
+      const f = path.join(root, fname);
+      if (fs.existsSync(f) && !tried.has(f)) {
+        tried.add(f);
+        const cp = parseDotEnvPrefix(f);
+        if (cp) { console.log(`  [context-path] ${fname}="${cp}"`); return cp; }
+      }
+    }
+  }
+
+  console.log('  [context-path] 미감지 (context path 없음)');
+  return '';
+}
+
 // ── 메인 ─────────────────────────────────────────────────────────────────────
 
 function main() {
@@ -355,6 +529,8 @@ function main() {
 
   console.log('[scan_source] 스캔 시작');
   sourcePaths.forEach(s => console.log(`  소스: [${s.label}] ${s.path}`));
+
+  const contextPath = detectContextPath(sourcePaths, env);
 
   const allFiles = [];
   const langStats = {};
@@ -392,6 +568,17 @@ function main() {
         parsed = { pkg: '', className: '', annotations: [], routes: [], imports: [], injected: [], type };
       }
 
+      // context path 적용 — 감지된 경우 모든 route에 prepend
+      let routes = parsed.routes;
+      if (contextPath && routes.length) {
+        routes = routes.map(r => ({
+          ...r,
+          path: r.path.startsWith(contextPath)
+            ? r.path
+            : contextPath + (r.path.startsWith('/') ? r.path : '/' + r.path),
+        }));
+      }
+
       allFiles.push({
         filePath: fullPath.replace(/\\/g, '/'),
         relPath,
@@ -401,7 +588,7 @@ function main() {
         className: parsed.className,
         type: parsed.type,
         annotations: parsed.annotations,
-        routes: parsed.routes,
+        routes,
         imports: parsed.imports,
         injected: parsed.injected,
       });
@@ -415,6 +602,7 @@ function main() {
   const output = {
     scannedAt: new Date().toISOString(),
     workspace: WORKSPACE,
+    contextPath: contextPath || null,
     langStats,
     typeStats,
     files: allFiles,
