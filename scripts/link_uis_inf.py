@@ -60,37 +60,58 @@ def build_inf_index(workspace):
             inf_id = m_id.group(1)
             method = (m_mtd.group(1) if m_mtd else '*').upper()
             path   = m_pth.group(1).lower()
-            idx[path] = (inf_id, method, domain)
-            # method-agnostic fallback
-            idx[('*', path)] = (inf_id, method, domain)
+
+            def _reg(p, _id=inf_id, _m=method, _d=domain):
+                idx[p] = (_id, _m, _d)
+                idx[('*', p)] = (_id, _m, _d)
+
+            _reg(path)
+            # BFS-captured URLs include /app/ context root — index both forms
+            if not path.startswith('/app/'):
+                _reg('/app' + path)
+            # Wildcard/path-variable segments (*  or {varName}): also index collapsed version
+            # e.g. /media/broadcastBasic/*/pgmSearchList → /media/broadcastBasic/pgmSearchList
+            segs = path.split('/')
+            if any(s == '*' or (s.startswith('{') and s.endswith('}')) for s in segs):
+                collapsed = '/'.join(s for s in segs
+                                     if s and s != '*' and not (s.startswith('{') and s.endswith('}')))
+                collapsed = '/' + re.sub(r'/+', '/', collapsed)
+                if collapsed != path:
+                    _reg(collapsed)
+                    if not collapsed.startswith('/app/'):
+                        _reg('/app' + collapsed)
     return idx
 
 
 def find_inf(url, method, inf_idx):
     """URL + method → INF-ID 매칭. 정확 일치 우선, prefix는 경계 기반 최장 일치."""
+    if not url:
+        return None
     u = url.lower()
     m = (method or '').upper()
+    # /app/ context-root 제거 버전도 시도 (BFS URL vs INF path 정규화)
+    u_stripped = re.sub(r'^/app(?=/)', '', u)
+    candidates = [u] if u == u_stripped else [u, u_stripped]
     # 정확 매칭
-    if (m, u) in inf_idx:
-        return inf_idx[(m, u)]
-    if u in inf_idx:
-        return inf_idx[u]
+    for cu in candidates:
+        if (m, cu) in inf_idx:
+            return inf_idx[(m, cu)]
+        if cu in inf_idx:
+            return inf_idx[cu]
     # 최장 prefix 매칭 — path segment 경계(/or끝)에서만 허용하여 오버매칭 방지
-    # 예: /api/order 인덱스가 /api/orders 요청에 오매칭되지 않도록
     best_val = None
     best_len = 0
     for key, val in inf_idx.items():
         k = key[1] if isinstance(key, tuple) else key
         if not isinstance(k, str) or len(k) <= 4:
             continue
-        # u가 k의 segment-boundary prefix인지 확인
-        if u.startswith(k) and (len(k) == len(u) or u[len(k)] == '/'):
-            if len(k) > best_len:
-                best_val, best_len = val, len(k)
-        # k가 u의 segment-boundary prefix인지 확인
-        elif k.startswith(u) and (len(u) == len(k) or k[len(u)] == '/'):
-            if len(k) > best_len:
-                best_val, best_len = val, len(k)
+        for cu in candidates:
+            if cu.startswith(k) and (len(k) == len(cu) or cu[len(k)] == '/'):
+                if len(k) > best_len:
+                    best_val, best_len = val, len(k)
+            elif k.startswith(cu) and (len(cu) == len(k) or k[len(cu)] == '/'):
+                if len(k) > best_len:
+                    best_val, best_len = val, len(k)
     return best_val
 
 
@@ -168,7 +189,7 @@ def process_screen(workspace, screen_id, inf_idx):
         return
 
     try:
-        req = json.load(open(req_path, encoding='utf-8'))
+        req = json.load(open(req_path, encoding='utf-8-sig'))
     except Exception as e:
         print(f'[SKIP] {screen_id}: {req_path} 파싱 실패 — {e}')
         return
