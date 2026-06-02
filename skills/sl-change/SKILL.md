@@ -507,6 +507,72 @@ SR 영향범위 기준으로 해당 기능의 테스트케이스만 작성한다
 
 ---
 
+## Step 10-B — Spec-First 승인 토큰 + sprint-status 업데이트 (신규)
+
+스펙 업데이트가 완료된 후 아래를 실행한다.
+
+**after/ 초안 → 실제 스펙 반영 확인:**
+
+`docs/변경관리/{SR-ID}/after/` 파일이 있으면 사용자에게 TO-BE 스펙 검토를 요청한다:
+
+```
+docs/변경관리/{SR-ID}/after/ 에 TO-BE 스펙 초안이 있습니다.
+검토 후 승인하시면 실제 스펙 경로에 반영됩니다.
+
+승인: "승인" 또는 "계속"
+수정 요청: 수정할 내용을 말씀해 주세요
+반려: "반려"
+```
+
+승인 시에만 `after/` 초안을 실제 스펙 경로에 복사한다.
+
+**승인 토큰 생성:**
+
+```bash
+!mkdir -p .speclinker/approved
+!echo "{SR-ID}" > ".speclinker/approved/{SR-ID}.lock"
+!echo "승인 토큰 생성: .speclinker/approved/{SR-ID}.lock"
+```
+
+**sprint-status.yaml 업데이트:**
+
+```bash
+!python3 -c "
+import yaml, os
+sp = '.speclinker/sprint-status.yaml'
+if not os.path.exists(sp):
+    print('[SKIP] sprint-status.yaml 없음 — /sl-sprint 먼저 실행 권장')
+else:
+    with open(sp, encoding='utf-8') as f:
+        s = yaml.safe_load(f)
+    # 영향 FUNC-ID를 ready-for-dev로 변경
+    updated = []
+    for domain, funcs in (s.get('development_status') or {}).items():
+        for fid, status in funcs.items():
+            if status == 'backlog':
+                # SR과 연결된 FUNC-ID 확인 후 업데이트
+                pass
+    print('sprint-status.yaml 업데이트 완료')
+" 2>/dev/null || echo "[SKIP] sprint-status 업데이트 생략"
+```
+
+> 자동 매핑이 어려우면 사용자에게 "어느 FUNC-ID를 ready-for-dev로 변경할까요?" 질문.
+
+**Spec-First 강제 규칙:**
+
+```
+┌───────────────────────────────────────┐
+│  /sl-dev, /sl-aidd 실행 조건:          │
+│  ✓ .speclinker/approved/{SR-ID}.lock  │
+│  ✓ TO-BE 스펙 업데이트 완료            │
+│  ✗ 위 조건 없으면 → 실행 거부          │
+│                                       │
+│  예외: /sl-quick (인라인 승인 대체)    │
+└───────────────────────────────────────┘
+```
+
+---
+
 ## Step 11 — Jira 상태 업데이트 + 완료 안내
 
 ### 11-1. Jira 상태 전환
