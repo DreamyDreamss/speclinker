@@ -1,0 +1,21 @@
+# sprint-status.yaml — speclinker 개발 진행 상태 추적
+# 기반: BMAD-METHOD sprint-status-template.yaml (MIT © BMad Code, LLC) + speclinker 확장
+# 생성: /sl-sprint | 갱신: /sl-change (승인 시 자동), /sl-dev (시작/완료 시 자동)
+# 수동 수정 가능 — 단, FUNC-ID는 FUNC_MAP.md와 일치해야 함
+
+generated: "{date}"
+project: "{project_name}"
+framework: "{감지된 프레임워크}"       # /sl-context가 채움
+last_recon: "{최종 RECON 날짜}"        # /sl-recon 완료 시 채움
+
+# 상태 값: backlog | ready-for-dev | in-progress | review | done
+# 상태 전이:
+#   backlog       → ready-for-dev  (/sl-change 승인 후 자동)
+#   ready-for-dev → in-progress    (/sl-dev 시작 시 자동)
+#   in-progress   → review         (/sl-dev 완료 시 자동)
+#   review        → done           (/sl-review all-pass 시 자동)
+
+development_status:
+  "{domain}":                          # FUNC_MAP.md 도메인명과 동일
+    "{FUNC-ID}": backlog               # 예: FUNC-ORD-001: backlog
+    # linked_sr: SR-{ID}              # 연결된 SR (있는 경우만)
