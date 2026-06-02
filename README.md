@@ -9,29 +9,20 @@ SI/ITO 개발 전주기 자동화 플러그인 — 요구사항 정의부터 코
 ```
 ~/.claude/plugins/speclinker/
 │
-├── skills/                  ← Claude Code 슬래시 커맨드 (12개)
+├── skills/                  ← Claude Code 슬래시 커맨드 (13개)
 │   ├── sl-init              /sl-init            프로젝트 초기화
 │   ├── sl-genesis           /sl-genesis          인터뷰→설계서 순방향 생성
-│   ├── sl-recon             /sl-recon            기존 코드→설계서 역분석
-│   ├── sl-recon-uis         /sl-recon-uis        RECON Phase-2: 화면 설계서 생성
-│   ├── sl-recon-inf         /sl-recon-inf        RECON Phase-3: API/DB 설계
+│   ├── sl-recon             /sl-recon            기존 코드 역분석 (소스 스캔 + INF/SCH 생성)
+│   ├── sl-recon-uis         /sl-recon-uis        RECON Phase-2: 화면 캡처·UIS 설계서
+│   ├── sl-recon-inf         /sl-recon-inf        RECON Phase-3: INF/SCH 정제 (UIS hints 반영)
 │   ├── sl-recon-doc         /sl-recon-doc        RECON Phase-4: 문서·RTM 생성
 │   ├── sl-aidd              /sl-aidd             FUNC 단위 AI 개발 파이프라인
 │   ├── sl-dev               /sl-dev              코드·단위테스트 자동 생성
 │   ├── sl-test              /sl-test             TC 작성·실행·TR 생성
 │   ├── sl-rtm               /sl-rtm              RTM 커버리지 재계산·게시
 │   ├── sl-analyze           /sl-analyze          변경영향분석서(CIA) 작성
-│   └── sl-change            /sl-change           SR 전주기 처리 (로컬 파일·Jira)
-│
-├── ua/skills/               ← 코드 이해 슬래시 커맨드 (8개, UA 통합)
-│   ├── understand           /understand     코드베이스 지식 그래프 생성
-│   ├── understand-chat      /understand-chat  지식 그래프 기반 Q&A
-│   ├── understand-dashboard /understand-dashboard  웹 대시보드 실행
-│   ├── understand-diff      /understand-diff  PR/diff 영향 분석
-│   ├── understand-domain    /understand-domain  도메인 흐름 그래프 추출
-│   ├── understand-explain   /understand-explain  파일·함수 심층 설명
-│   ├── understand-knowledge /understand-knowledge  LLM 위키 지식 그래프
-│   └── understand-onboard   /understand-onboard  신규 팀원 온보딩 가이드
+│   ├── sl-change            /sl-change           SR 전주기 처리 (로컬 파일·Jira)
+│   └── sl-viewer            /sl-viewer           산출물 뷰어
 │
 ├── agents/                  ← 산출물 생성 서브에이전트 (14개)
 │   ├── spec-agent.md           파이프라인 오케스트레이터
@@ -49,25 +40,23 @@ SI/ITO 개발 전주기 자동화 플러그인 — 요구사항 정의부터 코
 │   ├── convention-learner.md   팀 컨벤션 자동 학습
 │   └── meta-extractor.md       미지원 스택 Strategy yaml 초안 생성
 │
-├── ua/agents/               ← UA 분석 서브에이전트 (9개)
-│
 ├── scripts/                 ← Python·Node.js 자동화 스크립트
 │   ├── scan_source.js           제로-LLM 정적 소스 스캔 (form/api kind 분류)
+│   ├── dispatch_inf_gen.py      INF 생성 dispatcher (배치 병렬 실행)
+│   ├── resolve_call_chain.py    Controller→Service→DAO→Query 사전 추출 + sch_draft 생성
 │   ├── ai_nav.js                Chrome CDP BFS 탐색 (snapshot/click/capture)
-│   ├── detect_capture_strategy.js 캡처 전략 탐지
-│   ├── func_context_bundle.py   FUNC별 컨텍스트 자동 수집
-│   ├── req_scan.py              REQ 커버리지 스캔
-│   ├── ua_req_bridge.js         UA 지식 그래프 ↔ REQ-ID 브릿지
-│   ├── run-dashboard.js         대시보드 서버 실행
-│   ├── merge_index.py           RECON 색인 머징 (Phase-C 대체)
-│   ├── build_funcs_index.py     rd/srs/rtm 공유 인덱스 빌더
-│   ├── resolve_call_chain.py    Controller→Service→DAO→Query 사전 추출
-│   ├── screen_inventory.py      BFS 캡처 소스 경로 역매핑 보강
-│   ├── ia_map_builder.py        IA 맵 빌더
 │   ├── capture.js               CDP attach 기반 화면 캡처 + 위젯 마킹
-│   ├── build_capture_plan.py    화면 캡처 시나리오 자동 생성
-│   ├── link_inf_sch.py          INF→SCH 연결 패치
-│   └── poc_cleanup.py           POC 반복용 산출물 정리기
+│   ├── detect_capture_strategy.js 캡처 전략 탐지
+│   ├── generate_uis_spec.py     캡처 결과 → UIS spec.md 자동 생성
+│   ├── annotate_preview.py      preview.png + widgets.json → 번호 마커 오버레이 생성
+│   ├── link_uis_inf.py          UIS URL → INF 링크 패치
+│   ├── build_funcs_index.py     rd/srs/rtm 공유 인덱스 빌더
+│   ├── build_si_graph.py        SI 트레이싱 그래프 (스펙↔코드 매핑) 빌더
+│   ├── func_context_bundle.py   FUNC별 컨텍스트 자동 수집
+│   ├── req_scan.py              REQ/FUNC 커버리지 스캔
+│   ├── merge_index.py           RECON 색인 머징
+│   ├── screen_inventory.py      BFS 캡처 소스 경로 역매핑 보강
+│   └── link_inf_sch.py          INF→SCH 연결 패치
 │
 ├── templates/               ← 산출물 문서 템플릿 (10개)
 │   ├── RD_template.md           요구사항 정의서
@@ -89,7 +78,7 @@ SI/ITO 개발 전주기 자동화 플러그인 — 요구사항 정의부터 코
 └── CLAUDE.md                ← 커맨드 라우팅 규칙 (Claude가 자동 로드)
 ```
 
-**요약:** 슬래시 커맨드 20개 (speclinker 12 + UA 8), 서브에이전트 23개 (주요 14 + UA 9), 자동화 스크립트 30개+, 문서 템플릿 12개.
+**요약:** 슬래시 커맨드 13개, 서브에이전트 14개, 자동화 스크립트 16개+, 문서 템플릿 12개.
 
 ---
 
@@ -99,7 +88,6 @@ SI/ITO 개발 전주기 자동화 플러그인 — 요구사항 정의부터 코
 |------|-----------|------|
 | Claude Code CLI | 최신 | `claude --version` |
 | Node.js | 18+ | `node --version` |
-| pnpm | 8+ | `pnpm --version` (`npm i -g pnpm`) |
 | Python | 3.8+ | `python3 --version` |
 | Git | 2.40+ | `git --version` |
 
@@ -123,22 +111,6 @@ Claude Code CLI에서:
 
 설치 위치: `~/.claude/plugins/cache/speclinker/speclinker/<버전>/`
 
-### 3단계 — UA 코어 빌드 (자동)
-
-UA 코어 빌드는 **Claude Code 세션 시작 시 자동으로 실행**됩니다 (`SessionStart` 훅).  
-최초 설치 후 Claude Code를 열면 빌드가 자동으로 진행됩니다.
-
-> **수동 빌드가 필요한 경우** (훅이 실행 안 됐을 때):
-> ```bash
-> bash ~/.claude/plugins/cache/speclinker/speclinker/<버전>/scripts/build-ua.sh
-> ```
-
-빌드 완료 확인:
-```
-ua/packages/core/dist/index.js  ← 이 파일이 생성되면 성공
-```
-
----
 
 ## 첫 실행 확인
 
@@ -167,7 +139,10 @@ Claude Code에서 아무 프로젝트 디렉토리를 열고:
 
 ```
 /sl-init   → 프로젝트 초기화
-/sl-recon  → 소스 역분석 → 설계서 자동 생성 + UA 지식 그래프 구축
+/sl-recon      → 소스 스캔 + 도메인 확정 + INF/SCH 생성
+/sl-recon-uis  → 화면 캡처 + UIS 설계서
+/sl-recon-inf  → INF/SCH 정제 (UIS hints 반영)
+/sl-recon-doc  → FUNC/SRS/RTM 생성
 /sl-aidd   → 누락 기능 추가 개발
 ```
 
@@ -176,15 +151,6 @@ Claude Code에서 아무 프로젝트 디렉토리를 열고:
 ```
 /sl-analyze <SR>  → 변경영향분석서(CIA) 작성
 /sl-change <SR>   → AS-IS 조회 → TO-BE 설계 → 코드 생성 → RTM 갱신
-```
-
-### 코드 이해
-
-```
-/understand            → 지식 그래프 생성
-/understand-dashboard  → 웹 대시보드로 아키텍처 시각화
-/understand-domain     → 도메인 흐름도 추출
-/understand-diff       → PR 영향 분석
 ```
 
 ---
@@ -209,12 +175,6 @@ cp ~/.claude/plugins/speclinker/templates/mcp/.mcp.json.example .mcp.json
 /plugin update speclinker@speclinker
 ```
 
-업데이트 후 UA 코어를 다시 빌드합니다 (ua/packages/core 변경 시):
-
-```bash
-cd ~/.claude/plugins/speclinker/ua && pnpm install && pnpm --filter @understand-anything/core build
-```
-
 ---
 
 ## 문제 해결
@@ -222,7 +182,6 @@ cd ~/.claude/plugins/speclinker/ua && pnpm install && pnpm --filter @understand-
 | 증상 | 원인 | 해결 |
 |------|------|------|
 | `/sl-init` 인식 안 됨 | 플러그인 미설치 | `/plugin install speclinker@speclinker` 재실행 |
-| `/understand-dashboard` 실행 안 됨 | UA 코어 미빌드 | 3단계 빌드 재실행 |
 | `python not found` | Python 미설치·PATH 누락 | Python 3 설치 후 터미널 재시작 |
 | `.sh` 실행 안 됨 (Windows) | Git Bash 미설치 | [git-scm.com](https://git-scm.com/downloads) 설치 |
 | MCP 연결 실패 | 네트워크·토큰 문제 | `NETWORK=closed` 설정 후 로컬 모드로 동작 |

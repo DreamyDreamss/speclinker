@@ -23,6 +23,8 @@ import sys
 import subprocess
 import time
 import signal
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 # Windows cp949 환경에서 UTF-8 출력 강제
@@ -32,7 +34,7 @@ if hasattr(sys.stdout, "reconfigure"):
 
 BATCH_TIMEOUT   = 600   # 배치당 최대 10분
 MODEL           = "claude-sonnet-4-6"
-MAX_PARALLEL    = 1     # POC: 순차 실행 (컨텍스트 격리 검증 우선)
+MAX_PARALLEL    = 3     # 병렬 실행 수 (도메인 단위 동시 처리)
 LOG_DIR_NAME    = "_tmp/dispatch_logs"
 STATUS_FILE     = "_tmp/dispatch_status.json"
 
@@ -222,6 +224,7 @@ def parse_args():
 def main() -> int:
     workspace, inv_override = parse_args()
     print(f"dispatch_inf_gen - 워크스페이스: {workspace}")
+    print(f"병렬 실행: MAX_PARALLEL={MAX_PARALLEL}")
 
     # 환경 로드
     env = load_env(workspace)
@@ -250,52 +253,66 @@ def main() -> int:
     log_dir.mkdir(parents=True, exist_ok=True)
     status = load_status(workspace)
 
+    status_lock = threading.Lock()
     done_count = 0
     skipped = 0
     failed_list: list[int] = []
 
     t_total = time.time()
 
+    # 스킵 대상 사전 필터링
+    pending: list[tuple[int, list]] = []
     for i, group in enumerate(inventory):
         if not group:
             continue
-
         g0 = group[0]
         names = " / ".join(Path(item["filePath"]).name for item in group)
         label = f"[{i+1:03d}/{total:03d}] {g0['domain']}({g0['domainCode']}) {names}"
 
-        # 이미 성공한 배치 스킵
         if i in status.get("done", []):
             print(f"{label}  ⏭  (이전 실행 완료)")
             skipped += 1
             continue
-
-        # INF 파일로 완료 감지 (재시작 지원)
         if group_already_done(group, workspace):
             print(f"{label}  ⏭  (INF 존재)")
-            status.setdefault("done", []).append(i)
-            save_status(workspace, status)
+            with status_lock:
+                status.setdefault("done", []).append(i)
+                save_status(workspace, status)
             skipped += 1
             continue
+        pending.append((i, group))
 
+    print(f"\n스킵: {skipped}그룹 / 실행 대상: {len(pending)}그룹  (병렬={MAX_PARALLEL})\n")
+
+    def run_one(args: tuple[int, list]) -> tuple[int, bool, str, float]:
+        i, group = args
+        g0 = group[0]
+        names = " / ".join(Path(item["filePath"]).name for item in group)
+        label = f"[{i+1:03d}/{total:03d}] {g0['domain']}({g0['domainCode']}) {names}"
         print(f"{label}  ▶  실행 중...", flush=True)
         t0 = time.time()
-
         prompt = build_prompt(group, workspace, agent_md)
         ok, msg = run_batch(prompt, workspace, i, log_dir)
         elapsed = time.time() - t0
+        return i, ok, msg, elapsed, label
 
-        if ok:
-            print(f"{label}  ✔  완료 ({elapsed:.0f}s)  {msg}")
-            status.setdefault("done", []).append(i)
-            done_count += 1
-        else:
-            print(f"{label}  ✗  실패 ({elapsed:.0f}s)")
-            print(f"     {msg}")
-            status.setdefault("failed", []).append(i)
-            failed_list.append(i)
-
-        save_status(workspace, status)
+    with ThreadPoolExecutor(max_workers=MAX_PARALLEL) as executor:
+        futures = {executor.submit(run_one, args): args[0] for args in pending}
+        for future in as_completed(futures):
+            i, ok, msg, elapsed, label = future.result()
+            if ok:
+                print(f"{label}  ✔  완료 ({elapsed:.0f}s)  {msg}", flush=True)
+                with status_lock:
+                    status.setdefault("done", []).append(i)
+                    done_count += 1
+                    save_status(workspace, status)
+            else:
+                print(f"{label}  ✗  실패 ({elapsed:.0f}s)", flush=True)
+                print(f"     {msg}", flush=True)
+                with status_lock:
+                    status.setdefault("failed", []).append(i)
+                    failed_list.append(i)
+                    save_status(workspace, status)
 
     total_elapsed = time.time() - t_total
     print()

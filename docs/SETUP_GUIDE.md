@@ -1,6 +1,6 @@
 # Speclinker 설치 및 세팅 가이드
 
-> 버전: v2.19.0 기준
+> 버전: v2.48.0 기준
 
 ---
 
@@ -214,10 +214,10 @@ Chrome 창이 열리면:
 4개 Phase로 순서대로 실행:
 
 ```
-/sl-recon       STEP 0~5  (코드 분석, 화면 발견, 도메인 확정)
-/sl-recon-uis   STEP 6    (화면 캡처, UIS 설계서)
-/sl-recon-inf   STEP 7~8  (INF API 명세, SCH DB 스키마)
-/sl-recon-doc   STEP 9~10 (FUNC/SRS/RTM, IA 맵)
+/sl-recon       (소스 스캔, 도메인 확정, INF/SCH 초기 생성)
+/sl-recon-uis   (화면 캡처, UIS 설계서)
+/sl-recon-inf   (INF/SCH 정제 — UIS API hints 반영)
+/sl-recon-doc   (FUNC/SRS/RTM 생성)
 ```
 
 ### GENESIS 모드 (신규 프로젝트)

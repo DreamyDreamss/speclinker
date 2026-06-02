@@ -5,8 +5,7 @@
 | 항목 | 최소 버전 | 확인 명령 |
 |------|-----------|-----------|
 | Node.js | 18+ | `node --version` |
-| pnpm | 8+ | `pnpm --version` |
-| Python | 3.8+ | `python3 --version` (또는 `python --version`) |
+| Python | 3.10+ | `python3 --version` (또는 `python --version`) |
 | Claude Code CLI | 최신 | `claude --version` |
 | Git Bash (Windows) | 2.40+ | `bash --version` — `.sh` 스크립트 실행 시 필요 |
 
@@ -14,51 +13,42 @@
 
 ## 설치 방법
 
-### 1. 플러그인 클론
+### A. 마켓플레이스 설치 (권장)
+
+Claude Code CLI에서:
+
+```
+/plugin marketplace add DreamyDreamss/speclinker
+/plugin install speclinker@speclinker
+```
+
+설치 위치: `~/.claude/plugins/cache/speclinker/speclinker/<버전>/`
+
+SessionStart 훅이 자동으로 npm 의존성(playwright-core, tree-sitter)을 확인합니다.
+
+---
+
+### B. 로컬 개발 설치 (gen-harness 레포 클론 후)
 
 ```powershell
 git clone https://github.com/your-org/gen-harness.git
-cd gen-harness/plugins/speclinker
+cd gen-harness
+.\install.ps1
 ```
 
-### 2. UA 코어 빌드
+`install.ps1`이 하는 일:
+1. `plugins\speclinker\` → `%USERPROFILE%\.claude\plugins\speclinker\` 복사 (node_modules 제외)
+2. npm install (playwright-core, tree-sitter 등 런타임 의존성)
+3. `installed_plugins.json`에 `speclinker@local` 등록
+4. 설치 파일 무결성 검증
 
+```
+Install complete! 가 나오면 완료.
+```
+
+재설치 (덮어쓰기):
 ```powershell
-cd ua
-pnpm install
-pnpm --filter @understand-anything/core build
-cd ..
-```
-
-### 3. Claude Code에 플러그인 등록
-
-```powershell
-# installed_plugins.json에 수동 등록 (아직 마켓플레이스 미지원 시)
-$PLUGIN_DIR = "$env:USERPROFILE\.claude\plugins\speclinker"
-New-Item -ItemType Directory -Force $PLUGIN_DIR
-Copy-Item -Recurse -Force . $PLUGIN_DIR
-```
-
-또는 심볼릭 링크 방식 (개발 중 권장):
-
-```powershell
-$PLUGIN_DIR = "$env:USERPROFILE\.claude\plugins\speclinker"
-New-Item -ItemType SymbolicLink -Path $PLUGIN_DIR -Target (Get-Location).Path
-```
-
-### 4. installed_plugins.json 업데이트
-
-`$env:USERPROFILE\.claude\plugins\installed_plugins.json`의 `plugins` 객체에 추가:
-
-```json
-"speclinker@local": [
-  {
-    "scope": "user",
-    "installPath": "C:\\Users\\<유저명>\\.claude\\plugins\\speclinker",
-    "version": "2.28.0",
-    "installedAt": "<오늘날짜>T00:00:00.000Z"
-  }
-]
+.\install.ps1 -Force
 ```
 
 ---
@@ -66,12 +56,9 @@ New-Item -ItemType SymbolicLink -Path $PLUGIN_DIR -Target (Get-Location).Path
 ## 첫 실행 체크리스트
 
 - [ ] `node --version` → 18 이상 확인
-- [ ] `pnpm --version` → 설치됨 확인
-- [ ] `python3 --version` 또는 `python --version` → 3.8 이상 확인
-- [ ] `ua/packages/core/dist/index.js` 파일 존재 확인 (UA 코어 빌드 완료)
+- [ ] `python3 --version` 또는 `python --version` → 3.10 이상 확인
 - [ ] Claude Code에서 `/sl-init` 실행 시 스킬 목록에 표시되는지 확인
 - [ ] 프로젝트 루트에서 `/sl-init` → `project.env` 생성 확인
-- [ ] `.\run-dashboard.ps1` 실행 → 브라우저에서 대시보드 열림 확인
 
 ---
 
@@ -85,21 +72,14 @@ New-Item -ItemType SymbolicLink -Path $PLUGIN_DIR -Target (Get-Location).Path
 pip install -r <PLUGIN_PATH>/mcp-servers/requirements.txt
 ```
 
-또는:
-
-```powershell
-& (Get-Command python3 -ErrorAction SilentlyContinue).Source ?? "python" -m pip install -r mcp-servers/requirements.txt
-```
-
 ---
 
 ## 문제 해결
 
 | 증상 | 원인 | 해결 |
 |------|------|------|
-| `/sl-init` 스킬을 찾을 수 없음 | installed_plugins.json 미등록 | Step 3~4 재실행 |
-| `UA core 빌드 실패` | pnpm install 미실행 | `cd ua && pnpm install && pnpm --filter @understand-anything/core build` |
-| `GRAPH_DIR not set` 경고 | run-dashboard.ps1 대신 직접 `pnpm dev` 실행 | `.\run-dashboard.ps1` 사용 |
-| `python not found` | Python 미설치 또는 PATH 누락 | Python 3 설치 후 PATH 추가 |
+| `/sl-init` 스킬을 찾을 수 없음 | installed_plugins.json 미등록 | `.\install.ps1` 재실행 또는 마켓플레이스 재설치 |
+| `GRAPH_DIR not set` 경고 | 환경 설정 미완료 | `project.env` 의 `PLUGIN_PATH` 확인 |
+| `python not found` | Python 미설치 또는 PATH 누락 | Python 3.10+ 설치 후 PATH 추가 |
 | `.sh` 스크립트 실행 안 됨 (Windows) | Git Bash 미설치 | [Git for Windows](https://git-scm.com/downloads) 설치 |
-| `PLUGIN_PATH` 감지 실패 | 레지스트리 키 형식 비표준 | project.env에 `PLUGIN_PATH=<절대경로>` 수동 입력 |
+| `PLUGIN_PATH` 감지 실패 | installed_plugins.json 형식 비표준 | project.env에 `PLUGIN_PATH=<절대경로>` 수동 입력 |
