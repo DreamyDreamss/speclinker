@@ -1,7 +1,7 @@
 {
   "name": "speclinker",
-  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 FUNC-ID 체이닝. v2.49: dispatch_inf_gen 도메인별 순차 Lock + 프로세스 stagger — INF-ID 레이스 컨디션 및 claude CLI 초기화 충돌 방지. v2.47: STEP 4-3 컨텍스트 오버플로 해결 — dispatch_inf_gen.py 외부 subprocess dispatcher 도입.",
-  "version": "2.49.0",
+  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 FUNC-ID 체이닝. v2.50: 5개 산출물 템플릿 SM+AIDD 최적화 (INF 비즈니스룰·SCH 코드값·BAT 재처리·UIS apis·FUNC_MAP BAT컬럼). v2.49: dispatch_inf_gen 도메인별 순차 Lock + stagger.",
+  "version": "2.50.0",
   "author": {
     "name": "DreamyDreamss"
   },
