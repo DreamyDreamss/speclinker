@@ -17,6 +17,32 @@ triggers:
 | `/sl-dev --ua-update` | UA 지식 그래프 갱신 |
 | `/sl-dev --sync` | linked_req/linked_func 스캔 → si-graph 갱신만 실행 |
 
+## STEP 0: 사전 확인 (신규)
+
+**project-context.md 확인:**
+```bash
+!ls docs/project-context.md 2>/dev/null && echo "EXISTS" || echo "MISSING"
+```
+없으면 → 경고 후 진행 (강제 중단 아님): "project-context.md 없음. /sl-context 실행을 권장합니다. 계속 진행합니까?"
+
+**승인 토큰 확인 (SR 기반 변경 시):**
+```bash
+!ls .speclinker/approved/*.lock 2>/dev/null | head -5
+```
+SR-ID가 전달됐는데 해당 `.speclinker/approved/{SR-ID}.lock`이 없으면:
+- `/sl-quick` 경유 시: 예외 허용 (인라인 승인)
+- 그 외: 경고 + "/sl-change 먼저 실행 권장. 계속 진행합니까?"
+
+**컨텍스트 로드:**
+```bash
+!cat docs/project-context.md 2>/dev/null | head -100
+```
+TO-BE INF 경로 결정:
+- `docs/변경관리/{SR-ID}/after/` 있으면 사용
+- 없으면 현행 `docs/05_설계서/` INF 사용
+
+---
+
 ## 실행 전 확인
 
 ```python
@@ -45,6 +71,45 @@ dev-agent에 위임한다:
 > - **GENESIS**: docs/05_설계서/의 API_Design.md + DB_Schema.md + RTM을 읽고 REQ-ID별 소스코드를 생성하라. 모든 파일 상단에 `linked_req: REQ-F-XXX` 주석을 삽입하라.
 > - **RECON**: docs/00_FUNC/FUNC_MAP.md + FUNC_v1.0.md를 읽고 FUNC-ID별 소스코드를 생성하라. 모든 파일 상단에 `linked_func: FUNC-{domain}-{NNN}` 주석을 삽입하라. 기존 소스에 없는 기능 위주로 생성한다.
 > - 생성 완료 후 req_scan.py + ua_req_bridge.js를 실행하라.
+
+## TDD 루프 (신규 — RECON 모드 코드 생성 시 적용)
+
+dev-agent에 위임할 때 아래 TDD 절차를 명시한다:
+
+**[RED] 실패 테스트 먼저 작성:**
+- TO-BE INF의 요청/응답 구조 기반으로 테스트 생성
+- 프레임워크별 도구:
+  - Spring: JUnit5 + MockMvc
+  - FastAPI: pytest + httpx
+  - Next.js: Jest + @testing-library/react
+  - Express: Jest + supertest
+- 실제로 실패하는지 확인 후 진행
+
+**[GREEN] 최소 구현:**
+- project-context.md의 패턴 준수
+- 테스트 통과 최소 코드만 작성
+
+**[REFACTOR]:**
+- project-context.md 규칙 준수 재확인
+- 중복 제거, 명명 규칙 적용
+
+## DoD 체크리스트 (신규)
+
+코드 생성 완료 후 `skills/sl-dev/dod-checklist.md`의 체크리스트를 실행한다.
+완료되지 않은 항목이 있으면 사용자에게 보고 후 진행 여부 확인.
+
+**sprint-status 업데이트:**
+```bash
+!python3 -c "
+import yaml, os
+sp = '.speclinker/sprint-status.yaml'
+if os.path.exists(sp):
+    # in-progress → review로 변경
+    print('sprint-status: in-progress → review 업데이트')
+" 2>/dev/null || echo "[SKIP] sprint-status 없음"
+```
+
+---
 
 ## 코드 리뷰 (`/sl-dev --review`)
 
