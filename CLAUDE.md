@@ -20,6 +20,13 @@
 | `/sl-rtm` | `skills/sl-rtm/SKILL.md` | docs/02_추적표/ 또는 docs/00_FUNC/ | 전체 |
 | `/sl-dev` | `skills/sl-dev/SKILL.md` | docs/05_설계서/ 존재 | 전체 |
 | `/sl-test` | `skills/sl-test/SKILL.md` | 06_소스코드/ 존재 | 전체 |
+| `/sl-context` | `skills/sl-context/SKILL.md` | docs/05_설계서/ INF 존재 | RECON 후 |
+| `/sl-plan [파일\|텍스트]` | `skills/sl-plan/SKILL.md` | project.env, docs/05_설계서/ | SDD |
+| `/sl-check <SR-ID\|FUNC-ID\|--all>` | `skills/sl-check/SKILL.md` | docs/05_설계서/ INF, .speclinker/ | SDD |
+| `/sl-review <SR-ID\|FUNC-ID>` | `skills/sl-review/SKILL.md` | TO-BE INF, 소스코드, project-context.md | SDD |
+| `/sl-sprint [--status\|--next]` | `skills/sl-sprint/SKILL.md` | docs/00_FUNC/FUNC_MAP.md | SDD |
+| `/sl-drift [도메인] [--since Nd]` | `skills/sl-drift/SKILL.md` | git 저장소, docs/05_설계서/ INF | SDD 유지 |
+| `/sl-quick "설명"` | `skills/sl-quick/SKILL.md` | docs/05_설계서/ INF, project-context.md | SDD 경량 |
 
 ## 전제 조건 체크
 
@@ -116,6 +123,9 @@
 | 기존 코드 (RECON 분석만) | sl-init → sl-recon → 납품 |
 | 변경·유지보수 (Jira) | sl-analyze → sl-change → **sl-aidd** |
 | 변경·유지보수 (로컬) | sl-change --new SR-001 → (요구사항 작성) → sl-change SR-001 → **sl-aidd** |
+| **SDD 전체 파이프라인** | sl-recon → **sl-context** → sl-sprint → sl-plan → sl-analyze → sl-change → sl-check → **sl-dev** → sl-review → sl-test |
+| SDD 소규모 변경 | **sl-quick** "설명" (SR 없이 경량 경로) |
+| SDD 드리프트 점검 | **sl-drift** (주기적 스펙-코드 정합성 감지) |
 
 ### AIDD 핵심 루프 (sl-aidd 내부)
 
