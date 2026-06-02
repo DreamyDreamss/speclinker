@@ -106,9 +106,9 @@ generated: {오늘 날짜}
 
 ## 매핑표
 
-| FUNC-ID | 화면 | SRS-F | INF | DB 테이블 | 코드 파일 | 상태 |
-|---------|------|-------|-----|-----------|----------|------|
-| [FUNC-ORDER-001](domains/FUNC_ORDER.md#FUNC-ORDER-001) | [Or701Form](../05_설계서/ORDER/UI/Or701Form/spec.md) | [SRS-F-001](../03_기능명세서/domains/SRS_ORDER.md#SRS-F-001) | [INF-001](../05_설계서/ORDER/INF/INF-001.md) | TB_ORD_MST | `order/ordr/form.jsp` | ✅ 구현완료 |
+| FUNC-ID | 화면 | SRS-F | INF | BAT | DB 테이블 | 코드 파일 | 상태 |
+|---------|------|-------|-----|-----|-----------|----------|------|
+| [FUNC-ORDER-001](domains/FUNC_ORDER.md#FUNC-ORDER-001) | [Or701Form](../05_설계서/ORDER/UI/Or701Form/spec.md) | [SRS-F-001](../03_기능명세서/domains/SRS_ORDER.md#SRS-F-001) | [INF-001](../05_설계서/ORDER/INF/INF-001.md) | — | TB_ORD_MST | `order/ordr/form.jsp` | ✅ 구현완료 |
 
 ## 도메인별 요약
 
@@ -121,6 +121,8 @@ generated: {오늘 날짜}
 - INF가 없는 화면은 `— (정적 화면)` 표시
 - 소스 파일이 특정되지 않으면 `[확인 필요]` 표시
 - 상태: `✅ 구현완료` / `⚠️ 부분구현` / `❓ 불명확`
+- BAT 컬럼: 관련 배치가 있으면 `[BAT-{CODE}-{NNN}](../05_설계서/{도메인}/BAT/BAT-{CODE}-{NNN}.md)` 링크. 없으면 `—`
+- 배치 전용 FUNC(화면 없음)은 화면 컬럼에 `— (배치)` 표시
 
 ### R-3. linked-req-cache.json 생성 (RECON 호환)
 
