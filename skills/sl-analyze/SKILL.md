@@ -105,6 +105,51 @@ console.log('관련 노드:', hits.map(n => n.id).join(', '));
 
 ---
 
+## STEP 3-B — Before 스냅샷 + After 초안 자동 생성 (신규)
+
+영향 INF/UIS 파일이 확정되면 변경 전/후를 보존한다.
+
+**디렉토리 생성:**
+```bash
+!mkdir -p "docs/변경관리/{SR-ID}/before" "docs/변경관리/{SR-ID}/after"
+```
+
+**Before 스냅샷 (현재 스펙 그대로 복사):**
+
+영향 INF/UIS 파일 각각을 Read한 후 `docs/변경관리/{SR-ID}/before/` 에 동일한 이름으로 Write한다.
+```
+docs/변경관리/{SR-ID}/before/INF-PRD-129.md  ← 현재 스펙 그대로
+docs/변경관리/{SR-ID}/before/UIS-PRD-201.md
+```
+
+**After 초안 자동 생성 (AI 변경 반영):**
+
+SR의 요구사항을 Before 파일에 반영하여 `docs/변경관리/{SR-ID}/after/` 에 초안을 생성한다.
+- 추가될 파라미터/필드: `[신규]` 표기
+- 제거될 파라미터/필드: `~~취소선~~` 표기
+- 변경될 내용: 값 교체 후 `<!-- 변경: {이전값} → {새값} -->` 주석
+
+```
+docs/변경관리/{SR-ID}/after/INF-PRD-129.md   ← 변경사항 반영 초안
+docs/변경관리/{SR-ID}/after/UIS-PRD-201.md
+```
+
+**Diff 뷰 생성:**
+
+`docs/변경관리/{SR-ID}/01_스펙변경_diff.md` 생성:
+
+```markdown
+# 스펙 변경 Diff — {SR-ID}
+
+## INF-PRD-129 변경 내용
+
++ 추가: `category_id` (Integer, 필수) — 카테고리 필터링용
+- 제거: `type_cd` (String) — category_id로 통합
+~ 변경: `sort_order` 기본값 `"asc"` → `"desc"`
+```
+
+---
+
 ## STEP 4 — 변경영향분석서 작성
 
 분석 결과를 `docs/변경관리/CIA-<SR-ID>.md`로 저장한다:
