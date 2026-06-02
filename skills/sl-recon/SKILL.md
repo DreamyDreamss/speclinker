@@ -711,61 +711,53 @@ else:
 > 📌 **부가 산출물**: `resolve_call_chain.py`는 `_tmp/sch_draft/{도메인}/{테이블}.json`도 함께 생성한다.  
 > SQL 텍스트에서 추출한 도메인별 테이블·컬럼·근거 파일·INF 범위 매핑. STEP 5의 `ddd-db-agent` 1차 입력.
 
-### STEP 4-3: INF 명세 생성 (ddd-api-agent 병렬 실행)
+### STEP 4-3: INF 명세 생성 (외부 dispatcher 실행)
 
-위 목록을 **파일 3개씩 묶어** `ddd-api-agent`에 동시 호출한다. (배치 크기: 3그룹 동시)
+`dispatch_inf_gen.py`를 블로킹으로 실행한다.  
+스크립트가 모든 배치를 완료하고 exit 0을 반환하면 STEP 5로 진행한다.  
+메인 Claude 컨텍스트에 배치 결과가 쌓이지 않는다 — 컨텍스트 오버플로 방지.
 
-> ⚠️ 토큰 절약 규칙:
-> - `router_inventory_with_chain.json` 항목을 3개씩 묶어 1개의 에이전트 호출로 처리
-> - 동시에 띄우는 에이전트는 3개 이하
-> - 한 배치 완료 후 다음 배치 시작
-
-```
-router_inventory_with_chain.json은 이미 3개씩 묶인 배치 그룹 배열이다.
-동시에 3그룹씩 Agent 도구 호출, 완료 후 다음 3그룹:
-
-  각 배치 그룹 → 1개의 Agent 도구 호출:
-  subagent_type: "speclinker:ddd-api-agent"
-  description: "{group[0].domain}({group[0].domainCode}) INF 생성 ({group[0].filePath basename}, ...)"
-  prompt: |
-    처리 대상 파일 목록 (여러 파일 한 번에 처리):
-    - {group[0].filePath} → INF-{group[0].domainCode}-{group[0].infIdStart:03d} 부터 순번 채번
-    - {group[1].filePath} → INF-{group[1].domainCode}-{group[1].infIdStart:03d} 부터 순번 채번  (있는 경우)
-    - {group[2].filePath} → INF-{group[2].domainCode}-{group[2].infIdStart:03d} 부터 순번 채번  (있는 경우)
-    도메인: {group[0].domain}
-    도메인 코드: {group[0].domainCode}
-    도메인 설명: {group[0].domainDescription}
-    관련 레이어: {group[0].layer}
-    MODE: RECON
-    워크스페이스: {현재 작업 디렉토리 절대경로}
-
-    === 사전 계산된 연관 파일 (읽기 의무) ===
-    아래 파일들은 resolve_call_chain이 미리 계산한 Controller→Service→DAO→Query 체인이다.
-    Phase 1에서 반드시 Read 도구로 읽어야 한다. 직접 경로 추론은 불필요하다.
-
-    [파일1 연관]
-    서비스: {group[0].relatedFiles.service}
-    DAO:    {group[0].relatedFiles.dao}
-    쿼리:   {group[0].relatedFiles.query}
-
-    [파일2 연관] (있는 경우)
-    서비스: {group[1].relatedFiles.service}
-    DAO:    {group[1].relatedFiles.dao}
-    쿼리:   {group[1].relatedFiles.query}
-
-    [파일3 연관] (있는 경우)
-    서비스: {group[2].relatedFiles.service}
-    DAO:    {group[2].relatedFiles.dao}
-    쿼리:   {group[2].relatedFiles.query}
-
-    === API Routes (INF 생성 대상 — kind=form 라우트 이미 제외됨) ===
-    ⚠️ 아래 routes만 INF로 생성할 것. 목록 외 라우트는 무시.
-    파일1: {group[0].apiRoutes → [{method, path, handler}, ...] 목록 출력. 비어있으면 "전체 api routes"}
-    파일2: (있는 경우) {group[1].apiRoutes}
-    파일3: (있는 경우) {group[2].apiRoutes}
+```bash
+!python -c "
+import os, json
+env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8') if '=' in l and not l.startswith('#'))
+plugin = env.get('PLUGIN_PATH','')
+script = os.path.join(plugin, 'scripts', 'dispatch_inf_gen.py') if plugin else ''
+if not script or not os.path.exists(script):
+    print('[ERROR] dispatch_inf_gen.py 없음 - PLUGIN_PATH 확인'); exit(1)
+print(f'dispatcher: {script}')
+print('inventory: _tmp/router_inventory_with_chain.json')
+"
 ```
 
-> ⚠️ 배치 완료 확인 후 다음 배치 시작. **모든 배치 완료 전 STEP 5 절대 진행 금지.**
+```bash
+!python "{PLUGIN_PATH}/scripts/dispatch_inf_gen.py" .
+```
+
+> **완료 판단**: 위 명령이 exit 0으로 반환되면 모든 배치 완료.  
+> exit 1이면 `_tmp/dispatch_status.json`의 `failed` 목록 확인 후 재실행 — 완료된 배치는 자동 스킵됨.
+
+```bash
+!python -c "
+import json, os, sys
+if hasattr(sys.stdout, 'reconfigure'): sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+sp = '_tmp/dispatch_status.json'
+if not os.path.exists(sp):
+    print('dispatch_status.json 없음')
+else:
+    st = json.load(open(sp, encoding='utf-8'))
+    done = len(st.get('done', []))
+    failed = st.get('failed', [])
+    print(f'완료: {done}그룹  실패: {len(failed)}그룹')
+    if failed:
+        print(f'실패 인덱스: {failed}')
+        print('재실행: python dispatch_inf_gen.py .')
+    else:
+        print('전체 성공 - STEP 5 진행')
+"
+```
+
+> ⚠️ **모든 배치 완료(실패 0) 전 STEP 5 절대 진행 금지.**
 
 모든 배치 완료 후 도메인별 INF 색인 파일을 생성한다.
 

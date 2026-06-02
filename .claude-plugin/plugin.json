@@ -1,7 +1,7 @@
 {
   "name": "speclinker",
-  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 FUNC-ID 체이닝. v2.46: dead code 정리 — UA 대시보드·ua_req_bridge.js 참조 제거, 0바이트 파일(link_inf_sch.py) 삭제. v2.45: resolve_call_chain.py source_index.json 재활용(fast path/fallback). v2.44: tree-sitter 파싱 결과 예시 추가.",
-  "version": "2.46.0",
+  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 FUNC-ID 체이닝. v2.47: STEP 4-3 컨텍스트 오버플로 해결 — dispatch_inf_gen.py 외부 subprocess dispatcher 도입. v2.46: dead code 정리 — UA 대시보드·ua_req_bridge.js 참조 제거.",
+  "version": "2.47.0",
   "author": {
     "name": "DreamyDreamss"
   },
