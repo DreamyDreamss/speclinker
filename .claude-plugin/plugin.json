@@ -1,7 +1,7 @@
 {
   "name": "speclinker",
-  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 FUNC-ID 체이닝. v2.50: 5개 산출물 템플릿 SM+AIDD 최적화 (INF 비즈니스룰·SCH 코드값·BAT 재처리·UIS apis·FUNC_MAP BAT컬럼). v2.49: dispatch_inf_gen 도메인별 순차 Lock + stagger.",
-  "version": "2.50.0",
+  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 FUNC-ID 체이닝. v2.51: SDD 파이프라인 전체 구현 — sl-context/plan/check/review/sprint/drift/quick 신규 + sl-analyze/change/dev 강화. v2.50: INF/SCH/BAT/UIS/FUNC_MAP 템플릿 SM+AIDD 최적화.",
+  "version": "2.51.0",
   "author": {
     "name": "DreamyDreamss"
   },
@@ -17,7 +17,14 @@
     "./skills/sl-rtm",
     "./skills/sl-dev",
     "./skills/sl-test",
-    "./skills/sl-viewer"
+    "./skills/sl-viewer",
+    "./skills/sl-context",
+    "./skills/sl-plan",
+    "./skills/sl-check",
+    "./skills/sl-review",
+    "./skills/sl-sprint",
+    "./skills/sl-drift",
+    "./skills/sl-quick"
   ],
   "agents": [
     "./agents/spec-agent.md",
