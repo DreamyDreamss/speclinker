@@ -24,6 +24,7 @@ import subprocess
 import time
 import signal
 import threading
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -34,7 +35,8 @@ if hasattr(sys.stdout, "reconfigure"):
 
 BATCH_TIMEOUT   = 600   # 배치당 최대 10분
 MODEL           = "claude-sonnet-4-6"
-MAX_PARALLEL    = 3     # 병렬 실행 수 (도메인 단위 동시 처리)
+MAX_PARALLEL    = 3     # 병렬 실행 수 — 다른 도메인끼리만 동시 실행, 같은 도메인은 순차
+LAUNCH_STAGGER  = 3     # 프로세스 시작 간격(초) — claude CLI 초기화 충돌 방지
 LOG_DIR_NAME    = "_tmp/dispatch_logs"
 STATUS_FILE     = "_tmp/dispatch_status.json"
 
@@ -254,6 +256,14 @@ def main() -> int:
     status = load_status(workspace)
 
     status_lock = threading.Lock()
+    # 도메인별 Lock — 같은 도메인의 배치는 반드시 순차 실행
+    # (INF-ID fallback 충돌 방지: 병렬 에이전트가 동시에 INF 디렉토리를 빈 상태로
+    #  보고 같은 ID 범위부터 채번하는 레이스 컨디션 방어)
+    domain_locks: dict[str, threading.Lock] = defaultdict(threading.Lock)
+    # claude CLI 초기화 충돌 방지 — 프로세스 시작을 순서대로 stagger
+    launch_lock = threading.Lock()
+    launch_order = [0]
+
     done_count = 0
     skipped = 0
     failed_list: list[int] = []
@@ -284,16 +294,27 @@ def main() -> int:
 
     print(f"\n스킵: {skipped}그룹 / 실행 대상: {len(pending)}그룹  (병렬={MAX_PARALLEL})\n")
 
-    def run_one(args: tuple[int, list]) -> tuple[int, bool, str, float]:
+    def run_one(args: tuple[int, list]) -> tuple[int, bool, str, float, str]:
         i, group = args
         g0 = group[0]
+        domain = g0["domain"]
         names = " / ".join(Path(item["filePath"]).name for item in group)
-        label = f"[{i+1:03d}/{total:03d}] {g0['domain']}({g0['domainCode']}) {names}"
-        print(f"{label}  ▶  실행 중...", flush=True)
-        t0 = time.time()
-        prompt = build_prompt(group, workspace, agent_md)
-        ok, msg = run_batch(prompt, workspace, i, log_dir)
-        elapsed = time.time() - t0
+        label = f"[{i+1:03d}/{total:03d}] {domain}({g0['domainCode']}) {names}"
+
+        # 프로세스 시작 stagger — 모든 배치가 동시에 claude CLI를 초기화하면 충돌 가능
+        with launch_lock:
+            my_order = launch_order[0]
+            launch_order[0] += 1
+        if my_order > 0:
+            time.sleep(my_order * LAUNCH_STAGGER)
+
+        # 같은 도메인은 순차 실행 — INF-ID 레이스 컨디션 방지
+        with domain_locks[domain]:
+            print(f"{label}  ▶  실행 중...", flush=True)
+            t0 = time.time()
+            prompt = build_prompt(group, workspace, agent_md)
+            ok, msg = run_batch(prompt, workspace, i, log_dir)
+            elapsed = time.time() - t0
         return i, ok, msg, elapsed, label
 
     with ThreadPoolExecutor(max_workers=MAX_PARALLEL) as executor:

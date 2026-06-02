@@ -1,7 +1,7 @@
 {
   "name": "speclinker",
-  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 FUNC-ID 체이닝. v2.47: STEP 4-3 컨텍스트 오버플로 해결 — dispatch_inf_gen.py 외부 subprocess dispatcher 도입. v2.46: dead code 정리 — UA 대시보드·ua_req_bridge.js 참조 제거.",
-  "version": "2.47.0",
+  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 FUNC-ID 체이닝. v2.49: dispatch_inf_gen 도메인별 순차 Lock + 프로세스 stagger — INF-ID 레이스 컨디션 및 claude CLI 초기화 충돌 방지. v2.47: STEP 4-3 컨텍스트 오버플로 해결 — dispatch_inf_gen.py 외부 subprocess dispatcher 도입.",
+  "version": "2.49.0",
   "author": {
     "name": "DreamyDreamss"
   },
