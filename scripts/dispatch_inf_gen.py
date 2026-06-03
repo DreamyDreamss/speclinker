@@ -24,7 +24,6 @@ import subprocess
 import time
 import signal
 import threading
-from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -33,10 +32,10 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 
-BATCH_TIMEOUT   = 600   # 배치당 최대 10분
+BATCH_TIMEOUT   = 1800  # 배치당 최대 30분 — 3파일 연관체인 읽기+INF 생성, 병렬 부하 감안
 MODEL           = "claude-sonnet-4-6"
-MAX_PARALLEL    = 3     # 병렬 실행 수 — 다른 도메인끼리만 동시 실행, 같은 도메인은 순차
-LAUNCH_STAGGER  = 3     # 프로세스 시작 간격(초) — claude CLI 초기화 충돌 방지
+MAX_PARALLEL    = 3     # 병렬 실행 수 — 도메인 무관 동시 실행 (INF-ID 사전배정으로 충돌 없음)
+LAUNCH_STAGGER  = 3     # 프로세스 시작 최소 간격(초) — claude CLI 초기화 충돌 방지
 LOG_DIR_NAME    = "_tmp/dispatch_logs"
 STATUS_FILE     = "_tmp/dispatch_status.json"
 
@@ -256,13 +255,12 @@ def main() -> int:
     status = load_status(workspace)
 
     status_lock = threading.Lock()
-    # 도메인별 Lock — 같은 도메인의 배치는 반드시 순차 실행
-    # (INF-ID fallback 충돌 방지: 병렬 에이전트가 동시에 INF 디렉토리를 빈 상태로
-    #  보고 같은 ID 범위부터 채번하는 레이스 컨디션 방어)
-    domain_locks: dict[str, threading.Lock] = defaultdict(threading.Lock)
-    # claude CLI 초기화 충돌 방지 — 프로세스 시작을 순서대로 stagger
+    # INF-ID는 STEP 4-1에서 그룹별로 사전 배정(infIdStart)되어 겹치지 않으므로
+    # 도메인 순차 Lock 없이 도메인 무관 병렬 실행한다.
+    # (ddd-api-agent는 infIdStart를 절대 준수 — 폴더 스캔 채번 금지)
+    # claude CLI 초기화 충돌 방지 — 프로세스 시작을 최소 STAGGER 간격으로 벌린다.
     launch_lock = threading.Lock()
-    launch_order = [0]
+    last_launch = [0.0]
 
     done_count = 0
     skipped = 0
@@ -301,20 +299,20 @@ def main() -> int:
         names = " / ".join(Path(item["filePath"]).name for item in group)
         label = f"[{i+1:03d}/{total:03d}] {domain}({g0['domainCode']}) {names}"
 
-        # 프로세스 시작 stagger — 모든 배치가 동시에 claude CLI를 초기화하면 충돌 가능
+        # 프로세스 시작 stagger — 직전 시작 대비 최소 LAUNCH_STAGGER초 간격 확보.
+        # (누적 지연 없이 동시 claude CLI 초기화 충돌만 방지)
         with launch_lock:
-            my_order = launch_order[0]
-            launch_order[0] += 1
-        if my_order > 0:
-            time.sleep(my_order * LAUNCH_STAGGER)
+            wait = last_launch[0] + LAUNCH_STAGGER - time.time()
+            if wait > 0:
+                time.sleep(wait)
+            last_launch[0] = time.time()
 
-        # 같은 도메인은 순차 실행 — INF-ID 레이스 컨디션 방지
-        with domain_locks[domain]:
-            print(f"{label}  ▶  실행 중...", flush=True)
-            t0 = time.time()
-            prompt = build_prompt(group, workspace, agent_md)
-            ok, msg = run_batch(prompt, workspace, i, log_dir)
-            elapsed = time.time() - t0
+        # 도메인 무관 병렬 실행 (INF-ID 사전배정 → 충돌 없음)
+        print(f"{label}  ▶  실행 중...", flush=True)
+        t0 = time.time()
+        prompt = build_prompt(group, workspace, agent_md)
+        ok, msg = run_batch(prompt, workspace, i, log_dir)
+        elapsed = time.time() - t0
         return i, ok, msg, elapsed, label
 
     with ThreadPoolExecutor(max_workers=MAX_PARALLEL) as executor:

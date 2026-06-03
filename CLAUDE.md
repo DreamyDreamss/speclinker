@@ -88,6 +88,7 @@
 | 코드 생성 | `agents/dev-agent.md` | Sonnet | 반복 실행 태스크 |
 | 테스트 | `agents/test-agent.md` | Sonnet | 반복 실행 태스크 |
 
+> v2.55: INF 생성 병렬화 개선 — dispatch_inf_gen.py domain_lock 제거(INF-ID 사전배정 신뢰 → 단일 도메인도 병렬 3) + 타임아웃 600→1800초 + stagger 누적버그 수정(간격 방식). ddd-api-agent infIdStart 절대준수(폴더스캔 채번 금지).
 > v2.54: 뷰어 사용자 가이드 추가 — docsify-sl.js renderGuide(사이드바 📖 가이드 → 빠른시작 파이프라인·전체 명령어·동작방식·FUNC-ID 체이닝). spec_index 없어도 접근 가능.
 > v2.53: 도메인 선택형 RECON + UIS goto 캡처 + **범용성 강화**. scan_source.js에 Next.js/Nuxt 파일경로 라우팅 인식(inferFileBasedRoutes) 추가 — tree-sitter AST 미감지 라우트 보강. build_domain_catalog.py(relPath 디렉토리 기반 범용 도메인 분류, Java+Next.js 검증) + build_uis_goto_plan.py(form URL goto 플랜) 신규. sl-init Step5.5(스캔+카탈로그) / sl-recon STEP1.7(도메인 선택→POC_DOMAINS) / sl-recon-uis STEP6-0-GOTO(form URL 직접 캡처, BFS 폴백). 도메인 분류 기준=relPath(package 전용 금지).
 > v2.52: Docsify 웹 뷰어 구현 — gen_docsify.py(스캔→spec_index.json) + docsify-sl.js(대시보드·INF/UIS 탭·Quick Nav·크로스링크·IA 트리) + /sl-ia(IA_MAP.md 자동생성+menu-path 보완). sl-viewer Obsidian→Docsify 교체.
