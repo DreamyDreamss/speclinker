@@ -26,6 +26,7 @@
 | `/sl-review <SR-ID\|FUNC-ID>` | `skills/sl-review/SKILL.md` | TO-BE INF, 소스코드, project-context.md | SDD |
 | `/sl-sprint [--status\|--next]` | `skills/sl-sprint/SKILL.md` | docs/00_FUNC/FUNC_MAP.md | SDD |
 | `/sl-drift [도메인] [--since Nd]` | `skills/sl-drift/SKILL.md` | git 저장소, docs/05_설계서/ INF | SDD 유지 |
+| `/sl-ia [도메인\|--update-only]` | `skills/sl-ia/SKILL.md` | docs/05_설계서/UIS/ spec.md 존재 | RECON 후 |
 | `/sl-quick "설명"` | `skills/sl-quick/SKILL.md` | docs/05_설계서/ INF, project-context.md | SDD 경량 |
 
 ## 전제 조건 체크
@@ -62,6 +63,7 @@
 | 코드 생성 | `agents/dev-agent.md` | Sonnet | 반복 실행 태스크 |
 | 테스트 | `agents/test-agent.md` | Sonnet | 반복 실행 태스크 |
 
+> v2.52: Docsify 웹 뷰어 구현 — gen_docsify.py(스캔→spec_index.json) + docsify-sl.js(대시보드·INF/UIS 탭·Quick Nav·크로스링크·IA 트리) + /sl-ia(IA_MAP.md 자동생성+menu-path 보완). sl-viewer Obsidian→Docsify 교체.
 > **v2.39+**: sl-recon STEP 1은 `scan_source.js` (제로-LLM 정적 스캔). v2.41: 컨텍스트 경로 자동 감지(web.xml/Spring Boot/NestJS/FastAPI/.env 6종) + 클래스 레벨 `/*` 와일드카드 strip. v2.44: STEP 1에 tree-sitter 파싱 결과 예시(source_index.json 스키마·필드 설명) 추가. v2.45: resolve_call_chain.py가 source_index.json 재활용 — 파일 재read·os.walk 제거, fast path/fallback 자동 분기. v2.46: dead code 정리 — UA 대시보드·ua_req_bridge.js 참조 제거, link_inf_sch.py(0바이트) 삭제. v2.48: install.ps1 검증 목록 정정(sl-spec→sl-genesis, req_scan.sh→req_scan.py, plugin.json 제거), UA 관련 문서 일괄 정리, installed_plugins.json 자동 등록 추가. v2.49: dispatch_inf_gen.py 도메인별 순차 Lock(INF-ID 레이스 컨디션 방지) + LAUNCH_STAGGER=3(claude CLI 초기화 충돌 방지). v2.50: 5개 산출물 템플릿 SM+AIDD 최적화 — INF(비즈니스룰·트랜잭션순서·사이드이펙트), SCH(코드값·비즈니스주의사항), BAT(비즈니스룰·재처리방법), UIS(apis/related-screens frontmatter), FUNC_MAP(BAT컬럼). v2.51: SDD 파이프라인 전체 구현 — sl-context/plan/check/review/sprint/drift/quick 신규 + sl-analyze/change/dev 강화 + BMAD MIT 차용 템플릿 5종.
 
 모델 분리 전략: 단일 Opus 대비 약 60~70% 비용 절감 (Sonnet 에이전트 10개 중 5개)
@@ -123,7 +125,7 @@
 | 기존 코드 (RECON 분석만) | sl-init → sl-recon → 납품 |
 | 변경·유지보수 (Jira) | sl-analyze → sl-change → **sl-aidd** |
 | 변경·유지보수 (로컬) | sl-change --new SR-001 → (요구사항 작성) → sl-change SR-001 → **sl-aidd** |
-| **SDD 전체 파이프라인** | sl-recon → **sl-context** → sl-sprint → sl-plan → sl-analyze → sl-change → sl-check → **sl-dev** → sl-review → sl-test |
+| **SDD 전체 파이프라인** | sl-recon → **sl-ia** → **sl-context** → sl-sprint → sl-plan → sl-analyze → sl-change → sl-check → **sl-dev** → sl-review → sl-test |
 | SDD 소규모 변경 | **sl-quick** "설명" (SR 없이 경량 경로) |
 | SDD 드리프트 점검 | **sl-drift** (주기적 스펙-코드 정합성 감지) |
 
