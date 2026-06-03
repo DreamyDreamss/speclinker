@@ -24,12 +24,18 @@
       renderSidebar();
       renderDashboard();
     } catch (e) {
+      renderSidebar();  // 인덱스 없어도 사이드바(가이드 버튼)는 표시
       document.getElementById('sl-main').innerHTML =
-        `<div style="padding:40px;color:var(--text-muted);text-align:center">
-          <h3 style="color:var(--accent)">spec_index.json 없음</h3>
-          <p>프로젝트 루트에서 다음을 실행하세요:</p>
+        `<div style="padding:48px 40px;color:var(--text-muted);text-align:center">
+          <div style="font-size:40px;margin-bottom:8px">📭</div>
+          <h3 style="color:var(--accent);margin:0 0 8px">아직 표시할 산출물이 없습니다</h3>
+          <p style="font-size:13px">RECON/GENESIS로 INF·UIS를 생성한 뒤 인덱스를 갱신하세요:</p>
           <code>python scripts/gen_docsify.py .</code>
-          <p style="font-size:12px;margin-top:16px">오류: ${escAttr(e.message)}</p>
+          <p style="margin-top:24px">
+            <span class="sl-nav-link" style="display:inline-block;border:1px solid var(--accent);color:var(--accent);padding:7px 18px;border-radius:6px;cursor:pointer"
+                  onclick="SlViewer.showGuide()">📖 사용자 가이드 보기</span>
+          </p>
+          <p style="font-size:11px;margin-top:20px;opacity:0.6">오류: ${escAttr(e.message)}</p>
         </div>`;
     }
   }
@@ -46,6 +52,7 @@
     sidebar.innerHTML = `
       <div class="sl-logo">⚡ Speclinker</div>
       <div>
+        <span class="sl-nav-link" onclick="SlViewer.showGuide()">📖 사용자 가이드</span>
         <span class="sl-nav-link" onclick="SlViewer.showDashboard()">🏠 대시보드</span>
         <a class="sl-nav-link" href="#/docs/00_FUNC/FUNC_MAP">📋 FUNC_MAP</a>
         <span class="sl-nav-link" onclick="SlViewer.openSpec('.speclinker/sprint-status.yaml')">⚡ Sprint</span>
@@ -96,6 +103,140 @@
       return `<div class="sl-ia-group" style="padding-left:${indent}px">▸ ${key}</div>
               ${screens}${children}`;
     }).join('');
+  }
+
+  // ── 사용자 가이드 ────────────────────────────────────────────
+  const GUIDE_VERSION = '2.53.0';
+
+  const GUIDE_PIPELINES = [
+    { icon: '🆕', title: '새 프로젝트 (AIDD)',
+      steps: ['sl-init', 'sl-genesis', 'sl-aidd', 'sl-test'],
+      desc: '기획 문서로 설계서→코드 순방향 생성' },
+    { icon: '🔍', title: '기존 코드 (RECON)',
+      steps: ['sl-init', 'sl-recon', 'sl-recon-uis', '납품'],
+      desc: '소스코드를 역분석해 설계서 추출' },
+    { icon: '🔧', title: '변경·유지보수 (DELTA)',
+      steps: ['sl-analyze', 'sl-change', 'sl-aidd'],
+      desc: '변경요청(SR) 영향분석→스펙수정→코드' },
+    { icon: '⚙️', title: 'SDD 전체 파이프라인',
+      steps: ['sl-recon', 'sl-ia', 'sl-context', 'sl-plan', 'sl-check', 'sl-dev', 'sl-review'],
+      desc: '스펙 주도 개발(Spec-Driven) 풀 사이클' },
+  ];
+
+  const GUIDE_CATEGORIES = [
+    { name: '시작 & 초기화', color: 'var(--accent)', cmds: [
+      ['/sl-init', '프로젝트 초기화 — 디렉토리·환경·모드 설정. RECON 모드면 소스 스캔 + 도메인 카탈로그 자동 생성', '제일 먼저 실행'],
+    ]},
+    { name: '산출물 생성 — GENESIS (순방향)', color: 'var(--status-done)', cmds: [
+      ['/sl-genesis [파일]', '기획 문서 → REQ·SRS·INF·SCH·UIS 설계 산출물 순방향 생성', 'docs/00_입력자료/'],
+      ['/sl-aidd [FUNC-ID]', 'FUNC 단위 AI 자동개발 루프 (스펙수집→코드→TC→커버리지)', 'FUNC_MAP.md'],
+    ]},
+    { name: '역분석 — RECON', color: 'var(--status-prog)', cmds: [
+      ['/sl-recon', '소스코드 역분석 → 도메인 선택 → INF·SCH 명세 생성', 'project.env, 소스'],
+      ['/sl-recon-uis', '화면 캡처(goto/BFS) → UIS 설계서 생성', 'recon 완료 후'],
+      ['/sl-recon-doc', 'INF 기반 추가 설계 문서 보강', 'INF 존재'],
+      ['/sl-ia', 'IA(메뉴 계층) 문서 자동 생성 + UIS menu-path 보완', 'UIS 존재'],
+    ]},
+    { name: 'SDD 파이프라인', color: '#a371f7', cmds: [
+      ['/sl-context', 'project-context.md 생성 — 프레임워크·공통패턴 학습', 'INF 존재'],
+      ['/sl-plan [설명]', '변경 영향분석 초안 — 키워드→스펙 매핑→규모 분류', 'docs/05_설계서/'],
+      ['/sl-check <ID>', '개발 착수 게이트 — 승인 토큰·INF 완전성 검증', '.speclinker/'],
+      ['/sl-review <ID>', '3단계 리뷰 — 스펙·보안·회귀 감사', 'TO-BE INF'],
+      ['/sl-sprint', '스프린트 대시보드 — FUNC 상태·진행률 관리', 'FUNC_MAP.md'],
+      ['/sl-drift', '스펙-코드 드리프트 감지 — 소스 변경 vs INF 미갱신', 'git, INF'],
+      ['/sl-quick "설명"', '소규모 변경 경량 경로 (SR 없이 INF≤2 인라인 처리)', 'INF, context'],
+    ]},
+    { name: '변경 관리 — DELTA', color: 'var(--status-review)', cmds: [
+      ['/sl-analyze', '변경 영향분석 (CIA) — 영향 INF·SCH·UIS 식별', 'docs/05_설계서/'],
+      ['/sl-change <SR-ID>', '변경명세 생성 → before/after diff → 승인 토큰', 'docs/05_설계서/'],
+    ]},
+    { name: '개발 · 테스트 · 추적', color: '#3fb950', cmds: [
+      ['/sl-dev', 'TO-BE 설계서 기반 코드 생성 (TDD, linked_func 주석)', 'docs/05_설계서/'],
+      ['/sl-test', '테스트 케이스 작성 + 실행 → 결과 보고서', '06_소스코드/'],
+      ['/sl-rtm', 'RTM 추적 매트릭스 — REQ→SRS→UIS→INF→SCH 체인 매핑', 'docs/02_추적표/'],
+    ]},
+    { name: '뷰어', color: 'var(--accent)', cmds: [
+      ['/sl-viewer [port]', '이 Docsify 웹 뷰어 실행 (대시보드·INF/UIS·IA 트리)', 'docs/05_설계서/'],
+    ]},
+  ];
+
+  const GUIDE_MODES = [
+    ['GENESIS', '순방향', '기획 문서 → 설계서 → 코드. 신규 프로젝트.', 'var(--status-done)'],
+    ['RECON', '역분석', '기존 소스 → 설계서 역추출. 문서 없는 레거시.', 'var(--status-prog)'],
+    ['DELTA', '변경', '변경요청 → 영향분석 → 스펙수정 → 코드. 운영·유지보수.', 'var(--status-review)'],
+  ];
+
+  function renderGuide() {
+    const main = document.getElementById('sl-main');
+    if (!main) return;
+    removeQuickNav();
+    ACTIVE_DOMAIN = null;
+    renderSidebar();
+
+    const pipes = GUIDE_PIPELINES.map(p => {
+      const chain = p.steps.map((s, i) =>
+        `<span class="sl-g-step">${s}</span>` +
+        (i < p.steps.length - 1 ? '<span class="sl-g-arrow">→</span>' : '')
+      ).join('');
+      return `
+        <div class="sl-g-pipe">
+          <div class="sl-g-pipe-head"><span class="sl-g-pipe-icon">${p.icon}</span>${p.title}</div>
+          <div class="sl-g-chain">${chain}</div>
+          <div class="sl-g-pipe-desc">${p.desc}</div>
+        </div>`;
+    }).join('');
+
+    const modes = GUIDE_MODES.map(([name, tag, desc, color]) => `
+      <div class="sl-g-mode" style="border-left:3px solid ${color}">
+        <div class="sl-g-mode-head"><span style="color:${color};font-weight:700">${name}</span>
+          <span class="sl-g-mode-tag">${tag}</span></div>
+        <div class="sl-g-mode-desc">${desc}</div>
+      </div>`).join('');
+
+    const cats = GUIDE_CATEGORIES.map(cat => {
+      const rows = cat.cmds.map(([cmd, desc, pre]) => `
+        <div class="sl-g-cmd">
+          <div class="sl-g-cmd-name" style="color:${cat.color}">${cmd}</div>
+          <div class="sl-g-cmd-desc">${desc}</div>
+          <div class="sl-g-cmd-pre">${pre}</div>
+        </div>`).join('');
+      return `
+        <div class="sl-g-cat">
+          <div class="sl-g-cat-title" style="border-left:3px solid ${cat.color}">${cat.name}
+            <span class="sl-g-cat-count">${cat.cmds.length}</span></div>
+          <div class="sl-g-cmds">${rows}</div>
+        </div>`;
+    }).join('');
+
+    main.innerHTML = `
+      <div class="sl-guide">
+        <div class="sl-g-hero">
+          <div class="sl-g-hero-title">⚡ Speclinker 사용자 가이드</div>
+          <div class="sl-g-hero-ver">v${GUIDE_VERSION}</div>
+          <div class="sl-g-hero-sub">SI/ITO 개발 전주기 자동화 — 산출물과 소스코드를 FUNC-ID로 체이닝하는 스펙 주도 플러그인.
+            Java Spring · Next.js 등 모든 스택 지원.</div>
+        </div>
+
+        <div class="sl-g-section-h">🚀 빠른 시작 — 상황별 파이프라인</div>
+        <div class="sl-g-pipes">${pipes}</div>
+
+        <div class="sl-g-section-h">📋 전체 명령어</div>
+        <div class="sl-g-cats">${cats}</div>
+
+        <div class="sl-g-section-h">🧭 동작 방식</div>
+        <div class="sl-g-modes">${modes}</div>
+        <div class="sl-g-note">
+          <b>FUNC-ID 체이닝</b> — 모든 산출물(REQ·SRS·UIS·INF·SCH)과 소스코드가
+          <code>FUNC-{도메인}-{NNN}</code>로 연결됩니다. <code>FUNC_MAP.md</code>가 단일 진실의 원천(SSoT).
+          <br><b>추적 체인</b> — REQ → SRS → UIS / INF / SCH / BAT → 코드(linked_func) → TC
+        </div>
+
+        <div class="sl-g-footer">
+          명령어는 Claude Code 프롬프트에 <code>/sl-init</code> 처럼 입력합니다 ·
+          전제 조건이 안 맞으면 안내 메시지가 출력됩니다 ·
+          상세 라우팅은 플러그인 <code>CLAUDE.md</code> 참조
+        </div>
+      </div>`;
   }
 
   // ── 대시보드 ────────────────────────────────────────────────
@@ -290,6 +431,9 @@
 
   // ── 공개 API ──────────────────────────────────────────────────
   window.SlViewer = {
+    showGuide() {
+      renderGuide();
+    },
     showDashboard() {
       renderDashboard();
     },

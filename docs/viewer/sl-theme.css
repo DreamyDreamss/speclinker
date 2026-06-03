@@ -103,3 +103,100 @@ blockquote { border-left: 3px solid var(--border); color: var(--text-muted); pad
 
 /* 크로스링크 */
 .sl-xlink { color: var(--accent) !important; text-decoration: none !important; border-bottom: 1px dashed var(--accent); cursor: pointer; }
+
+/* ── 사용자 가이드 ─────────────────────────────────────── */
+.sl-guide { padding: 28px 32px 60px; max-width: 1100px; }
+
+/* 히어로 */
+.sl-g-hero {
+  background: linear-gradient(135deg, rgba(212,165,116,0.14), rgba(212,165,116,0.03));
+  border: 1px solid var(--border); border-radius: 12px;
+  padding: 28px 30px; margin-bottom: 32px; position: relative;
+}
+.sl-g-hero-title { font-size: 26px; font-weight: 800; color: var(--accent); letter-spacing: -0.5px; }
+.sl-g-hero-ver {
+  position: absolute; top: 24px; right: 28px;
+  background: var(--accent); color: #0d1117; font-weight: 700; font-size: 12px;
+  padding: 3px 11px; border-radius: 20px;
+}
+.sl-g-hero-sub { color: var(--text-muted); font-size: 14px; line-height: 1.6; margin-top: 10px; max-width: 720px; }
+
+/* 섹션 헤더 */
+.sl-g-section-h {
+  font-size: 17px; font-weight: 700; color: var(--text-primary);
+  margin: 36px 0 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border);
+}
+
+/* 파이프라인 */
+.sl-g-pipes { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 14px; }
+.sl-g-pipe {
+  background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 10px;
+  padding: 16px 18px; transition: border-color 0.15s;
+}
+.sl-g-pipe:hover { border-color: var(--accent); }
+.sl-g-pipe-head { font-weight: 700; color: var(--text-primary); font-size: 14px; margin-bottom: 12px; }
+.sl-g-pipe-icon { margin-right: 7px; }
+.sl-g-chain { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-bottom: 10px; }
+.sl-g-step {
+  background: var(--accent-dim); color: var(--accent); border: 1px solid rgba(212,165,116,0.3);
+  font-family: 'SFMono-Regular', Consolas, monospace; font-size: 11px;
+  padding: 3px 8px; border-radius: 5px; white-space: nowrap;
+}
+.sl-g-arrow { color: var(--text-muted); font-size: 11px; }
+.sl-g-pipe-desc { color: var(--text-muted); font-size: 12px; line-height: 1.5; }
+
+/* 명령어 카테고리 */
+.sl-g-cats { display: flex; flex-direction: column; gap: 22px; }
+.sl-g-cat-title {
+  font-size: 14px; font-weight: 700; color: var(--text-primary);
+  padding: 4px 0 4px 12px; margin-bottom: 12px;
+}
+.sl-g-cat-count {
+  background: var(--bg-tertiary); color: var(--text-muted); font-size: 11px; font-weight: 600;
+  padding: 1px 8px; border-radius: 10px; margin-left: 8px;
+}
+.sl-g-cmds { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 10px; }
+.sl-g-cmd {
+  background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px;
+  padding: 12px 14px; transition: border-color 0.15s, transform 0.1s;
+}
+.sl-g-cmd:hover { border-color: var(--accent); transform: translateY(-1px); }
+.sl-g-cmd-name {
+  font-family: 'SFMono-Regular', Consolas, monospace; font-size: 13px; font-weight: 700;
+  margin-bottom: 5px;
+}
+.sl-g-cmd-desc { color: var(--text-primary); font-size: 12.5px; line-height: 1.55; }
+.sl-g-cmd-pre {
+  color: var(--text-muted); font-size: 11px; margin-top: 7px;
+  font-family: 'SFMono-Regular', Consolas, monospace;
+}
+.sl-g-cmd-pre::before { content: '⊢ '; opacity: 0.6; }
+
+/* 모드 */
+.sl-g-modes { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.sl-g-mode {
+  background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px;
+  padding: 14px 16px;
+}
+.sl-g-mode-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 14px; }
+.sl-g-mode-tag {
+  background: var(--bg-tertiary); color: var(--text-muted); font-size: 10px;
+  padding: 1px 7px; border-radius: 8px;
+}
+.sl-g-mode-desc { color: var(--text-muted); font-size: 12px; line-height: 1.5; }
+
+/* 노트 / 푸터 */
+.sl-g-note {
+  background: var(--bg-secondary); border: 1px solid var(--border);
+  border-left: 3px solid var(--accent); border-radius: 8px;
+  padding: 16px 18px; margin-top: 14px; color: var(--text-primary);
+  font-size: 12.5px; line-height: 1.8;
+}
+.sl-g-note code, .sl-g-footer code {
+  background: var(--bg-tertiary); color: var(--accent); padding: 1px 6px;
+  border-radius: 4px; font-size: 11.5px;
+}
+.sl-g-footer {
+  margin-top: 36px; padding-top: 16px; border-top: 1px solid var(--border);
+  color: var(--text-muted); font-size: 12px; line-height: 1.7;
+}
