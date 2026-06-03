@@ -62,16 +62,33 @@ def count_tbd(content: str) -> int:
     return len(re.findall(r'\[TBD\]', body))
 
 
+def _iter_inf_dirs(spec_root: str):
+    """INF 파일 디렉터리 iterator. 두 가지 구조 모두 지원:
+    A) docs/05_설계서/INF/{domain}/  (신규 표준)
+    B) docs/05_설계서/{domain}/INF/  (기존 프로젝트)
+    yields (domain_name, dir_path)"""
+    design_root = os.path.join(spec_root, 'docs', '05_설계서')
+    if not os.path.isdir(design_root):
+        return
+    # 구조 A: INF/{domain}/
+    inf_root_a = os.path.join(design_root, 'INF')
+    if os.path.isdir(inf_root_a):
+        for d in sorted(os.listdir(inf_root_a)):
+            p = os.path.join(inf_root_a, d)
+            if os.path.isdir(p):
+                yield d, p
+        return
+    # 구조 B: {domain}/INF/
+    for domain in sorted(os.listdir(design_root)):
+        inf_sub = os.path.join(design_root, domain, 'INF')
+        if os.path.isdir(inf_sub):
+            yield domain, inf_sub
+
+
 def scan_infs(spec_root: str) -> list:
-    """docs/05_설계서/INF/{domain}/INF-*.md 전수 스캔."""
+    """docs/05_설계서 하위 INF-*.md 전수 스캔 (두 가지 폴더 구조 지원)."""
     infs = []
-    inf_root = os.path.join(spec_root, 'docs', '05_설계서', 'INF')
-    if not os.path.isdir(inf_root):
-        return infs
-    for domain_dir in sorted(os.listdir(inf_root)):
-        domain_path = os.path.join(inf_root, domain_dir)
-        if not os.path.isdir(domain_path):
-            continue
+    for domain_dir, domain_path in _iter_inf_dirs(spec_root):
         for fname in sorted(os.listdir(domain_path)):
             if not (fname.endswith('.md') and fname.startswith('INF-')):
                 continue

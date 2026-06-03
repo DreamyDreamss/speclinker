@@ -5,6 +5,31 @@
 이 파일은 SI/ITO 개발 전주기 자동화 플러그인 Speclinker의 라우팅 규칙을 정의합니다.
 사용자 입력을 분석하여 적절한 스킬(Skill)로 라우팅하고, 서브에이전트를 조율합니다.
 
+## ⚠️ 핵심 설계 원칙 — 범용성 (MUST)
+
+> **Speclinker는 특정 프로젝트·기술 스택에 종속되지 않는 범용 도구다.**
+> 이 플러그인을 개발·수정할 때 아래 원칙을 반드시 지킨다. 위반은 결함으로 간주한다.
+
+1. **스택 중립**: Java/Kotlin Spring, Next.js(React/TS), Vue, NestJS, FastAPI/Django(Python), Go 등
+   어떤 스택에서도 동작해야 한다. 특정 프로젝트(예: nkshop) 구조를 전제하지 않는다.
+
+2. **언어 중립 신호 우선**: 도메인 분류·경로 추출 등은 **모든 언어에 존재하는 신호**를 1차 기준으로 한다.
+   - ✅ 1차: 파일 **디렉토리 경로**(`relPath`) — 모든 언어·프레임워크에 존재
+   - ⚠️ 보조: 언어별 메타데이터(Java `package`, 어노테이션 등) — 있으면 보강, 없어도 동작
+   - ❌ 금지: 특정 언어 전용 필드(`package`)에만 의존하는 로직 → 타 스택에서 0건/전부 unknown
+
+3. **프레임워크 보일러플레이트 자동 흡수**: 경로 공통 prefix(`src/main/java/...`, `src/app/`, `src/pages/`,
+   `app/`, 회사 패키지 prefix 등)는 자동 감지·제거한다. 하드코딩 금지.
+
+4. **멀티모듈 대응**: 한 워크스페이스에 여러 모듈(admin/scm, api/web/batch 등)이 섞일 수 있다.
+   단일 prefix를 가정하지 말고, 모듈 경계를 자동 처리한다.
+
+5. **다중 스택 검증 의무**: 새 스크립트·스킬은 **최소 2개 이상 이질적 스택**으로 검증한다.
+   (예: Java Spring 프로젝트 + Next.js 프로젝트). 단일 프로젝트 통과만으로 완료 처리 금지.
+
+> **참고 실측**: nkshop-bos-admin = Java Spring(`*Controller.java`, `package` 존재),
+> KDI = Next.js(`src/app/{도메인}/page.tsx`, `package` 없음). 두 구조 모두 도메인 추출이 동작해야 한다.
+
 ## 커맨드 라우팅 규칙
 
 | 사용자 입력 | 라우팅 스킬 | 전제 조건 | 모드 |
@@ -63,6 +88,7 @@
 | 코드 생성 | `agents/dev-agent.md` | Sonnet | 반복 실행 태스크 |
 | 테스트 | `agents/test-agent.md` | Sonnet | 반복 실행 태스크 |
 
+> v2.53: 도메인 선택형 RECON + UIS goto 캡처 + **범용성 강화**. scan_source.js에 Next.js/Nuxt 파일경로 라우팅 인식(inferFileBasedRoutes) 추가 — tree-sitter AST 미감지 라우트 보강. build_domain_catalog.py(relPath 디렉토리 기반 범용 도메인 분류, Java+Next.js 검증) + build_uis_goto_plan.py(form URL goto 플랜) 신규. sl-init Step5.5(스캔+카탈로그) / sl-recon STEP1.7(도메인 선택→POC_DOMAINS) / sl-recon-uis STEP6-0-GOTO(form URL 직접 캡처, BFS 폴백). 도메인 분류 기준=relPath(package 전용 금지).
 > v2.52: Docsify 웹 뷰어 구현 — gen_docsify.py(스캔→spec_index.json) + docsify-sl.js(대시보드·INF/UIS 탭·Quick Nav·크로스링크·IA 트리) + /sl-ia(IA_MAP.md 자동생성+menu-path 보완). sl-viewer Obsidian→Docsify 교체.
 > **v2.39+**: sl-recon STEP 1은 `scan_source.js` (제로-LLM 정적 스캔). v2.41: 컨텍스트 경로 자동 감지(web.xml/Spring Boot/NestJS/FastAPI/.env 6종) + 클래스 레벨 `/*` 와일드카드 strip. v2.44: STEP 1에 tree-sitter 파싱 결과 예시(source_index.json 스키마·필드 설명) 추가. v2.45: resolve_call_chain.py가 source_index.json 재활용 — 파일 재read·os.walk 제거, fast path/fallback 자동 분기. v2.46: dead code 정리 — UA 대시보드·ua_req_bridge.js 참조 제거, link_inf_sch.py(0바이트) 삭제. v2.48: install.ps1 검증 목록 정정(sl-spec→sl-genesis, req_scan.sh→req_scan.py, plugin.json 제거), UA 관련 문서 일괄 정리, installed_plugins.json 자동 등록 추가. v2.49: dispatch_inf_gen.py 도메인별 순차 Lock(INF-ID 레이스 컨디션 방지) + LAUNCH_STAGGER=3(claude CLI 초기화 충돌 방지). v2.50: 5개 산출물 템플릿 SM+AIDD 최적화 — INF(비즈니스룰·트랜잭션순서·사이드이펙트), SCH(코드값·비즈니스주의사항), BAT(비즈니스룰·재처리방법), UIS(apis/related-screens frontmatter), FUNC_MAP(BAT컬럼). v2.51: SDD 파이프라인 전체 구현 — sl-context/plan/check/review/sprint/drift/quick 신규 + sl-analyze/change/dev 강화 + BMAD MIT 차용 템플릿 5종.
 
@@ -122,7 +148,7 @@
 | 새 프로젝트 (AIDD) | sl-init → sl-genesis → **sl-aidd** → sl-test |
 | 새 프로젝트 (수동) | sl-init → sl-genesis → sl-dev → sl-test |
 | 기존 코드 (RECON + AIDD) | sl-init → sl-recon → **sl-aidd** → 납품 |
-| 기존 코드 (RECON 분석만) | sl-init → sl-recon → 납품 |
+| 기존 코드 (RECON 분석만) | sl-init(스캔+카탈로그) → sl-recon(도메인 선택) → sl-recon-uis(goto 캡처) → 납품 |
 | 변경·유지보수 (Jira) | sl-analyze → sl-change → **sl-aidd** |
 | 변경·유지보수 (로컬) | sl-change --new SR-001 → (요구사항 작성) → sl-change SR-001 → **sl-aidd** |
 | **SDD 전체 파이프라인** | sl-recon → **sl-ia** → **sl-context** → sl-sprint → sl-plan → sl-analyze → sl-change → sl-check → **sl-dev** → sl-review → sl-test |

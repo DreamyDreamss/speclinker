@@ -429,6 +429,60 @@ function parseJavaRegex(content, filePath) {
 const PY_ROUTE_QUICK_RE = /@(?:app|router|bp|blueprint|api)\./i;
 
 /**
+ * 파일경로 기반 라우팅 인식 (Next.js Pages/App Router, Nuxt 등).
+ * tree-sitter는 코드 AST만 보므로 "파일 위치 = URL" 컨벤션은 여기서 합성한다.
+ * @param {string} relPath - 워크스페이스 상대경로
+ * @returns {Array} routes — [{ method, path, handlerMethod, kind }]
+ */
+function inferFileBasedRoutes(relPath) {
+  const norm = relPath.replace(/\\/g, '/');
+  const parts = norm.split('/');
+
+  // 라우트 마커 탐색: 'pages' 또는 'app' (마지막 출현 우선 — 중첩 src/app 대응)
+  let markerIdx = -1, marker = '';
+  for (let i = 0; i < parts.length; i++) {
+    if (parts[i] === 'pages' || parts[i] === 'app') { markerIdx = i; marker = parts[i]; }
+  }
+  if (markerIdx < 0) return [];
+
+  const after = parts.slice(markerIdx + 1);
+  if (after.length === 0) return [];
+  const fileName = after[after.length - 1];
+  const extMatch = fileName.match(/\.(tsx|jsx|ts|js|vue)$/);
+  if (!extMatch) return [];
+  const base = fileName.slice(0, fileName.length - extMatch[0].length);
+
+  const normalizeUrl = (u) => {
+    let s = '/' + u.replace(/^\/+/, '').replace(/\/+/g, '/');
+    s = s.replace(/\/$/, '');
+    return s || '/';
+  };
+  // 동적 라우트: [...slug] → *, [id] → :id
+  const toDynamic = (u) => u.replace(/\[\.\.\.([^\]]+)\]/g, '*').replace(/\[([^\]]+)\]/g, ':$1');
+
+  if (marker === 'app') {
+    // App Router: page.*(화면) / route.*(API 핸들러)만 라우트. layout/loading/error 등 제외.
+    if (base !== 'page' && base !== 'route') return [];
+    // 라우트 그룹 (auth) 등은 URL에 포함되지 않음 → 제거
+    const segs = after.slice(0, -1).filter(s => !/^\(.*\)$/.test(s));
+    const url = toDynamic(normalizeUrl('/' + segs.join('/')));
+    const isApi = base === 'route' || segs[0] === 'api';
+    return [{ method: 'ANY', path: url, handlerMethod: base, kind: isApi ? 'api' : 'form' }];
+  }
+
+  // Pages Router
+  // 제외: _app, _document, _error, *.d(.ts) 타입선언
+  if (base.startsWith('_') || base.endsWith('.d')) return [];
+  const isApi = after[0] === 'api';
+  const dirs = after.slice(0, -1);
+  let url;
+  if (base === 'index') url = '/' + dirs.join('/');
+  else url = '/' + [...dirs, base].join('/');
+  url = toDynamic(normalizeUrl(url));
+  return [{ method: 'ANY', path: url, handlerMethod: base, kind: isApi ? 'api' : 'form' }];
+}
+
+/**
  * Tree-sitter Python AST 기반 파서.
  * FastAPI/Flask 데코레이터를 정확히 파싱: 멀티라인, methods=[] 지원.
  */
@@ -1037,6 +1091,15 @@ function main() {
           /repositor|dao|mapper/i.test(bn) ? 'dao' :
           /batch|job|worker/i.test(bn) ? 'batch' : 'other';
         parsed = { pkg: '', className: '', annotations: [], routes: [], imports: [], injected: [], type };
+      }
+
+      // 파일경로 기반 라우팅 (Next.js/Nuxt — tree-sitter AST에 라우트가 없는 프레임워크)
+      if (parsed.routes.length === 0 && /\.(tsx|jsx|ts|js|vue)$/.test(relPath)) {
+        const fileRoutes = inferFileBasedRoutes(relPath);
+        if (fileRoutes.length) {
+          parsed.routes = fileRoutes;
+          if (parsed.type === 'other') parsed.type = 'controller';
+        }
       }
 
       // context path 적용 — 감지된 경우 모든 route에 prepend

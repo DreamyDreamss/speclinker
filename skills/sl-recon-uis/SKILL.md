@@ -102,7 +102,22 @@ mode = {}
 if os.path.exists('_tmp/_recon_uis_mode.json'):
     mode = json.load(open('_tmp/_recon_uis_mode.json', encoding='utf-8'))
 
-if not base_url:
+# goto 캡처 가능 여부: source_index.json에 form route가 있으면 goto 우선
+form_count = 0
+if os.path.exists('_tmp/source_index.json'):
+    sidx = json.load(open('_tmp/source_index.json', encoding='utf-8'))
+    form_count = sum(1 for f in sidx.get('files', [])
+                     for r in f.get('routes', []) if r.get('kind') == 'form')
+mode['goto_capable'] = form_count > 0
+
+if base_url and form_count > 0 and not mode.get('spec_only'):
+    mode['capture_mode'] = 'goto'
+    json.dump(mode, open('_tmp/_recon_uis_mode.json', 'w', encoding='utf-8'),
+              ensure_ascii=False, indent=2)
+    print('[캡처 모드] goto — source_index.json의 form URL ' + str(form_count) + '개 직접 캡처')
+    print('  PREVIEW_BASE_URL = ' + base_url)
+    print('  → STEP 6-1 로그인 후 STEP 6-0-GOTO로 이동 (BFS 건너뜀)')
+elif not base_url:
     print('[INFO] PREVIEW_BASE_URL 미설정 → 정적 소스 분석 fallback 모드')
     print('  /sl-recon STEP 4에서 생성된 screen_inventory_static.json 사용')
     mode['static_fallback'] = True
@@ -192,6 +207,117 @@ if os.path.exists(cfg_path):
     print('     shell-iframe | spa | mpa')
 "
 ```
+
+---
+
+## STEP 6-0-GOTO: form URL 직접 goto 캡처 (기본 모드)
+
+> `_tmp/_recon_uis_mode.json`의 `capture_mode == 'goto'`일 때만 실행한다.
+> BFS 메뉴 탐색 대신 source_index.json의 `kind="form"` URL을 `capture_single_tab.js`로 직접 goto 캡처한다.
+> **전제: STEP 6-1을 먼저 실행**해 Chrome CDP를 띄우고 로그인한 뒤 "계속"한다.
+
+**6-0-GOTO-1: goto 플랜 생성** (build_uis_goto_plan.py)
+
+```bash
+!python -c "
+import os, sys, subprocess, json
+try: sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+except: pass
+
+mode = json.load(open('_tmp/_recon_uis_mode.json', encoding='utf-8'))
+if mode.get('capture_mode') != 'goto':
+    print('[SKIP] goto 모드 아님 — STEP 6-0/6-1로 진행')
+    sys.exit(0)
+
+env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
+           if '=' in l and not l.startswith('#'))
+plugin = env.get('PLUGIN_PATH','')
+genpy  = os.path.join(plugin, 'scripts', 'build_uis_goto_plan.py') if plugin else ''
+
+poc_domains = [d.strip() for d in env.get('POC_DOMAINS','').split(',') if d.strip()]
+domain_filter = mode.get('domain_filter') or (poc_domains[0] if poc_domains else None)
+
+args = [sys.executable, genpy, '_tmp/source_index.json', '_tmp/uis_goto_plan.json']
+if domain_filter:
+    args.append(domain_filter)
+r = subprocess.run(args, capture_output=True, text=True, encoding='utf-8', errors='replace')
+print(r.stdout)
+if r.returncode != 0:
+    print('[ERROR] goto 플랜 생성 실패:', (r.stderr or '')[:300]); sys.exit(1)
+"
+```
+
+**6-0-GOTO-2: 화면 순차 goto 캡처** (capture_single_tab.js --url=)
+
+`_tmp/uis_goto_plan.json`의 각 화면을 캡처하고 결과를 `_tmp/uis_capture_map.json`에 누적한다.
+
+```bash
+!python -c "
+import os, sys, subprocess, json
+try: sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+except: pass
+
+env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
+           if '=' in l and not l.startswith('#'))
+plugin   = env.get('PLUGIN_PATH','')
+base_url = env.get('PREVIEW_BASE_URL','').rstrip('/')
+cdp_port = env.get('PREVIEW_CDP_PORT','9222')
+capture  = os.path.join(plugin, 'scripts', 'capture_single_tab.js') if plugin else ''
+ws = os.getcwd()
+
+plan = json.load(open('_tmp/uis_goto_plan.json', encoding='utf-8'))
+cap_map = []
+if os.path.exists('_tmp/uis_capture_map.json'):
+    cap_map = json.load(open('_tmp/uis_capture_map.json', encoding='utf-8'))
+done_routes = set(e.get('activeRoute','') for e in cap_map)
+
+todo = [s for s in plan if s['route'] not in done_routes]
+print('goto 캡처: 전체 ' + str(len(plan)) + '개 / 완료 ' + str(len(done_routes)) + '개 / 대상 ' + str(len(todo)) + '개')
+
+for i, s in enumerate(todo, 1):
+    url = base_url + s['route']
+    sid = s['screenId']
+    print('  [' + str(i) + '/' + str(len(todo)) + '] ' + sid + ' <- ' + url)
+    try:
+        r = subprocess.run(
+            ['node', capture, '--url=' + url, '--screenId=' + sid,
+             '--workspace=' + ws, '--port=' + cdp_port, '--maxHeight=8000'],
+            capture_output=True, text=True, encoding='utf-8', errors='ignore', timeout=90)
+        data = json.loads(r.stdout.strip())
+        entry = {
+            'menuPath':     s['menuPath'],
+            'screenLabel':  sid,
+            'activeRoute':  s['route'],
+            'contentRoute': s['route'],
+            'domain':       s['domain'],
+            'screenId':     sid,
+            'entryFile':    s['entryFile'],
+            'capture_mode': 'goto',
+        }
+        if data.get('success'):
+            entry['captureDir']  = data.get('captureDir','')
+            entry['captureFile'] = data.get('captureFile','')
+            entry['widgetCount'] = data.get('widgetCount',0)
+            entry['apiHints']    = data.get('apiHints', [])
+            print('      OK widgets=' + str(data.get('widgetCount',0)))
+        else:
+            entry['captureDir'] = ''
+            print('      FAIL: ' + str(data.get('error','?')))
+        cap_map.append(entry)
+        json.dump(cap_map, open('_tmp/uis_capture_map.json','w',encoding='utf-8'),
+                  ensure_ascii=False, indent=2)
+    except Exception as ex:
+        print('      ERROR: ' + str(ex))
+
+print()
+print('goto 캡처 완료: uis_capture_map.json ' + str(len(cap_map)) + '개')
+print('→ STEP 6-2-3으로 이동 (도메인은 이미 relPath 기반으로 설정됨)')
+"
+```
+
+> goto 캡처는 `domain`/`menuPath`를 이미 채우므로 STEP 6-2-3의 도메인 결정을 건너뛴다.
+> `apiHints`는 캡처 결과에 포함되어 STEP 6-2-3-B 소스 역매핑에 그대로 활용된다.
+> goto 캡처 완료 후 **STEP 6-2-3으로 이동**한다 (STEP 6-2 BFS는 건너뜀).
 
 ---
 
@@ -620,6 +746,9 @@ for entry in cap_map:
         continue
     # 정적 fallback 항목은 domain 이미 설정됨
     if entry.get('static_fallback') and entry.get('domain'):
+        continue
+    # goto 캡처 항목은 relPath 기반 domain이 이미 정확함 — 덮어쓰지 않음
+    if entry.get('capture_mode') == 'goto' and entry.get('domain'):
         continue
 
     api_hints = entry.get('apiHints', [])

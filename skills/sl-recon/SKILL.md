@@ -247,6 +247,82 @@ if not skip:
 
 ---
 
+## STEP 1.7 — 처리 도메인 선택 (카탈로그 기반)
+
+> `_tmp/domain_catalog.json`(sl-init Step 5.5 또는 아래에서 생성)을 읽어 도메인 목록을 제시한다.
+> 수천 개 INF 프로젝트에서 전체를 한 번에 처리하지 않고 도메인 단위로 선택 처리하기 위함이다.
+> 도메인 분류는 relPath 디렉토리 기반(스택 무관 — Java/Next.js 동일).
+
+**카탈로그 로드/생성 + 도메인 목록 출력:**
+
+```bash
+!python -c "
+import os, sys, subprocess, json
+try: sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+except: pass
+
+env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
+           if '=' in l and not l.startswith('#'))
+plugin = env.get('PLUGIN_PATH','')
+cat_path = '_tmp/domain_catalog.json'
+
+# 카탈로그 없으면 즉석 생성 (sl-init Step 5.5를 건너뛴 경우)
+if not os.path.exists(cat_path):
+    catpy = os.path.join(plugin, 'scripts', 'build_domain_catalog.py') if plugin else ''
+    if catpy and os.path.exists(catpy) and os.path.exists('_tmp/source_index.json'):
+        subprocess.run([sys.executable, catpy, '_tmp/source_index.json', cat_path],
+                       capture_output=True, text=True)
+
+if not os.path.exists(cat_path):
+    print('[WARN] domain_catalog.json 없음 — 전체 도메인 처리로 진행')
+    sys.exit(0)
+
+cat = json.load(open(cat_path, encoding='utf-8'))
+domains = cat.get('domains', [])
+poc_domains = [d.strip() for d in env.get('POC_DOMAINS','').split(',') if d.strip()]
+
+print('=' * 64)
+print('처리할 도메인을 선택하세요 (relPath 기반 분류, stack=' + cat.get('stack','?') + ')')
+print('=' * 64)
+print('  공통 prefix: ' + cat.get('common_prefix',''))
+print()
+print('  #  도메인'.ljust(26) + 'files   form    api')
+print('  ' + '-' * 50)
+for i, d in enumerate(domains, 1):
+    mark = ' *' if d['name'] in poc_domains else '  '
+    print(mark + str(i).rjust(2) + '. ' + d['name'].ljust(18)
+          + str(d.get('files',0)).rjust(6) + '  ' + str(d.get('forms',0)).rjust(5)
+          + '  ' + str(d.get('apis',0)).rjust(5))
+print()
+total_f = sum(d.get('files',0) for d in domains)
+total_form = sum(d.get('forms',0) for d in domains)
+print('  전체: 도메인 ' + str(len(domains)) + '개 / 엔트리 ' + str(total_f)
+      + '개 / form 화면 ' + str(total_form) + '개')
+print()
+if poc_domains:
+    print('  현재 POC_DOMAINS = ' + str(poc_domains) + ' (* 표시)')
+print()
+print('[선택 방법]')
+print('  특정 도메인: \"product, order\" (쉼표 구분)')
+print('  전체 처리:   \"전체\"')
+"
+```
+
+**사용자 선택 처리:**
+
+사용자가 도메인명(쉼표 구분) 또는 "전체"를 입력하면 `project.env`의 `POC_MODE`/`POC_DOMAINS`를 갱신한다 (Edit 도구):
+
+- 특정 도메인 선택 시: `POC_MODE=true`, `POC_DOMAINS={선택값}` 으로 수정
+- "전체" 선택 시: `POC_MODE=false` 로 두고 진행
+
+> POC_DOMAINS를 설정하면 기존 STEP 2-2(도메인 필터), STEP 4(INF 생성)가 자동으로 선택 도메인만 처리한다.
+> **단, domain_catalog의 도메인명(relPath 기반)과 _domain_plan.json의 도메인명(spec-agent 생성)이 다를 수 있다.**
+> STEP 3 도메인 검토에서 최종 확인한다.
+
+> **확인 전 STEP 1.5 진행 금지.**
+
+---
+
 ## STEP 1.5 — 프로젝트 Profile 생성·로드
 
 `.speclinker/profile.yaml`이 있으면 그대로 로드, 없으면 `profile-agent`를 호출해 초안 생성.  
