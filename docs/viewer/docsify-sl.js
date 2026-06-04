@@ -9,6 +9,12 @@
     });
   }
 
+  // ── 문서 베이스 경로 ────────────────────────────────────────
+  // index.html은 /docs/viewer/ 에서 서빙되지만 문서·미리보기 이미지는
+  // 프로젝트 루트 기준 경로(docs/05_설계서/...)다. docsify 라우팅은 basePath가
+  // 처리하지만, <img> 같은 직접 리소스 참조는 이 BASE를 접두로 붙여야 한다.
+  const DOC_BASE = location.pathname.replace(/docs\/viewer\/(index\.html)?$/, '');
+
   // ── 상태 ──────────────────────────────────────────────────
   let INDEX = null;
   let ACTIVE_DOMAIN = null;
@@ -370,7 +376,7 @@
   }
 
   function renderUisCard(ui) {
-    const previewSrc = ui.file.replace('spec.md', 'preview.png');
+    const previewSrc = DOC_BASE + ui.file.replace('spec.md', 'preview.png');
     const preview = ui.has_preview
       ? `<img src="${previewSrc}" alt="preview" onerror="this.parentNode.innerHTML='🖥️'">`
       : '🖥️';

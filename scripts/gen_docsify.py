@@ -10,6 +10,7 @@ import os
 import re
 import json
 import sys
+import shutil
 from datetime import datetime
 
 
@@ -225,7 +226,35 @@ def generate_index(spec_root: str, output_path: str) -> dict:
     return index
 
 
+def copy_viewer_assets(spec_root: str) -> None:
+    """플러그인 뷰어 자산(index.html/js/css)을 프로젝트 docs/viewer/로 복사.
+
+    뷰어는 프로젝트 루트에서 서빙된다(문서 docs/...와 자산 docs/viewer/...이
+    한 서버 루트 아래 있어야 INF 클릭 라우팅이 동작). 따라서 깨끗한 프로젝트에도
+    부트스트랩 자산이 docs/viewer/ 안에 존재하도록 매 실행마다 동기화한다."""
+    plugin_viewer = os.path.normpath(
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'docs', 'viewer'))
+    dest = os.path.join(spec_root, 'docs', 'viewer')
+    os.makedirs(dest, exist_ok=True)
+    copied = []
+    for asset in ('index.html', 'docsify-sl.js', 'sl-theme.css'):
+        src = os.path.join(plugin_viewer, asset)
+        dst = os.path.join(dest, asset)
+        if not os.path.isfile(src):
+            continue
+        if os.path.abspath(src) == os.path.abspath(dst):
+            continue  # 플러그인 자체를 대상으로 실행한 경우 자기복사 방지
+        try:
+            shutil.copy2(src, dst)
+            copied.append(asset)
+        except OSError:
+            pass
+    if copied:
+        print(f'[OK] 뷰어 자산 동기화: {", ".join(copied)} → {dest}')
+
+
 if __name__ == '__main__':
     root = sys.argv[1] if len(sys.argv) > 1 else '.'
+    copy_viewer_assets(root)
     out = os.path.join(root, 'docs', 'viewer', 'spec_index.json')
     generate_index(root, out)
