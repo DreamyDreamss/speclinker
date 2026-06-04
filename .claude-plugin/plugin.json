@@ -7,7 +7,6 @@
   },
   "skills": [
     "./skills/sl-init",
-    "./skills/sl-genesis",
     "./skills/sl-recon",
     "./skills/sl-recon-uis",
     "./skills/sl-recon-doc",
