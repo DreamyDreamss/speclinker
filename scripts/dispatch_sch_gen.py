@@ -143,6 +143,18 @@ def main() -> int:
     log_dir = Path(workspace) / LOG_DIR_NAME
     log_dir.mkdir(parents=True, exist_ok=True)
     status = load_status(workspace)
+
+    # C-2 fix: enrich_todo가 바뀌면 인덱스 기반 done이 신규 도메인을 stale-skip한다.
+    # SCH enrichment은 파일 존재 스캔으로 done 판정이 어려우므로 inventory_hash가 단일 가드.
+    import hashlib
+    inv_hash = hashlib.sha1(todo_path.read_bytes()).hexdigest()
+    if status.get("inventory_hash") != inv_hash:
+        if status.get("done") or status.get("failed"):
+            print("[reset] enrich_todo 변경 감지 — done/failed 초기화")
+        status = {"done": [], "failed": [], "inventory_hash": inv_hash}
+        save_status(workspace, status)
+    else:
+        status.setdefault("inventory_hash", inv_hash)
     status_lock = threading.Lock()
     launch_lock = threading.Lock()
     last_launch = [0.0]

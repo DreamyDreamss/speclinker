@@ -263,6 +263,18 @@ def main() -> int:
     log_dir.mkdir(parents=True, exist_ok=True)
     status = load_status(workspace)
 
+    # C-2 fix: inventory가 바뀌면 인덱스 기반 done/failed가 stale-skip을 유발한다.
+    # 인벤토리 내용 해시가 불일치하면 done/failed를 리셋(파일 존재 스캔 group_already_done이 재판정).
+    import hashlib
+    inv_hash = hashlib.sha1(inv_path.read_bytes()).hexdigest()
+    if status.get("inventory_hash") != inv_hash:
+        if status.get("done") or status.get("failed"):
+            print(f"[reset] inventory 변경 감지 — done/failed 초기화 (이전 해시 불일치)")
+        status = {"done": [], "failed": [], "inventory_hash": inv_hash}
+        save_status(workspace, status)
+    else:
+        status.setdefault("inventory_hash", inv_hash)
+
     status_lock = threading.Lock()
     # INF-ID는 STEP 4-1에서 그룹별로 사전 배정(infIdStart)되어 겹치지 않으므로
     # 도메인 순차 Lock 없이 도메인 무관 병렬 실행한다.

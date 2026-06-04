@@ -642,7 +642,7 @@ for d in plan['domains']:
 
     # 도메인 루트 controller 파일
     domain_ctrl = [f for f in ctrl_files
-                   if any(norm(f.get('filePath','')).startswith(r) for r in roots)]
+                   if any(norm(f.get('filePath','')).startswith(r) or norm(f.get('relPath','')).startswith(r) for r in roots)]
 
     # form routes → screen_inventory_static (sl-recon-uis fallback용)
     for f in domain_ctrl:
@@ -662,11 +662,13 @@ for d in plan['domains']:
     # batch 후보 (type=batch)
     bat_src = [f for f in idx.get('files', [])
                if f.get('type') == 'batch' and
-               any(norm(f.get('filePath','')).startswith(r) for r in roots)]
+               any(norm(f.get('filePath','')).startswith(r) or norm(f.get('relPath','')).startswith(r) for r in roots)]
     all_domain = api_ctrl + [f for f in bat_src if f not in api_ctrl]
 
     files = sorted(set(f.get('filePath','') for f in all_domain if f.get('filePath')))
     if not files:
+        if ctrl_files:
+            print(f'  [WARN {d[\"name\"]}] api 파일 0건 — rootPaths={roots} vs filePath/relPath 매칭 실패 의심(절대/상대 경로 점검)')
         continue
 
     # POC_FILE_LIMIT 보조 필터

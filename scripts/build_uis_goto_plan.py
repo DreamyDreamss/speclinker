@@ -27,14 +27,38 @@ def menu_path_from_route(url: str, context_path) -> list:
     return [s for s in path.strip('/').split('/') if s]
 
 
+# jwork/Spring MVC 등 레거시 MVC: 독립 페이지는 *Form 진입점뿐, 나머지(*List/*Pop/...)는
+# 부모 Form 안에서 AJAX로 로드되는 조각(fragment) → 직접 goto 시 프레임워크 예외.
+# 환경변수 SL_FRAGMENT_SUFFIXES / SL_ENTRY_REGEX 로 override 가능.
+FRAGMENT_SUFFIXES = tuple(
+    (os.environ.get('SL_FRAGMENT_SUFFIXES') or
+     'List,Info,Pop,Detail,Ajax,Data,Save,One,Search,Excel,Download').split(',')
+)
+ENTRY_REGEX = os.environ.get('SL_ENTRY_REGEX', 'Form')  # screenId 접미사(대소문자 무시)
+
+
+def _is_entry(screen_id: str, jwork_mode: bool) -> bool:
+    """jwork_mode면 진입화면(*Form)만 통과, 명백한 조각 접미사는 제외. 아니면 전부 통과."""
+    if not jwork_mode:
+        return True
+    sid = (screen_id or '')
+    low = sid.lower()
+    if low.endswith(ENTRY_REGEX.lower()):
+        return True
+    if any(low.endswith(suf.strip().lower()) for suf in FRAGMENT_SUFFIXES if suf.strip()):
+        return False
+    return True  # Form도 조각도 아닌 모호한 건 보존
+
+
 def build_goto_plan(source_index: dict, domain_filter: str = None) -> list:
     """source_index dict → goto 캡처 플랜 리스트.
-    kind="form" route만 화면으로 포함. 도메인은 assign_file_domains 재사용."""
+    kind="form" route 중 진입화면만 포함(jwork 조각 제외). 도메인은 assign_file_domains 재사용."""
     files = source_index.get('files', [])
     context_path = source_index.get('contextPath')
     pairs, _ = assign_file_domains(files)
 
-    plan = []
+    # 1차 수집: 모든 form route
+    raw = []
     for f, dom in pairs:
         if domain_filter and dom != domain_filter:
             continue
@@ -44,13 +68,22 @@ def build_goto_plan(source_index: dict, domain_filter: str = None) -> list:
             route = r.get('path', '')
             segs = [s for s in route.rstrip('/').split('/') if s]
             screen_id = r.get('handlerMethod') or (segs[-1] if segs else 'screen')
-            plan.append({
-                'domain': dom,
-                'screenId': screen_id,
-                'route': route,
-                'menuPath': menu_path_from_route(route, context_path),
-                'entryFile': f.get('filePath', '') or f.get('relPath', ''),
-            })
+            raw.append((dom, screen_id, route, f.get('filePath', '') or f.get('relPath', '')))
+
+    # jwork-style 감지: screenId 중 하나라도 *Form 접미사 → 조각 필터 활성(Next.js 등은 미적용)
+    jwork_mode = any((sid or '').lower().endswith(ENTRY_REGEX.lower()) for _, sid, _, _ in raw)
+
+    plan = []
+    for dom, screen_id, route, entry_file in raw:
+        if not _is_entry(screen_id, jwork_mode):
+            continue
+        plan.append({
+            'domain': dom,
+            'screenId': screen_id,
+            'route': route,
+            'menuPath': menu_path_from_route(route, context_path),
+            'entryFile': entry_file,
+        })
     return plan
 
 
