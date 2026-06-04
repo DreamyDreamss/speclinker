@@ -359,15 +359,27 @@ SR-1234 키워드: "주문 목록", "ORDER_LIST", "order"
 
 > 요약 스펙을 통째로 로드하지 않는다(lossy·stale). 그래프로 **영향슬라이스를 정밀 특정**하고 **근거소스 앵커(file:line)를 직접 read**하여 최신·정밀 AS-IS를 확보한다.
 
-### 5-1. 영향슬라이스 + 앵커 브리프 (build_change_context.py)
+### 5-0. 엔티티 자동추출 (extract_entities.py)
 
-SR 본문 + `_extracted.md`에서 엔티티(테이블명·INF-ID·path 키워드)를 추출해 그래프 기반 영향집합을 만든다:
+SR 본문 + `_extracted.md`에서 변경 엔티티(테이블·INF-ID·path)를 **자동 추출**한다(스펙 어휘 교차검증으로 정밀도 확보):
 
 ```bash
-!python "{PLUGIN_PATH}/scripts/build_change_context.py" . --sr {SR-ID} --entities "{엔티티 쉼표구분}"
+!python "{PLUGIN_PATH}/scripts/extract_entities.py" . --sr {SR-ID}
 ```
 
-산출 `docs/변경관리/{SR-ID}/_asis_brief.md`에는 **영향 INF/SCH + 근거소스 앵커(file:line) + ⚠️ ripple 경고**(공유테이블의 시드 외 사용처 — 교차도메인 포함)가 담긴다. `spec_graph.json`이 없어도 INF/SCH frontmatter에서 그래프를 빌드한다.
+산출 `docs/변경관리/{SR-ID}/_entities.json`의 `entities_arg`를 다음 단계 입력으로 쓴다. `tables_unknown`(그래프 미존재 후보)·`infs_unmatched`는 검토 대상으로 사용자에게 제시한다.
+
+### 5-1. 영향슬라이스 + 앵커 브리프 (build_change_context.py)
+
+추출 엔티티로 그래프 기반 영향집합을 만든다:
+
+```bash
+!python "{PLUGIN_PATH}/scripts/build_change_context.py" . --sr {SR-ID} --entities "{_entities.json의 entities_arg}"
+```
+
+> 플래그: `--ubiquity N`(공통자원 임계, 기본 20) · `--top K`(관련도 상위 표시, 기본 30) · `--hops H`(전이 확장, 기본 1).
+
+산출 `docs/변경관리/{SR-ID}/_asis_brief.md`에는 **관련도 순 영향 INF(점수·연결경로·앵커) + 영향 SCH + ⚠️ 광역 공통자원 격리**(JT_CODE 등 편재 테이블은 개별 나열 대신 사용처 수만 — 노이즈 방지)가 담긴다. `spec_graph.json`이 없어도 frontmatter에서 그래프를 빌드한다.
 
 ### 5-2. JIT 실소스 read (요약 대신 실코드)
 

@@ -40,11 +40,35 @@ def test_change_context_brief():
         c = open(brief, encoding='utf-8').read()
         assert 'INF-ORD-001' in c and 'INF-PRD-001' in c, 'ripple 누락'
         assert 'OrderCtl.java:10-50' in c, '앵커 누락'
-        assert 'ripple' in c.lower() or '공유' in c, 'ripple 경고 누락'
+        assert 'SHARED_T' in c, 'ripple 연결경로(via table) 누락'
         print('PASS: test_change_context_brief')
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+def test_ubiquity_isolation():
+    """공통테이블(다수 사용)은 격리되고, 전용테이블 사용처가 상위 랭킹."""
+    tmp = tempfile.mkdtemp()
+    try:
+        # COMMON_CD를 5개 INF가 사용(편재), DEDICATED를 1개가 사용
+        for n in range(1, 6):
+            _inf(tmp, 'd'+str(n), 'D'+str(n), 1, 'GET', f'/d{n}/x', ['COMMON_CD'], f'src/d{n}.java:1-9')
+        _inf(tmp, 'order', 'ORD', 9, 'POST', '/order/refund', ['COMMON_CD', 'ORD_REFUND_D'], 'src/order.java:1-9')
+        env = dict(os.environ, PYTHONUTF8='1')
+        # 임계 3 → COMMON_CD(6 users) 격리, ORD_REFUND_D(1 user) 정상
+        r = subprocess.run([sys.executable, os.path.join(SCRIPTS, 'build_change_context.py'),
+                            tmp, '--entities', 'COMMON_CD,ORD_REFUND_D', '--ubiquity', '3'],
+                           capture_output=True, text=True, env=env)
+        assert r.returncode == 0, r.stderr
+        c = open(os.path.join(tmp, 'docs/변경관리/_adhoc/_asis_brief.md'), encoding='utf-8').read()
+        assert '광역 공통자원' in c, '공통자원 격리 섹션 없음'
+        assert 'COMMON_CD' in c
+        # COMMON_CD를 쓰는 5개 무관 도메인 INF가 본문 영향목록에 개별 나열되지 않아야(노이즈 방지)
+        assert c.count('INF-D1-001') == 0 or '광역' in c.split('INF-D1-001')[0][-200:], 'D1 INF 노이즈'
+        print('PASS: test_ubiquity_isolation')
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
 if __name__ == '__main__':
     test_graph_reverse_ripple()
     test_change_context_brief()
+    test_ubiquity_isolation()
