@@ -42,7 +42,7 @@ SM 추적 체인:
 ### 3-2. 🔧 GENESIS 분기만 제거 (RECON/DELTA 동작 보존)
 | 파일 | 제거할 것 | 보존할 것 |
 |------|----------|----------|
-| `skills/sl-init/SKILL.md` (+ `create_dirs.sh`) | MODE 선택의 GENESIS 옵션, 01_요구사항정의서 폴더 | RECON/DELTA 초기화 |
+| `skills/sl-init/SKILL.md` (+ `create_dirs.sh`) | **MODE 작성/선택 자체**(§4 모드 폐기), 01_요구사항정의서 폴더 | 프로젝트 구조·NETWORK·POC 초기화 |
 | `agents/rd-agent.md` | GENESIS RD/REQ 생성 경로 | RECON FUNC 생성 경로 |
 | `agents/srs-agent.md` | GENESIS 상세화 경로 | RECON SRS 집약 경로 |
 | `agents/spec-agent.md` | GENESIS Phase-A/C의 REQ 역합성 | RECON Phase-A(SAD/도메인)·Phase-C(색인) |
@@ -61,10 +61,21 @@ SM 추적 체인:
 ### 3-3. ✅ 그대로 유지 (B에서 통합 검토)
 RECON 전체 · DELTA(sl-analyze/change/quick) · sl-aidd/dev/test/rtm/sprint/drift/context/ia/viewer.
 
-## 4. MODE 개념 정리
+## 4. MODE 개념 — 완전 제거
 
-- `project.env`의 `MODE`: `GENESIS | RECON | DELTA` → **`RECON | DELTA`** (기본 RECON).
-- GENESIS만 분기하던 로직은 RECON 경로로 단일화. RECON vs DELTA 구분은 유지.
+코드 확인 결과 `project.env`의 `MODE`는 **오직 GENESIS vs RECON을 가르는 용도**로만 쓰였다
+(skill 진입 게이트 + 에이전트 `linked_req`/`linked_func`·크로스링크 분기). `MODE=DELTA` 게이트는
+**코드에 존재하지 않으며**, DELTA는 프로젝트 모드가 아니라 `/sl-change` 등 **변경 워크플로우**일 뿐이다.
+→ GENESIS 제거 시 MODE가 가를 대상이 없어지므로 **MODE 개념 자체를 제거**한다.
+
+- `project.env`에서 `MODE` 필드 제거 (sl-init이 더 이상 쓰지/묻지 않음). `POC_MODE`·`NETWORK`·`PROJECT_NAME`·`PLUGIN_PATH`는 유지.
+- `/sl-recon`의 `MODE=RECON` 진입 게이트(라인 19, 741) 제거 — 다른 모드 없음.
+- `sl-aidd`(29)·`sl-dev`(52)·`sl-test`(25,85)·`sl-rtm`(53,129)의 `env.get('MODE',...)` 분기 제거 → **항상 `linked_func`**.
+- `ddd-api/db/ui-agent`의 `MODE: {RECON|GENESIS}` 입력 제거 → **항상 RECON 크로스링크(FUNC-ID)**.
+- `sl-recon`(358,936,1018)·`sl-recon-uis`(1283)가 에이전트에 넘기던 `MODE: RECON` 줄 제거(불필요).
+- 핵심: **"어떤 명령어를 쓰느냐"가 곧 행위 결정** — 프로젝트 모드 플래그 없음.
+
+> ⚠️ `POC_MODE`(POC 샘플링 범위 플래그)는 MODE와 무관 — 절대 건드리지 않는다.
 
 ## 5. plugin.json description
 
@@ -73,7 +84,7 @@ RECON 전체 · DELTA(sl-analyze/change/quick) · sl-aidd/dev/test/rtm/sprint/dr
 
 ## 6. 검증 (무결성 게이트)
 
-1. **잔존 0 게이트**: `grep -rn "GENESIS\|REQ-F\|REQ-NF\|요구사항정의서\|RD_v1.0\|RD_template\|linked_req" skills agents scripts templates docs README.md CLAUDE.md` → 이력 노트/변경설명 외 0건.
+1. **잔존 0 게이트**: `grep -rn "GENESIS\|REQ-F\|REQ-NF\|요구사항정의서\|RD_v1.0\|RD_template\|linked_req\|MODE=GENESIS\|env.get('MODE'" skills agents scripts templates docs README.md CLAUDE.md` → 이력 노트/변경설명 외 0건. (단 `POC_MODE`는 제외 — 유지 대상)
 2. **RECON 보존 게이트**: `rd-agent`/`srs-agent`/`spec-agent`에 RECON 동작 블록이 남아있는지 확인. `RECON_PIPELINE.md` STEP 표의 에이전트/산출물 불변 확인.
 3. **plugin.json 정합**: `skills[]`에 sl-genesis 없음 + 나머지 스킬 경로 유효.
 4. **스킬 로드 확인**: 삭제 후 남은 스킬 디렉토리 = sl-init/recon/recon-uis/recon-doc/aidd/dev/test/rtm/sprint/drift/context/plan/check/review/quick/analyze/change/ia/viewer.
