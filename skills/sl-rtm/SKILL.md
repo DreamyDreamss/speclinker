@@ -1,6 +1,6 @@
 ---
 name: sl-rtm
-description: RTM(요구사항 추적 매트릭스) 독립 운용 — 커버리지 재계산, 갭 리포트, Confluence 게시. GENESIS 모드에서 동작. RECON은 /sl-rtm --func 사용.
+description: RTM(FUNC 추적 매트릭스) 독립 운용 — FUNC_MAP 기반 커버리지 재계산, 갭 리포트, Confluence 게시.
 triggers:
   - /sl-rtm
 ---
@@ -15,7 +15,7 @@ triggers:
 |------|------|
 | `/sl-rtm` | RTM 커버리지 재계산 + si-graph 갱신 |
 | `/sl-rtm --func` | FUNC_MAP 커버리지 재계산 (RECON 모드) |
-| `/sl-rtm --gap` | 미연결 REQ-ID / FUNC-ID 갭 리포트 |
+| `/sl-rtm --gap` | 미연결 FUNC-ID 갭 리포트 |
 | `/sl-rtm --publish` | Confluence에 RTM/FUNC_MAP 게시 (오픈망) |
 
 ---
@@ -50,33 +50,20 @@ f.existsSync(bridge)?require('child_process').execSync('node '+JSON.stringify(br
 !python3 -c "
 import os, json, re
 env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8') if '=' in l and not l.startswith('#'))
-mode = env.get('MODE','GENESIS')
-
-if mode == 'GENESIS':
-    rtm_path = 'docs/02_추적표/RTM_v1.0.md'
-    if not os.path.exists(rtm_path):
-        print('RTM 없음 — /sl-genesis 먼저 실행하세요')
-    else:
-        content = open(rtm_path, encoding='utf-8').read()
-        req_ids = set(re.findall(r'REQ-[FC]-\d+', content))
-        done = content.count('✅')
-        print(f'RTM 커버리지: {done}/{len(req_ids)} REQ-ID ({int(done/len(req_ids)*100) if req_ids else 0}%)')
-
-elif mode == 'RECON':
-    func_map = 'docs/00_FUNC/FUNC_MAP.md'
-    if not os.path.exists(func_map):
-        print('FUNC_MAP 없음 — /sl-recon 먼저 실행하세요')
-    else:
-        content = open(func_map, encoding='utf-8').read()
-        func_ids = set(re.findall(r'FUNC-[\w]+-\d+', content))
-        cache_path = '.understand-anything/linked-func-cache.json'
-        linked = set()
-        if os.path.exists(cache_path):
-            cache = json.load(open(cache_path, encoding='utf-8'))
-            for ids in cache.values():
-                linked.update(ids)
-        covered = len(func_ids & linked)
-        print(f'FUNC 커버리지: {covered}/{len(func_ids)} FUNC-ID ({int(covered/len(func_ids)*100) if func_ids else 0}%)')
+func_map = 'docs/00_FUNC/FUNC_MAP.md'
+if not os.path.exists(func_map):
+    print('FUNC_MAP 없음 — /sl-recon 먼저 실행하세요')
+else:
+    content = open(func_map, encoding='utf-8').read()
+    func_ids = set(re.findall(r'FUNC-[\w]+-\d+', content))
+    cache_path = '.understand-anything/linked-func-cache.json'
+    linked = set()
+    if os.path.exists(cache_path):
+        cache = json.load(open(cache_path, encoding='utf-8'))
+        for ids in cache.values():
+            linked.update(ids)
+    covered = len(func_ids & linked)
+    print(f'FUNC 커버리지: {covered}/{len(func_ids)} FUNC-ID ({int(covered/len(func_ids)*100) if func_ids else 0}%)')
 "
 ```
 
@@ -126,40 +113,20 @@ else:
 import os, json, re
 
 env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8') if '=' in l and not l.startswith('#'))
-mode = env.get('MODE','GENESIS')
-
-if mode == 'GENESIS':
-    req_cache = '.understand-anything/linked-req-cache.json'
-    rtm_path  = 'docs/02_추적표/RTM_v1.0.md'
-    if not os.path.exists(req_cache) or not os.path.exists(rtm_path):
-        print('req-cache 또는 RTM 없음 — /sl-rtm 먼저 실행하세요')
-    else:
-        # linked-req-cache.json 형식: {파일경로: [REQ-ID, ...]}
-        cache = json.load(open(req_cache, encoding='utf-8'))
-        linked = set()
-        for ids in cache.values():
-            linked.update(ids)
-        rtm_ids = set(re.findall(r'REQ-[FC]-\d+', open(rtm_path, encoding='utf-8').read()))
-        unlinked = sorted(rtm_ids - linked)
-        print(f'코드 미연결 REQ-ID: {len(unlinked)}건')
-        for rid in unlinked:
-            print(f'  - {rid}')
-
-elif mode == 'RECON':
-    func_cache = '.understand-anything/linked-func-cache.json'
-    func_map   = 'docs/00_FUNC/FUNC_MAP.md'
-    if not os.path.exists(func_cache) or not os.path.exists(func_map):
-        print('func-cache 또는 FUNC_MAP 없음 — /sl-rtm --func 먼저 실행하세요')
-    else:
-        cache = json.load(open(func_cache, encoding='utf-8'))
-        linked = set()
-        for ids in cache.values():
-            linked.update(ids)
-        all_ids = set(re.findall(r'FUNC-[\w]+-\d+', open(func_map, encoding='utf-8').read()))
-        unlinked = sorted(all_ids - linked)
-        print(f'코드 미연결 FUNC-ID: {len(unlinked)}건')
-        for fid in unlinked:
-            print(f'  - {fid}')
+func_cache = '.understand-anything/linked-func-cache.json'
+func_map   = 'docs/00_FUNC/FUNC_MAP.md'
+if not os.path.exists(func_cache) or not os.path.exists(func_map):
+    print('func-cache 또는 FUNC_MAP 없음 — /sl-rtm --func 먼저 실행하세요')
+else:
+    cache = json.load(open(func_cache, encoding='utf-8'))
+    linked = set()
+    for ids in cache.values():
+        linked.update(ids)
+    all_ids = set(re.findall(r'FUNC-[\w]+-\d+', open(func_map, encoding='utf-8').read()))
+    unlinked = sorted(all_ids - linked)
+    print(f'코드 미연결 FUNC-ID: {len(unlinked)}건')
+    for fid in unlinked:
+        print(f'  - {fid}')
 "
 ```
 
