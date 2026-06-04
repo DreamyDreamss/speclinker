@@ -74,16 +74,13 @@
 | `/sl-recon-uis` | `skills/sl-recon-uis/SKILL.md` | _tmp/recon_checkpoint.json | RECON |
 | `/sl-recon-doc` | `skills/sl-recon-doc/SKILL.md` | docs/05_설계서/ INF 존재, _tmp/recon_checkpoint.json | RECON |
 | `/sl-aidd [FUNC-ID]` | `skills/sl-aidd/SKILL.md` | docs/00_FUNC/FUNC_MAP.md 존재 | AIDD (story 루프: 구현·QA·테스트 통합) |
-| `/sl-analyze` | `skills/sl-analyze/SKILL.md` | project.env, docs/05_설계서/ | DELTA |
-| `/sl-change <SR-ID>` | `skills/sl-change/SKILL.md` | project.env, docs/05_설계서/ (로컬 파일 또는 NETWORK=open) | DELTA |
+| `/sl-change <SR-ID> [--quick\|--full]` | `skills/sl-change/SKILL.md` | project.env, docs/05_설계서/ (로컬 파일 또는 NETWORK=open) | DELTA (변경 전주기·경량 통합) |
 | `/sl-rtm` | `skills/sl-rtm/SKILL.md` | docs/02_추적표/ 또는 docs/00_FUNC/ | 전체 |
 | `/sl-test` | `skills/sl-test/SKILL.md` | 06_소스코드/ 존재 | 전체 |
 | `/sl-context` | `skills/sl-context/SKILL.md` | docs/05_설계서/ INF 존재 | RECON 후 |
-| `/sl-plan [파일\|텍스트]` | `skills/sl-plan/SKILL.md` | project.env, docs/05_설계서/ | SDD |
 | `/sl-sprint [--status\|--next]` | `skills/sl-sprint/SKILL.md` | docs/00_FUNC/FUNC_MAP.md | SDD |
 | `/sl-drift [도메인] [--since Nd]` | `skills/sl-drift/SKILL.md` | git 저장소, docs/05_설계서/ INF | SDD 유지 |
 | `/sl-ia [도메인\|--update-only]` | `skills/sl-ia/SKILL.md` | docs/05_설계서/UIS/ spec.md 존재 | RECON 후 |
-| `/sl-quick "설명"` | `skills/sl-quick/SKILL.md` | docs/05_설계서/ INF, project-context.md | SDD 경량 |
 
 ## 전제 조건 체크
 
@@ -117,6 +114,7 @@
 | QA 게이트 | `agents/qa-agent.md` | Sonnet | dev와 분리된 독립 컨텍스트 3-Layer 검증 |
 | 테스트 | `agents/test-agent.md` | Sonnet | 반복 실행 태스크 |
 
+> **v3.2.0** (B1): `/sl-change` DELTA 단일 통합 — sl-plan/sl-analyze/sl-quick 흡수·삭제(analyze는 sl-change 전주기와 중복, quick은 `--quick` 분기, plan 경량리포트는 --quick 1단계). **REQ-C/RD_v 폐기 → SR 단일 추적축**(RTM이 SR→INF/SCH/UIS 직접). skills 13. RECON·AIDD 무영향.
 > **v3.1.0** (B2): `/sl-aidd`를 BMAD story 루프로 재구성 — sl-dev/sl-check/sl-review 스킬 흡수·삭제, `agents/qa-agent.md`(독립 컨텍스트 3-Layer 게이트) 신설, `scripts/build_story.py`(FUNC→STORY 마크다운) 신설, FUNC별 story 파일(docs/00_FUNC/stories/) + 상태머신(Draft→Approved→InProgress→Review→Done) + 사람 승인 3지점. dev/test 에이전트는 재사용(루프가 서브 호출). func_context_bundle mode·ensure_ascii 잔존버그 제거. 추적 축 FUNC-ID 불변.
 > **v3.0.0**: SM 전용 전환 — GENESIS 모드·REQ-ID/RD·MODE 개념 전면 제거. 추적 축 = FUNC-ID(RECON) + SR(DELTA). sl-genesis/RD_template/미참조 legacy 스크립트 삭제, 공유 에이전트(rd/srs/spec/sad/rtm) RECON 경로만 보존, 항상 linked_func, ddd-* 크로스링크 FUNC-ID만. SI(신규구축)용은 별도 플러그인. plugin.json description SM 중심으로 갱신.
 > v2.60: 뷰어 이름 **SpecLens** 명명 — index.html 타이틀·docsify-sl.js 로고/대시보드·/sl-viewer 스킬·README 반영. (플러그인명 Speclinker는 유지, 뷰어 정체성만 SpecLens)
@@ -176,10 +174,10 @@
 |------|-----------|
 | 기존 코드 (RECON + AIDD) | sl-init → sl-recon → **sl-aidd** → sl-test |
 | 기존 코드 (RECON 분석만) | sl-init(스캔+카탈로그) → sl-recon(도메인 선택) → sl-recon-uis(goto 캡처) → 납품 |
-| 변경·유지보수 (Jira) | sl-analyze → sl-change → **sl-aidd** |
+| 변경·유지보수 (Jira) | sl-change &lt;SR&gt; → **sl-aidd** |
 | 변경·유지보수 (로컬) | sl-change --new SR-001 → (요구사항 작성) → sl-change SR-001 → **sl-aidd** |
-| **SDD 전체 파이프라인** | sl-recon → **sl-ia** → **sl-context** → sl-sprint → sl-plan → sl-analyze → sl-change → **sl-aidd** (story 승인→구현→QA→테스트) |
-| SDD 소규모 변경 | **sl-quick** "설명" (SR 없이 경량 경로) |
+| **SDD 전체 파이프라인** | sl-recon → **sl-ia** → **sl-context** → sl-sprint → sl-change → **sl-aidd** (story 승인→구현→QA→테스트) |
+| SDD 소규모 변경 | **sl-change --quick** "설명" (SR 없이 경량 경로) |
 | SDD 드리프트 점검 | **sl-drift** (주기적 스펙-코드 정합성 감지) |
 
 ### AIDD 핵심 루프 (sl-aidd 내부)
