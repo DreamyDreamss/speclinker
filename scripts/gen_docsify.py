@@ -142,6 +142,63 @@ def scan_uis(spec_root: str) -> list:
     return uis
 
 
+def _iter_sch_dirs(spec_root: str):
+    """SCH 파일 디렉터리 iterator. 두 구조 지원:
+    A) docs/05_설계서/SCH/{domain}/   B) docs/05_설계서/{domain}/SCH/
+    yields (domain_name, dir_path)"""
+    design_root = os.path.join(spec_root, 'docs', '05_설계서')
+    if not os.path.isdir(design_root):
+        return
+    sch_root_a = os.path.join(design_root, 'SCH')
+    if os.path.isdir(sch_root_a):
+        for d in sorted(os.listdir(sch_root_a)):
+            p = os.path.join(sch_root_a, d)
+            if os.path.isdir(p):
+                yield d, p
+        return
+    for domain in sorted(os.listdir(design_root)):
+        sch_sub = os.path.join(design_root, domain, 'SCH')
+        if os.path.isdir(sch_sub):
+            yield domain, sch_sub
+
+
+def _parse_inf_list(fm_block: str, fm: dict) -> list:
+    """SCH frontmatter의 inf: 값을 리스트로. 인라인([a, b])·블록(- a) 모두 지원."""
+    raw = fm.get('inf', '').strip()
+    if raw.startswith('[') and raw.endswith(']'):
+        return [x.strip() for x in raw[1:-1].split(',') if x.strip()]
+    block = _extract_list_field(fm_block, 'inf')
+    if block:
+        return block
+    return [x.strip() for x in raw.split(',') if x.strip()] if raw else []
+
+
+def scan_schs(spec_root: str) -> list:
+    """docs/05_설계서 하위 SCH-*.md 전수 스캔 (두 구조 지원)."""
+    schs = []
+    for domain_dir, domain_path in _iter_sch_dirs(spec_root):
+        for fname in sorted(os.listdir(domain_path)):
+            if not (fname.endswith('.md') and fname.startswith('SCH-')):
+                continue
+            fpath = os.path.join(domain_path, fname)
+            try:
+                with open(fpath, encoding='utf-8', errors='replace') as f:
+                    content = f.read()
+            except OSError:
+                continue
+            fm = parse_frontmatter(content)
+            fb = _get_fm_block(content)
+            schs.append({
+                'id': fm.get('sch-id', fname.replace('.md', '')),
+                'table': fm.get('table', ''),
+                'domain': fm.get('domain', domain_dir),
+                'domain_code': fm.get('domain-code', ''),
+                'inf': _parse_inf_list(fb, fm),
+                'file': os.path.relpath(fpath, spec_root).replace('\\', '/'),
+            })
+    return schs
+
+
 def load_sprint_status(spec_root: str) -> dict:
     """sprint-status.yaml에서 도메인별 done/total 집계."""
     path = os.path.join(spec_root, '.speclinker', 'sprint-status.yaml')
@@ -189,6 +246,7 @@ def generate_index(spec_root: str, output_path: str) -> dict:
     """전체 스캔 실행 → spec_index.json 저장 → index dict 반환."""
     infs = scan_infs(spec_root)
     uis = scan_uis(spec_root)
+    schs = scan_schs(spec_root)
     sprint = load_sprint_status(spec_root)
 
     domains: dict = {}
@@ -202,6 +260,11 @@ def generate_index(spec_root: str, output_path: str) -> dict:
         if d:
             domains.setdefault(d, {'inf': 0, 'uis': 0, 'sch': 0, 'bat': 0, 'tbd_total': 0})
             domains[d]['uis'] += 1
+    for sch in schs:
+        d = sch['domain']
+        if d:
+            domains.setdefault(d, {'inf': 0, 'uis': 0, 'sch': 0, 'bat': 0, 'tbd_total': 0})
+            domains[d]['sch'] += 1
     for d, s in sprint.items():
         if d in domains:
             domains[d]['sprint_done'] = s['done']
@@ -209,10 +272,11 @@ def generate_index(spec_root: str, output_path: str) -> dict:
 
     index = {
         'generated_at': datetime.now().isoformat(timespec='seconds'),
-        'totals': {'inf': len(infs), 'uis': len(uis), 'sch': 0, 'bat': 0},
+        'totals': {'inf': len(infs), 'uis': len(uis), 'sch': len(schs), 'bat': 0},
         'domains': domains,
         'infs': infs,
         'uis': uis,
+        'schs': schs,
         'ia_tree': build_ia_tree(uis),
     }
 
@@ -221,7 +285,7 @@ def generate_index(spec_root: str, output_path: str) -> dict:
         json.dump(index, f, ensure_ascii=False, indent=2)
 
     print(f'[OK] spec_index.json 생성 완료')
-    print(f'     INF {len(infs)}개 | UIS {len(uis)}개 | 도메인 {len(domains)}개')
+    print(f'     INF {len(infs)}개 | UIS {len(uis)}개 | SCH {len(schs)}개 | 도메인 {len(domains)}개')
     print(f'     → {output_path}')
     return index
 
