@@ -1374,6 +1374,6 @@ json.dump(cp, open('_tmp/recon_checkpoint.json','w'), ensure_ascii=False, indent
 cap_map = json.load(open('_tmp/uis_capture_map.json', encoding='utf-8')) if os.path.exists('_tmp/uis_capture_map.json') else []
 plan = json.load(open('docs/05_설계서/_domain_plan.json', encoding='utf-8')) if os.path.exists('docs/05_설계서/_domain_plan.json') else {}
 print('완료: 화면 ' + str(len(cap_map)) + '개 / 도메인 ' + str(len(plan.get('domains',[]))) + '개 / spec.md 생성')
-print('다음 커맨드: /sl-recon-inf')
+print('다음 커맨드: /sl-recon-doc')
 "
 ```

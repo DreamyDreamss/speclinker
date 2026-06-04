@@ -14,8 +14,7 @@ SI/ITO 개발 전주기 자동화 플러그인 — 요구사항 정의부터 코
 │   ├── sl-genesis           /sl-genesis          인터뷰→설계서 순방향 생성
 │   ├── sl-recon             /sl-recon            기존 코드 역분석 (소스 스캔 + INF/SCH 생성)
 │   ├── sl-recon-uis         /sl-recon-uis        RECON Phase-2: 화면 캡처·UIS 설계서
-│   ├── sl-recon-inf         /sl-recon-inf        RECON Phase-3: INF/SCH 정제 (UIS hints 반영)
-│   ├── sl-recon-doc         /sl-recon-doc        RECON Phase-4: 문서·RTM 생성
+│   ├── sl-recon-doc         /sl-recon-doc        RECON Phase-3: 문서·RTM 생성
 │   ├── sl-aidd              /sl-aidd             FUNC 단위 AI 개발 파이프라인
 │   ├── sl-dev               /sl-dev              코드·단위테스트 자동 생성
 │   ├── sl-test              /sl-test             TC 작성·실행·TR 생성
@@ -141,8 +140,7 @@ Claude Code에서 아무 프로젝트 디렉토리를 열고:
 /sl-init   → 프로젝트 초기화
 /sl-recon      → 소스 스캔 + 도메인 확정 + INF/SCH 생성
 /sl-recon-uis  → 화면 캡처 + UIS 설계서
-/sl-recon-inf  → INF/SCH 정제 (UIS hints 반영)
-/sl-recon-doc  → FUNC/SRS/RTM 생성
+/sl-recon-doc  → FUNC/SRS/RTM/IA 생성
 /sl-aidd   → 누락 기능 추가 개발
 ```
 

@@ -30,6 +30,39 @@
 > **참고 실측**: nkshop-bos-admin = Java Spring(`*Controller.java`, `package` 존재),
 > KDI = Next.js(`src/app/{도메인}/page.tsx`, `package` 없음). 두 구조 모두 도메인 추출이 동작해야 한다.
 
+## ⚠️ 참조 문서 동기화 (MUST)
+
+> **신규 기능 추가·프로세스 변경·파이프라인 STEP 재배치·파일/경로 구조 변경 시, 아래 "정본 참조 문서"를
+> 같은 변경 안에서 반드시 함께 갱신한다.** 코드/스킬만 바꾸고 참조 문서를 방치하면 문서가 stale 되어
+> (특히 다음 세션의) 분석을 오도한다. 위반은 결함으로 간주한다. — 실제 사고 사례: `RECON_PIPELINE.md`가
+> v2.19에 멈춰 있어 "recon은 INF를 안 만든다"는 오분석을 유발했고, legacy `sl-recon-inf`를 현행으로 착각함.
+
+### 정본 참조 문서 레지스트리
+
+| 문서 | 무엇의 정본인가 | 언제 갱신 |
+|------|----------------|----------|
+| `docs/RECON_PIPELINE.md` | RECON 3-Phase 커맨드별 STEP·에이전트·산출물 흐름 | recon 계열 STEP/에이전트/산출경로 변경 시 |
+| `CLAUDE.md` (이 파일) | 커맨드 라우팅표 · 서브에이전트 모델표 · 파이프라인 · **버전 노트** | 스킬/에이전트/라우팅/모델 변경 시 |
+| `scripts/README.md` | 스크립트 목록 · 사용 STEP · 스크립트 간 의존 흐름 | 스크립트 추가/삭제/호출위치 변경 시 |
+| `README.md` | 스킬 트리 · 파이프라인 개요 | 스킬 추가/삭제 시 |
+| `docs/SETUP_GUIDE.md` | 사용자 실행 순서(Phase) | Phase 구성 변경 시 |
+| `templates/*.md` | 산출물 형식의 정본 | 산출물 구조 변경 시 |
+| 해당 `skills/*/SKILL.md`, `agents/*.md` | 그 커맨드/에이전트의 실제 동작 | 동작 변경 시 (1차 진실의 원천) |
+
+### 변경 완료 전 체크리스트 (DoD)
+
+```
+[ ] 동작을 바꾼 SKILL/agent/script가 1차 진실의 원천 — 여기부터 정확히 수정했는가?
+[ ] 위 레지스트리에서 영향 문서를 모두 골라 같은 변경에 포함했는가?
+[ ] STEP 번호·커맨드 순서·산출물 경로를 바꿨다면 RECON_PIPELINE.md를 현행화했는가?
+[ ] 스킬/에이전트를 삭제했다면 라우팅표·파이프라인·README·다른 스킬의 "다음 커맨드"·전제조건
+    문구에서 그 참조를 전부 제거했는가? (grep로 잔존 0 확인)
+[ ] CLAUDE.md 버전 노트(> vX.Y) 1줄을 추가했는가? plugin.json version도 bump했는가?
+[ ] 산출물 형식을 바꿨다면 templates/ 정본도 같이 바꿨는가?
+```
+
+> **자기검증 권장:** 변경 후 `grep -rn "<삭제/변경 키워드>" skills agents scripts docs templates`로 잔존 참조 0을 확인.
+
 ## 커맨드 라우팅 규칙
 
 | 사용자 입력 | 라우팅 스킬 | 전제 조건 | 모드 |
@@ -88,6 +121,7 @@
 | 코드 생성 | `agents/dev-agent.md` | Sonnet | 반복 실행 태스크 |
 | 테스트 | `agents/test-agent.md` | Sonnet | 반복 실행 태스크 |
 
+> v2.57: RECON 문서 현행화 + 참조문서 동기화 강제. legacy `/sl-recon-inf` 삭제(INF·SCH 생성은 v2.53 도메인선택형 리팩토링으로 이미 `/sl-recon` STEP 4-3/5에 통합됨). `link_inf_sch_new.py`를 `/sl-recon` STEP 5-1로 재배선(INF→SCH 링크 패치 누락 복구). sl-recon STEP 5 SCH 프롬프트를 개별파일 구조로 정정. RECON_PIPELINE.md/README/SETUP_GUIDE/scripts-README의 stale recon-inf·DB_Schema_{domain} 참조 일괄 제거. CLAUDE.md에 "참조 문서 동기화(MUST)" 레지스트리+DoD 신설.
 > v2.56: SCH 명세 테이블당 개별파일 구조 + 뷰어 경로/링크 라우팅 수정. SCH가 INF와 대칭(`{도메인}/SCH/SCH-{CODE}-NNN.md` 개별파일 + 슬림 `DB_{도메인}.md`(도메인 ERD+목록) + `DB_Schema.md` 파일직링크 색인). 앵커(#SCH) 전면 폐기 → INF↔SCH 정확 네비게이션. gen_docsify scan_schs(spec_index.schs[]) + docsify-sl.js goToId SCH해소·SCH탭 + link_inf_sch/merge_index SCH/스캔. 뷰어는 프로젝트 루트 서빙 + 동적 basePath + 자산 자동복사(gen_docsify). 3NF 검증결과/통과여부 산출물에서 제외.
 > v2.55: INF 생성 병렬화 개선 — dispatch_inf_gen.py domain_lock 제거(INF-ID 사전배정 신뢰 → 단일 도메인도 병렬 3) + 타임아웃 600→1800초 + stagger 누적버그 수정(간격 방식). ddd-api-agent infIdStart 절대준수(폴더스캔 채번 금지).
 > v2.54: 뷰어 사용자 가이드 추가 — docsify-sl.js renderGuide(사이드바 📖 가이드 → 빠른시작 파이프라인·전체 명령어·동작방식·FUNC-ID 체이닝). spec_index 없어도 접근 가능.

@@ -1,6 +1,6 @@
 ---
 name: sl-recon-doc
-description: RECON Phase-4 — FUNC/SRS/RTM/IA맵 생성 (STEP 9~10). /sl-recon-inf 완료 후 실행.
+description: RECON Phase-3 — FUNC/SRS/RTM/IA맵 생성 (STEP 9~11). /sl-recon-uis 완료 후 실행.
 triggers:
   - /sl-recon-doc
 ---
@@ -21,7 +21,7 @@ if not os.path.exists(inventory):
     errors.append('[FAIL] screen_inventory.json 없음 — /sl-recon-uis STEP 6-1 확인')
 inf_files = glob.glob('docs/05_설계서/*/INF/INF-*.md')
 if not inf_files:
-    errors.append('[FAIL] INF 파일 없음 — /sl-recon-inf 먼저 실행')
+    errors.append('[FAIL] INF 파일 없음 — /sl-recon 먼저 실행 (STEP 4-3에서 INF 생성)')
 if errors:
     for e in errors: print(e)
     sys.exit(1)

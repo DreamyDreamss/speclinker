@@ -211,13 +211,12 @@ Chrome 창이 열리면:
 /sl-recon
 ```
 
-4개 Phase로 순서대로 실행:
+3개 Phase로 순서대로 실행:
 
 ```
-/sl-recon       (소스 스캔, 도메인 확정, INF/SCH 초기 생성)
+/sl-recon       (소스 스캔, 도메인 확정, INF·SCH 생성)
 /sl-recon-uis   (화면 캡처, UIS 설계서)
-/sl-recon-inf   (INF/SCH 정제 — UIS API hints 반영)
-/sl-recon-doc   (FUNC/SRS/RTM 생성)
+/sl-recon-doc   (FUNC/SRS/RTM/IA 생성)
 ```
 
 ### GENESIS 모드 (신규 프로젝트)
