@@ -17,7 +17,6 @@ SI/ITO 개발 전주기 자동화 플러그인 — 요구사항 정의부터 코
 │   ├── sl-aidd              /sl-aidd             FUNC=story 단위 AIDD 루프 (story→승인→구현→QA→테스트)
 │   ├── sl-test              /sl-test             TC 작성·실행·TR 생성
 │   ├── sl-rtm               /sl-rtm              RTM 커버리지 재계산·게시
-│   ├── sl-analyze           /sl-analyze          변경영향분석서(CIA) 작성
 │   ├── sl-change            /sl-change           SR 전주기 처리 (로컬 파일·Jira)
 │   └── sl-viewer            /sl-viewer           SpecLens 산출물 웹 뷰어
 │
@@ -144,8 +143,8 @@ Claude Code에서 아무 프로젝트 디렉토리를 열고:
 ### 유지보수·변경 (SR 접수)
 
 ```
-/sl-analyze <SR>  → 변경영향분석서(CIA) 작성
-/sl-change <SR>   → AS-IS 조회 → TO-BE 설계 → 코드 생성 → RTM 갱신
+/sl-change <SR>        → CIA(영향분석) → AS-IS 조회 → TO-BE 설계 → 스펙동기화 → RTM 갱신
+/sl-change --quick "…" → SR 없이 소규모 경량 변경
 ```
 
 ---

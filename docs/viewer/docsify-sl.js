@@ -119,10 +119,10 @@
       steps: ['sl-init', 'sl-recon', 'sl-recon-uis', '납품'],
       desc: '소스코드를 역분석해 설계서 추출' },
     { icon: '🔧', title: '변경·유지보수 (DELTA)',
-      steps: ['sl-analyze', 'sl-change', 'sl-aidd'],
+      steps: ['sl-change', 'sl-aidd'],
       desc: '변경요청(SR) 영향분석→스펙수정→코드' },
     { icon: '⚙️', title: 'SDD 전체 파이프라인',
-      steps: ['sl-recon', 'sl-ia', 'sl-context', 'sl-plan', 'sl-aidd'],
+      steps: ['sl-recon', 'sl-ia', 'sl-context', 'sl-change', 'sl-aidd'],
       desc: '스펙 주도 개발(Spec-Driven) 풀 사이클' },
   ];
 
@@ -141,14 +141,12 @@
     ]},
     { name: 'SDD 파이프라인', color: '#a371f7', cmds: [
       ['/sl-context', 'project-context.md 생성 — 프레임워크·공통패턴 학습', 'INF 존재'],
-      ['/sl-plan [설명]', '변경 영향분석 초안 — 키워드→스펙 매핑→규모 분류', 'docs/05_설계서/'],
       ['/sl-sprint', '스프린트 대시보드 — FUNC 상태·진행률 관리', 'FUNC_MAP.md'],
       ['/sl-drift', '스펙-코드 드리프트 감지 — 소스 변경 vs INF 미갱신', 'git, INF'],
-      ['/sl-quick "설명"', '소규모 변경 경량 경로 (SR 없이 INF≤2 인라인 처리)', 'INF, context'],
     ]},
     { name: '변경 관리 — DELTA', color: 'var(--status-review)', cmds: [
-      ['/sl-analyze', '변경 영향분석 (CIA) — 영향 INF·SCH·UIS 식별', 'docs/05_설계서/'],
-      ['/sl-change <SR-ID>', '변경명세 생성 → before/after diff → 승인 토큰', 'docs/05_설계서/'],
+      ['/sl-change <SR-ID>', '변경 전주기(--full) — CIA→TO-BE diff→스펙동기화→RTM→승인 토큰', 'docs/05_설계서/'],
+      ['/sl-change --quick "설명"', '소규모 경량 변경 (SR 없이 INF≤2 인라인 처리)', 'INF, context'],
     ]},
     { name: '개발 · 테스트 · 추적', color: '#3fb950', cmds: [
       ['/sl-test', '테스트 케이스 작성 + 실행 → 결과 보고서', '06_소스코드/'],
