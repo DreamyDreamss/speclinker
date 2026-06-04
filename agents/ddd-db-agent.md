@@ -36,6 +36,9 @@ INF 생성 단계에서 `resolve_call_chain.py`가 미리 만들어 둔 **sch_dr
 
 - **채울 것**: `### 코드값`(코드성 컬럼 `_CD/_TP/_STS/_YN/_FL/_GB/_DIV` 값·의미 표), `### 비즈니스 주의사항`,
   컬럼표 '설명' 칸의 `<!-- LLM-TODO -->`.
+- **코드값은 *사실로 역인용*(요약의 요약 금지)** — 값·의미를 ① 공통코드 테이블(JT_CODE/CMM_CODE 등) 조회,
+  ② 소스 if/switch 분기, ③ 참조 INF 응답 예시에서 **사실로** 가져오고 **출처(`테이블` 또는 `file:line`)를 각 행에 표기**한다.
+  근거를 못 찾은 값은 임의 의미부여 금지 — **`[미확인]`** 으로 명시한다. (예: `| 03 | 환불완료 | JT_CODE.REFUND_STS | |`)
 - **절대 수정 금지 (읽기 전용)**: frontmatter(sch-id/table/domain/domain-code/inf), DDL·컬럼 타입·NULL·기본값,
   `### 인덱스`, `### 관계(FK)`, `### mini-ERD`, 상단 크로스링크 블록.
 - **근거**: 해당 SCH의 `inf:` frontmatter가 가리키는 INF 파일 `## 비즈니스 규칙/트랜잭션 순서/사이드이펙트`
