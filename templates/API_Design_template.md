@@ -22,14 +22,14 @@ linked_docs:
 ## INF 색인 (parseSISpecs 파싱 대상)
 
 > **파싱 규약**: `si-spec-parser`가 이 표를 읽어 `inf` 노드와 `REQ→INF traces_to` 엣지를 생성한다.  
-> 3열 형식 고정: `| INF-XXX | HTTP메소드 경로 — 기능명 | REQ-F-XXX |`  
+> 3열 형식 고정: `| INF-XXX | HTTP메소드 경로 — 기능명 | FUNC-XXX |`  
 > **Obsidian 링크**: 2열을 `[텍스트](./도메인/API_도메인.md#INF-XXX)` 형식으로 작성
 
-| INF-ID  | HTTP 메소드·경로·기능명 | REQ-ID |
+| INF-ID  | HTTP 메소드·경로·기능명 | FUNC-ID |
 |---------|----------------------|--------|
-| INF-001 | [POST /auth/login — 로그인](./auth/API_auth.md#INF-001) | REQ-F-001 |
-| INF-002 | [DELETE /auth/sessions — 로그아웃](./auth/API_auth.md#INF-002) | REQ-F-001 |
-| INF-003 | [GET /users/{id} — 사용자 조회](./user/API_user.md#INF-003) | REQ-F-002 |
+| INF-001 | [POST /auth/login — 로그인](./auth/API_auth.md#INF-001) | FUNC-001 |
+| INF-002 | [DELETE /auth/sessions — 로그아웃](./auth/API_auth.md#INF-002) | FUNC-001 |
+| INF-003 | [GET /users/{id} — 사용자 조회](./user/API_user.md#INF-003) | FUNC-002 |
 
 ---
 
@@ -73,4 +73,4 @@ linked_docs:
 
 ---
 
-> **연결 문서**: [RD](../01_요구사항정의서/RD_v1.0.md) | [SRS](../03_기능명세서/SRS_v1.0.md) | [DB 스키마](./DB_Schema.md) | [UI 명세](./UI_Spec_v1.0.md) | [RTM](../02_추적표/RTM_v1.0.md) | [SAD](../04_아키텍처설계서/SAD_v1.0.md)
+> **연결 문서**: [FUNC](../00_FUNC/FUNC_v1.0.md) | [SRS](../03_기능명세서/SRS_v1.0.md) | [DB 스키마](./DB_Schema.md) | [UI 명세](./UI_Spec_v1.0.md) | [RTM](../02_추적표/RTM_v1.0.md) | [SAD](../04_아키텍처설계서/SAD_v1.0.md)

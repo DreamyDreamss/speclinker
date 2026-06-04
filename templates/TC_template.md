@@ -14,7 +14,7 @@ linked_docs:
 
 # 테스트케이스 명세서 (Test Case Specification)
 
-> **문서 목적**: REQ-ID별 테스트케이스를 정의하여 QA·개발자가 검증 기준으로 활용한다.
+> **문서 목적**: FUNC-ID별 테스트케이스를 정의하여 QA·개발자가 검증 기준으로 활용한다.
 
 ---
 
@@ -32,10 +32,10 @@ linked_docs:
 
 > TC-ID 규칙: `TC-F-{세자리 숫자}` (기능), `TC-NF-{세자리 숫자}` (비기능)
 
-| TC-ID | 테스트명 | REQ-ID | 유형 | 우선순위 |
+| TC-ID | 테스트명 | FUNC-ID | 유형 | 우선순위 |
 |-------|---------|--------|------|---------|
-| TC-F-001 | | REQ-F-001 | 정상 | High |
-| TC-F-002 | | REQ-F-001 | 예외 | High |
+| TC-F-001 | | FUNC-001 | 정상 | High |
+| TC-F-002 | | FUNC-001 | 예외 | High |
 
 ---
 
@@ -48,7 +48,7 @@ linked_docs:
 | 항목 | 내용 |
 |------|------|
 | TC-ID | TC-F-001 |
-| 연결 REQ-ID | REQ-F-001 |
+| 연결 FUNC-ID | FUNC-001 |
 | 연결 SRS-ID | SRS-F-001 |
 | 테스트 유형 | 정상 / 예외 / 경계값 |
 | 우선순위 | High / Medium / Low |

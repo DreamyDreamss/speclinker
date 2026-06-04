@@ -7,7 +7,6 @@ created: YYYY-MM-DD
 updated: YYYY-MM-DD
 project: {프로젝트명}
 linked_docs:
-  - RD-001
   - SRS-001
   - RTM-001
 ---
@@ -22,14 +21,14 @@ linked_docs:
 ## 화면 목록 (parseSISpecs 파싱 대상)
 
 > **파싱 규약**: `si-spec-parser`가 이 표를 읽어 `uis` 노드와 `REQ→UIS traces_to` 엣지를 생성한다.  
-> 3열 형식 고정: `| UIS-F-XXX | 화면명 | REQ-F-XXX |`  
+> 3열 형식 고정: `| UIS-F-XXX | 화면명 | FUNC-XXX |`  
 > **Obsidian 링크**: 2열을 `[화면명](./도메인/UI_도메인.md#UIS-F-XXX)` 형식으로 작성
 
-| UIS-ID    | 화면명 | REQ-ID |
+| UIS-ID    | 화면명 | FUNC-ID |
 |-----------|--------|--------|
-| UIS-F-001 | [로그인](./auth/UI_auth.md#UIS-F-001) | REQ-F-001 |
-| UIS-F-002 | [대시보드 메인](./dashboard/UI_dashboard.md#UIS-F-002) | REQ-F-002 |
-| UIS-F-003 | [사용자 목록](./user/UI_user.md#UIS-F-003) | REQ-F-003 |
+| UIS-F-001 | [로그인](./auth/UI_auth.md#UIS-F-001) | FUNC-001 |
+| UIS-F-002 | [대시보드 메인](./dashboard/UI_dashboard.md#UIS-F-002) | FUNC-002 |
+| UIS-F-003 | [사용자 목록](./user/UI_user.md#UIS-F-003) | FUNC-003 |
 
 ---
 
@@ -52,7 +51,7 @@ linked_docs:
 
 ---
 
-> **연결 문서**: [RD](../01_요구사항정의서/RD_v1.0.md) | [SRS](../03_기능명세서/SRS_v1.0.md) | [API 설계](./API_Design.md) | [DB 스키마](./DB_Schema.md) | [RTM](../02_추적표/RTM_v1.0.md)
+> **연결 문서**: [FUNC](../00_FUNC/FUNC_v1.0.md) | [SRS](../03_기능명세서/SRS_v1.0.md) | [API 설계](./API_Design.md) | [DB 스키마](./DB_Schema.md) | [RTM](../02_추적표/RTM_v1.0.md)
 
 ---
 
@@ -79,7 +78,7 @@ linked_docs:
 
 ## UIS-F-001: 로그인 화면
 
-> **REQ-F:** [REQ-F-001](../../01_요구사항정의서/RD_v1.0.md#REQ-F-001) | **SRS-F:** [SRS-F-001](../../03_기능명세서/SRS_v1.0.md#SRS-F-001) | **API:** [INF-001](./API_{도메인}.md#INF-001), [INF-003](./API_{도메인}.md#INF-003) | **DB:** [SCH-001](./SCH/SCH-001.md) | **RTM:** [↗](../../02_추적표/RTM_v1.0.md)
+> **FUNC-ID:** [FUNC-001](../../00_FUNC/FUNC_v1.0.md#FUNC-001) | **SRS-F:** [SRS-F-001](../../03_기능명세서/SRS_v1.0.md#SRS-F-001) | **API:** [INF-001](./API_{도메인}.md#INF-001), [INF-003](./API_{도메인}.md#INF-003) | **DB:** [SCH-001](./SCH/SCH-001.md) | **RTM:** [↗](../../02_추적표/RTM_v1.0.md)
 
 **근거 소스:** `pages/auth/login.tsx`, `components/AuthForm.tsx`
 
@@ -218,7 +217,7 @@ flowchart LR
 
 ## UIS-F-002: {화면명}
 
-> **REQ-F:** [REQ-F-XXX](../../01_요구사항정의서/RD_v1.0.md#REQ-F-XXX) | **SRS-F:** [SRS-F-XXX](../../03_기능명세서/SRS_v1.0.md#SRS-F-XXX) | **API:** [INF-XXX](./API_{도메인}.md#INF-XXX) | **DB:** [SCH-XXX](./SCH/SCH-XXX.md) | **RTM:** [↗](../../02_추적표/RTM_v1.0.md)
+> **FUNC-ID:** [FUNC-XXX](../../00_FUNC/FUNC_v1.0.md#FUNC-XXX) | **SRS-F:** [SRS-F-XXX](../../03_기능명세서/SRS_v1.0.md#SRS-F-XXX) | **API:** [INF-XXX](./API_{도메인}.md#INF-XXX) | **DB:** [SCH-XXX](./SCH/SCH-XXX.md) | **RTM:** [↗](../../02_추적표/RTM_v1.0.md)
 
 **근거 소스:** `{소스 파일 경로}`
 

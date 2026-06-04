@@ -42,7 +42,7 @@
 
 | 에이전트 | 활용 도구 | 용도 |
 |--------|---------|------|
-| `rd-agent` | `jira_search`, `jira_get_issue` | SR 이슈에서 REQ-ID 추출 |
+| `rd-agent` | `jira_search`, `jira_get_issue` | SR 이슈에서 변경 요구 추출 |
 | `srs-agent` | `jira_get_issue`, `confluence_get_page` | AS-IS 스펙 문서 참조 |
 | `rtm-agent` | `jira_update_issue`, `jira_add_comment` | RTM 결과를 지라 이슈에 반영 |
 | `dev-agent` | `jira_transition_issue`, `jira_add_comment` | 개발 완료 상태 전환 |

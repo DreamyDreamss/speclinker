@@ -84,8 +84,7 @@ inf: [INF-{CODE}-NNN]
 
 # SCH-{CODE}-001: users
 
-> GENESIS: **REQ-F:** [REQ-F-001](../../../01_요구사항정의서/RD_v1.0.md#REQ-F-001) | **SRS-F:** [SRS-F-001](../../../03_기능명세서/SRS_v1.0.md#SRS-F-001) | **API:** [INF-{CODE}-001](../INF/INF-{CODE}-001.md) | **화면:** [UIS-{CODE}-001](../UI/UIS-{CODE}-001_화면명/spec.md)
-> RECON: **FUNC-ID:** [FUNC-{도메인}-001](../../../00_FUNC/FUNC_v1.0.md) | **SRS-F:** [TBD] | **API:** [INF-{CODE}-001](../INF/INF-{CODE}-001.md)
+> **FUNC-ID:** [FUNC-{도메인}-001](../../../00_FUNC/FUNC_v1.0.md) | **SRS-F:** [TBD] | **API:** [INF-{CODE}-001](../INF/INF-{CODE}-001.md) | **화면:** [UIS-{CODE}-001](../UI/UIS-{CODE}-001_화면명/spec.md)
 
 **근거 소스:** `{모델/ORM 파일:라인}`
 
@@ -139,4 +138,4 @@ inf: [INF-{CODE}-NNN]
 
 ---
 
-> **연결 문서**: [RD](../01_요구사항정의서/RD_v1.0.md) | [SRS](../03_기능명세서/SRS_v1.0.md) | [API 색인](./API_Design.md) | [UI 명세](./UI_Spec_v1.0.md) | [RTM](../02_추적표/RTM_v1.0.md) | [SAD](../04_아키텍처설계서/SAD_v1.0.md)
+> **연결 문서**: [FUNC](../00_FUNC/FUNC_v1.0.md) | [SRS](../03_기능명세서/SRS_v1.0.md) | [API 색인](./API_Design.md) | [UI 명세](./UI_Spec_v1.0.md) | [RTM](../02_추적표/RTM_v1.0.md) | [SAD](../04_아키텍처설계서/SAD_v1.0.md)

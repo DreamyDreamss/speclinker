@@ -8,15 +8,14 @@ updated: YYYY-MM-DD
 project: {프로젝트명}
 author: Claude (자동 생성)
 linked_docs:
-  - RD-001
   - SRS-001
 ---
 
 # 요구사항 추적 매트릭스 (Requirements Traceability Matrix)
 
-> **문서 목적**: REQ-ID를 공통 키로 설계→코드→테스트 전 체인을 추적한다.  
+> **문서 목적**: FUNC-ID를 공통 키로 설계→코드→테스트 전 체인을 추적한다.  
 > **DELTA 활용**: `domain` 컬럼을 기준으로 sl-change가 관련 ID만 선택적으로 로드한다.  
-> 스펙 체인: `SR → REQ → SRS → UIS → INF → SCH ← TC ← 코드`
+> 스펙 체인: `SR → FUNC → SRS → UIS → INF → SCH ← TC ← 코드`
 
 ---
 
@@ -38,10 +37,10 @@ linked_docs:
 > `domain` 컬럼 — sl-change Step 5에서 RTM을 인덱스로 사용할 때 필터 기준.  
 > 도메인명은 `docs/05_설계서/{도메인}/` 폴더명과 일치해야 한다.
 
-| domain | REQ-ID | 요구사항명 | SRS-ID | UIS-ID | INF-ID | SCH-ID | TC-ID | SR-ID | 상태 |
+| domain | FUNC-ID | 요구사항명 | SRS-ID | UIS-ID | INF-ID | SCH-ID | TC-ID | SR-ID | 상태 |
 |--------|--------|-----------|--------|--------|--------|--------|-------|-------|------|
-| auth | [REQ-F-001](../01_요구사항정의서/RD_v1.0.md#REQ-F-001) | | SRS-F-001 | [UIS-F-001](../05_설계서/auth/UI_auth.md#UIS-F-001) | [INF-001](../05_설계서/auth/API_auth.md#INF-001) | [SCH-001](../05_설계서/auth/SCH/SCH-001.md) | TC-F-001 | | ⬜ |
-| order | [REQ-F-002](../01_요구사항정의서/RD_v1.0.md#REQ-F-002) | | SRS-F-002 | [UIS-F-002](../05_설계서/order/UI_order.md#UIS-F-002) | [INF-003](../05_설계서/order/API_order.md#INF-003) | | | | ⬜ |
+| auth | [FUNC-001](../00_FUNC/FUNC_v1.0.md#FUNC-001) | | SRS-F-001 | [UIS-F-001](../05_설계서/auth/UI_auth.md#UIS-F-001) | [INF-001](../05_설계서/auth/API_auth.md#INF-001) | [SCH-001](../05_설계서/auth/SCH/SCH-001.md) | TC-F-001 | | ⬜ |
+| order | [FUNC-002](../00_FUNC/FUNC_v1.0.md#FUNC-002) | | SRS-F-002 | [UIS-F-002](../05_설계서/order/UI_order.md#UIS-F-002) | [INF-003](../05_설계서/order/API_order.md#INF-003) | | | | ⬜ |
 
 > 파일 링크 규칙:
 > - UIS/INF/SCH는 도메인 파일의 `## ID` 앵커로 직접 연결
@@ -51,19 +50,19 @@ linked_docs:
 
 ## 3. 비기능 요구사항 추적
 
-| domain | REQ-ID | 요구사항명 | SRS-ID | INF-ID | 설계 문서 | 측정 방법 | TC-ID | 상태 |
+| domain | FUNC-ID | 요구사항명 | SRS-ID | INF-ID | 설계 문서 | 측정 방법 | TC-ID | 상태 |
 |--------|--------|-----------|--------|--------|----------|----------|-------|------|
-| infra | REQ-NF-001 | | SRS-NF-001 | | | 성능 테스트 | TC-NF-001 | ⬜ |
+| infra | SRS-NF-001 | | SRS-NF-001 | | | 성능 테스트 | TC-NF-001 | ⬜ |
 
 ---
 
 ## 4. 변경 요구사항 추적 (DELTA)
 
-> SR 한 건 = REQ-C 한 행. sl-change 실행 시 자동 추가된다.
+> SR 한 건 = 변경 한 행. sl-change 실행 시 자동 추가된다.
 
-| SR-ID | REQ-ID | 변경 유형 | 변경 요약 | domain | 영향 INF | 영향 SCH | 영향 UIS | 변경일 | 상태 |
+| SR-ID | FUNC-ID | 변경 유형 | 변경 요약 | domain | 영향 INF | 영향 SCH | 영향 UIS | 변경일 | 상태 |
 |-------|--------|---------|----------|--------|---------|---------|---------|--------|------|
-| SR-1234 | REQ-C-001 | API_MODIFY | 로그인 토큰 만료 시간 변경 | auth | INF-001 | | | YYYY-MM-DD | 🔄 |
+| SR-1234 | SR-001 | API_MODIFY | 로그인 토큰 만료 시간 변경 | auth | INF-001 | | | YYYY-MM-DD | 🔄 |
 
 > 변경 유형: `SCREEN_MODIFY` / `SCREEN_NEW` / `API_MODIFY` / `API_NEW` / `DB_CHANGE` / `BUG_FIX` / `IMPROVEMENT` / `COMPOSITE`
 
@@ -73,7 +72,7 @@ linked_docs:
 
 > sl-change Step 4에서 도메인 특정 후 이 표로 로드할 파일을 결정한다.
 
-| domain | API 파일 | DB 파일 | UI 파일 | REQ 수 |
+| domain | API 파일 | DB 파일 | UI 파일 | FUNC 수 |
 |--------|---------|---------|---------|--------|
 | auth | [API_auth.md](../05_설계서/auth/API_auth.md) | [DB_auth.md](../05_설계서/auth/DB_auth.md) | [UI_auth.md](../05_설계서/auth/UI_auth.md) | 0 |
 | order | [API_order.md](../05_설계서/order/API_order.md) | [DB_order.md](../05_설계서/order/DB_order.md) | [UI_order.md](../05_설계서/order/UI_order.md) | 0 |
