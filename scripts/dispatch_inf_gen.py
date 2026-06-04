@@ -204,28 +204,37 @@ def save_status(workspace: str, status: dict) -> None:
 def parse_args():
     """간단한 CLI 파싱.
     사용법:
-      dispatch_inf_gen.py [workspace] [--inventory path/to/inventory.json]
+      dispatch_inf_gen.py [workspace] [--inventory path] [--model 모델ID]
+    --model: 배치 실행 모델 override (예: claude-opus-4-8).
+             Sonnet 주간 한도 소진 시 남는 Opus 한도로 전환하는 용도.
     """
     args = sys.argv[1:]
     workspace = os.getcwd()
     inv_override = None
+    model_override = None
     i = 0
     while i < len(args):
         if args[i] == "--inventory" and i + 1 < len(args):
             inv_override = args[i + 1]
+            i += 2
+        elif args[i] == "--model" and i + 1 < len(args):
+            model_override = args[i + 1]
             i += 2
         elif not args[i].startswith("--"):
             workspace = str(Path(args[i]).resolve())
             i += 1
         else:
             i += 1
-    return workspace, inv_override
+    return workspace, inv_override, model_override
 
 
 def main() -> int:
-    workspace, inv_override = parse_args()
+    global MODEL
+    workspace, inv_override, model_override = parse_args()
+    if model_override:
+        MODEL = model_override
     print(f"dispatch_inf_gen - 워크스페이스: {workspace}")
-    print(f"병렬 실행: MAX_PARALLEL={MAX_PARALLEL}")
+    print(f"병렬 실행: MAX_PARALLEL={MAX_PARALLEL}  모델: {MODEL}")
 
     # 환경 로드
     env = load_env(workspace)
