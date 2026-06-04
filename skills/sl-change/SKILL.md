@@ -588,7 +588,7 @@ docs/변경관리/{SR-ID}/after/ 에 TO-BE 스펙 초안이 있습니다.
 import yaml, os
 sp = '.speclinker/sprint-status.yaml'
 if not os.path.exists(sp):
-    print('[SKIP] sprint-status.yaml 없음 — /sl-sprint 먼저 실행 권장')
+    print('[SKIP] sprint-status.yaml 없음 — /sl-status 먼저 실행 권장')
 else:
     with open(sp, encoding='utf-8') as f:
         s = yaml.safe_load(f)

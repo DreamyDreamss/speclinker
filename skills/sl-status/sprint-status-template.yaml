@@ -1,6 +1,6 @@
 # sprint-status.yaml — speclinker 개발 진행 상태 추적
 # 기반: BMAD-METHOD sprint-status-template.yaml (MIT © BMad Code, LLC) + speclinker 확장
-# 생성: /sl-sprint | 갱신: /sl-change (승인 시 자동), /sl-aidd (story 시작/완료 시 자동)
+# 생성: /sl-status | 갱신: /sl-change (승인 시 자동), /sl-aidd (story 시작/완료 시 자동)
 # 수동 수정 가능 — 단, FUNC-ID는 FUNC_MAP.md와 일치해야 함
 
 generated: "{date}"

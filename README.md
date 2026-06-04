@@ -16,7 +16,7 @@ SI/ITO 개발 전주기 자동화 플러그인 — 요구사항 정의부터 코
 │   ├── sl-recon-doc         /sl-recon-doc        RECON Phase-3: 문서·RTM 생성
 │   ├── sl-aidd              /sl-aidd             FUNC=story 단위 AIDD 루프 (story→승인→구현→QA→테스트)
 │   ├── sl-test              /sl-test             TC 작성·실행·TR 생성
-│   ├── sl-rtm               /sl-rtm              RTM 커버리지 재계산·게시
+│   ├── sl-status            /sl-status           추적 통합 — 커버리지·진행·갭·게시 (--coverage/--next/--publish)
 │   ├── sl-change            /sl-change           SR 전주기 처리 (로컬 파일·Jira)
 │   └── sl-viewer            /sl-viewer           SpecLens 산출물 웹 뷰어
 │

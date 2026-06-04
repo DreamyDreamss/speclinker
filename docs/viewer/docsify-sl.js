@@ -141,16 +141,15 @@
     ]},
     { name: 'SDD 파이프라인', color: '#a371f7', cmds: [
       ['/sl-context', 'project-context.md 생성 — 프레임워크·공통패턴 학습', 'INF 존재'],
-      ['/sl-sprint', '스프린트 대시보드 — FUNC 상태·진행률 관리', 'FUNC_MAP.md'],
+      ['/sl-status', '추적 통합 — 커버리지·진행·갭·게시 (--coverage/--next/--publish)', 'FUNC_MAP.md'],
       ['/sl-drift', '스펙-코드 드리프트 감지 — 소스 변경 vs INF 미갱신', 'git, INF'],
     ]},
     { name: '변경 관리 — DELTA', color: 'var(--status-review)', cmds: [
       ['/sl-change <SR-ID>', '변경 전주기(--full) — CIA→TO-BE diff→스펙동기화→RTM→승인 토큰', 'docs/05_설계서/'],
       ['/sl-change --quick "설명"', '소규모 경량 변경 (SR 없이 INF≤2 인라인 처리)', 'INF, context'],
     ]},
-    { name: '개발 · 테스트 · 추적', color: '#3fb950', cmds: [
+    { name: '개발 · 테스트', color: '#3fb950', cmds: [
       ['/sl-test', '테스트 케이스 작성 + 실행 → 결과 보고서', '06_소스코드/'],
-      ['/sl-rtm', 'RTM 추적 매트릭스 — FUNC→SRS→UIS→INF→SCH 체인 매핑', 'docs/02_추적표/'],
     ]},
     { name: '뷰어', color: 'var(--accent)', cmds: [
       ['/sl-viewer [port]', 'SpecLens (이 웹 뷰어) 실행 (대시보드·INF/UIS/SCH·IA 트리)', 'docs/05_설계서/'],
