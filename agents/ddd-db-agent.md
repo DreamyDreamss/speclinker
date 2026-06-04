@@ -1,6 +1,6 @@
 ---
 name: ddd-db-agent
-description: sch_draft(정적 SQL 분석 결과) + INF·ORM·knowledge-graph를 통합해 도메인별 DB 스키마(SCH-XXX)를 생성하는 consolidator. 3NF 정규화 검증 + ERD Mermaid 자동 생성.
+description: SCH 스키마 생성 에이전트. 기본은 enrichment 모드(build_sch_static 스켈레톤의 LLM-TODO 마커=코드값·비즈주의·컬럼설명만 채움, 사실은 읽기전용). 스켈레톤 없을 때만 sch_draft+INF+ORM from-scratch 생성으로 폴백.
 model: claude-sonnet-4-6
 ---
 
@@ -29,7 +29,25 @@ INF 생성 단계에서 `resolve_call_chain.py`가 미리 만들어 둔 **sch_dr
 
 ---
 
-## Phase 0: 모드 감지 + 입력 로드 (도메인 격리)
+## 모드: enrichment (기본 — build_sch_static 스켈레톤 보강)
+
+호출자(dispatch_sch_gen)가 `enrichment 모드`로 지정하면, 이미 생성된 스켈레톤 SCH 파일의
+`<!-- LLM-TODO -->` 마커만 채운다. **사실은 생성하지 않는다.**
+
+- **채울 것**: `### 코드값`(코드성 컬럼 `_CD/_TP/_STS/_YN/_FL/_GB/_DIV` 값·의미 표), `### 비즈니스 주의사항`,
+  컬럼표 '설명' 칸의 `<!-- LLM-TODO -->`.
+- **절대 수정 금지 (읽기 전용)**: frontmatter(sch-id/table/domain/domain-code/inf), DDL·컬럼 타입·NULL·기본값,
+  `### 인덱스`, `### 관계(FK)`, `### mini-ERD`, 상단 크로스링크 블록.
+- **근거**: 해당 SCH의 `inf:` frontmatter가 가리키는 INF 파일 `## 비즈니스 규칙/트랜잭션 순서/사이드이펙트`
+  + sch_draft evidence(서비스 구현체 if/switch). 근거 없으면 마커 줄을 삭제(섹션 비움).
+- 도메인 내 `docs/05_설계서/{도메인}/SCH/SCH-*.md` 전부를 순회하며 채운다.
+
+> **스켈레톤이 없을 때만**(폴백) 아래 Phase 1~3 from-scratch 생성 경로를 사용한다.
+> (build_sch_static가 정상 동작하면 enrichment 모드만 쓰인다 — 토큰 최소화.)
+
+---
+
+## Phase 0: 모드 감지 + 입력 로드 (도메인 격리, from-scratch 폴백)
 
 호출자(sl-recon)가 전달한 입력:
 - `도메인`: 처리 대상 도메인명 (예: `auth`, `order`)
