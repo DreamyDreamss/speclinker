@@ -1280,7 +1280,6 @@ for dom, items in sorted(by_domain.items()):
     스펙 저장 경로: docs/05_설계서/{domain}/UI/{specDirName}/spec.md
     INF 디렉토리: docs/05_설계서/{domain}/INF/
     캡처 디렉토리: {captureDir}
-    MODE: RECON
     워크스페이스: {현재 작업 디렉토리 절대경로}
     ← 탭 서브엔트리 (parentScreenId 있음) 인 경우에만 아래 4줄 추가:
     탭 인덱스: {tabIndex}           ← ddd-ui-agent 탭 모드 진입 트리거

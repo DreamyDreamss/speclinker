@@ -7,8 +7,7 @@ triggers:
 
 # /sl-recon — 코드 역분석
 
-기존 소스코드에서 설계 산출물을 역방향으로 추출합니다.  
-RECON 모드 (`project.env`의 `MODE=RECON`)에서 실행합니다.
+기존 소스코드에서 설계 산출물(INF/SCH/UIS/FUNC)을 역방향으로 추출합니다.
 
 ## 실행 전 확인
 
@@ -16,7 +15,7 @@ RECON 모드 (`project.env`의 `MODE=RECON`)에서 실행합니다.
 !cat project.env
 ```
 
-`MODE=RECON`이 아니면 실행을 중단하고 `/sl-init`으로 모드 재설정을 안내한다.
+`project.env`가 없으면 `/sl-init`을 먼저 실행하도록 안내한다.
 
 ---
 
@@ -355,7 +354,6 @@ Agent 도구 호출:
   prompt: |
     워크스페이스: {현재 작업 디렉토리 절대경로}
     source_index: _tmp/source_index.json
-    MODE: RECON
     기존 profile.yaml: 없음 (또는 --reprofile 옵션으로 갱신 요청)
 
     참고 schema: 플러그인 templates/profile_schema.yaml
@@ -933,7 +931,6 @@ _tmp/batch_inventory_with_chain.json의 각 그룹에 대해 Agent 도구 호출
     도메인: {group[0].domain}
     MCP_DB 서버: {_tmp/mcp_status.json의 가용 DB MCP 서버 별칭 — 없으면 "없음"}
     워크스페이스: {현재 작업 디렉토리 절대경로}
-    MODE: RECON
     프로젝트 Profile: .speclinker/profile.yaml (있으면 batch.runner/scheduler로 배치 종류 인식)
 
     === 사전 계산된 연관 파일 (읽기 의무) ===
@@ -1015,7 +1012,6 @@ _tmp/sch_todo.json의 각 도메인(생성 대상만)에 대해 Agent 도구 호
     sch_draft 디렉토리: _tmp/sch_draft/{domain.name}/ (없으면 INF tables: frontmatter + SQL 분석)
     MCP_DB 서버: {_tmp/mcp_status.json의 가용 DB MCP 서버 별칭 — 없으면 "없음"}
     워크스페이스: {현재 작업 디렉토리 절대경로}
-    MODE: RECON
     이미 생성된 SCH 테이블 (재생성 금지 — 건너뛸 것): {todo.existing}  ← _tmp/sch_todo.json
     생성 대상 누락 테이블만 SCH 작성: {todo.missing}
 
