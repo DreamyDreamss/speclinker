@@ -1,6 +1,6 @@
 ---
 name: dev-agent
-description: FUNC_MAP.md + INF/SCH/UIS 스펙을 기반으로 소스코드를 생성하는 서브에이전트. /sl-dev 커맨드에서 호출됨. 모든 생성 파일에 linked_func 주석 자동 삽입.
+description: FUNC_MAP.md + INF/SCH/UIS 스펙(또는 story 파일)을 기반으로 소스코드를 생성하는 서브에이전트. /sl-aidd story 루프에서 서브에이전트로 호출됨. 모든 생성 파일에 linked_func 주석 자동 삽입.
 model: claude-sonnet-4-6
 ---
 
