@@ -45,6 +45,30 @@ def test_change_context_brief():
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
+def test_freshness_gate():
+    """소스 파일이 스펙보다 최신이면 STALE 경고."""
+    import time
+    tmp = tempfile.mkdtemp()
+    try:
+        # INF 스펙 + 그 앵커가 가리키는 소스 파일 생성
+        os.makedirs(os.path.join(tmp, 'src/order'), exist_ok=True)
+        _inf(tmp, 'order', 'ORD', 1, 'POST', '/order/x', ['ORDERS'], 'src/order/OrderCtl.java:1-9')
+        spec = os.path.join(tmp, 'docs/05_설계서/order/INF/INF-ORD-001.md')
+        src = os.path.join(tmp, 'src/order/OrderCtl.java')
+        open(src, 'w', encoding='utf-8').write('class X {}')
+        # 소스를 스펙보다 최신으로 (mtime +100s)
+        st = os.stat(spec)
+        os.utime(spec, (st.st_atime, st.st_mtime - 100))
+        env = dict(os.environ, PYTHONUTF8='1')
+        r = subprocess.run([sys.executable, os.path.join(SCRIPTS, 'build_change_context.py'),
+                            tmp, '--entities', 'ORDERS'], capture_output=True, text=True, env=env)
+        assert r.returncode == 0, r.stderr
+        c = open(os.path.join(tmp, 'docs/변경관리/_adhoc/_asis_brief.md'), encoding='utf-8').read()
+        assert '현행성' in c and 'OrderCtl.java' in c, '현행성 경고 누락'
+        print('PASS: test_freshness_gate')
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
 def test_ubiquity_isolation():
     """공통테이블(다수 사용)은 격리되고, 전용테이블 사용처가 상위 랭킹."""
     tmp = tempfile.mkdtemp()
@@ -72,3 +96,4 @@ if __name__ == '__main__':
     test_graph_reverse_ripple()
     test_change_context_brief()
     test_ubiquity_isolation()
+    test_freshness_gate()
