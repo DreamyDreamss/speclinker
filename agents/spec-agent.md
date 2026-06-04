@@ -216,7 +216,7 @@ graph TD
 
 | SCH-ID  | 테이블명 | INF-ID |
 |---------|---------|--------|
-| SCH-001 | [users](./auth/DB_auth.md#SCH-001) | INF-001, INF-002 |
+| SCH-001 | [users](./auth/SCH/SCH-001.md) | INF-001, INF-002 |
 ```
 
 **`docs/05_설계서/UI_Spec_v1.0.md`**

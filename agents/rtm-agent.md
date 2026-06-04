@@ -221,8 +221,8 @@ Constitutional Principle 6 (UIS-INF 연결):
 ```markdown
 | domain | REQ-ID | 요구사항명 | SRS-ID | UIS-ID | INF-ID | SCH-ID | TC-ID | 코드 파일 | SR-ID | 상태 |
 |--------|--------|-----------|--------|--------|--------|--------|-------|----------|-------|------|
-| auth | [REQ-F-001](../01_요구사항정의서/RD_v1.0.md#REQ-F-001) | 사용자 인증 | [SRS-F-001](../03_기능명세서/domains/SRS_auth.md#SRS-F-001) | [UIS-F-001](../05_설계서/auth/UI/LoginPage/spec.md) | [INF-001](../05_설계서/auth/INF/INF-001.md), [INF-002](../05_설계서/auth/INF/INF-002.md) | [SCH-001](../05_설계서/auth/DB_auth.md#SCH-001) | TC-F-001 | `src/auth/...` | — | 🔄 진행중 |
-| dashboard | [REQ-F-002](../01_요구사항정의서/RD_v1.0.md#REQ-F-002) | 대시보드 조회 | [SRS-F-002](../03_기능명세서/domains/SRS_dashboard.md#SRS-F-002) | [UIS-F-002](../05_설계서/dashboard/UI/DashboardPage/spec.md) | [INF-011](../05_설계서/dashboard/INF/INF-011.md) | [SCH-011](../05_설계서/dashboard/DB_dashboard.md#SCH-011) | — | `src/bi/...` | — | ⬜ 미착수 |
+| auth | [REQ-F-001](../01_요구사항정의서/RD_v1.0.md#REQ-F-001) | 사용자 인증 | [SRS-F-001](../03_기능명세서/domains/SRS_auth.md#SRS-F-001) | [UIS-F-001](../05_설계서/auth/UI/LoginPage/spec.md) | [INF-001](../05_설계서/auth/INF/INF-001.md), [INF-002](../05_설계서/auth/INF/INF-002.md) | [SCH-001](../05_설계서/auth/SCH/SCH-001.md) | TC-F-001 | `src/auth/...` | — | 🔄 진행중 |
+| dashboard | [REQ-F-002](../01_요구사항정의서/RD_v1.0.md#REQ-F-002) | 대시보드 조회 | [SRS-F-002](../03_기능명세서/domains/SRS_dashboard.md#SRS-F-002) | [UIS-F-002](../05_설계서/dashboard/UI/DashboardPage/spec.md) | [INF-011](../05_설계서/dashboard/INF/INF-011.md) | [SCH-011](../05_설계서/dashboard/SCH/SCH-011.md) | — | `src/bi/...` | — | ⬜ 미착수 |
 | common | [REQ-NF-001](../01_요구사항정의서/RD_v1.0.md#REQ-NF-001) | 응답시간 < 200ms | [SRS-NF-001](../03_기능명세서/SRS_v1.0.md#SRS-NF-001) | — | (전체 INF) | — | TC-NF-001 | — | — | ⬜ 미착수 |
 ```
 

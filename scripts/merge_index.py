@@ -100,26 +100,36 @@ def collect_inf(domain):
 
 
 def collect_sch(domain):
-    """도메인의 DB_{domain}.md 파일에서 SCH 항목 추출"""
-    db_path = os.path.join(DOCS, domain, f'DB_{domain}.md')
-    if not os.path.exists(db_path):
+    """도메인의 SCH/ 디렉토리에서 개별 SCH-*.md 파일을 수집 (테이블당 1파일 구조)"""
+    sch_dir = os.path.join(DOCS, domain, 'SCH')
+    if not os.path.isdir(sch_dir):
         return []
-    txt = open(db_path, encoding='utf-8').read()
-    # ## SCH-NNN: tablename 패턴
     schs = []
-    for m in re.finditer(r'^##\s+(SCH-\d+):\s*(\S+)', txt, re.M):
-        sch_id = m.group(1)
-        table = m.group(2)
-        # 해당 섹션 본문에서 INF-NNN 참조 추출
-        section_start = m.end()
-        next_h = re.search(r'^##\s+SCH-', txt[section_start:], re.M)
-        section_body = txt[section_start: section_start + (next_h.start() if next_h else len(txt))]
-        inf_refs = sorted(set(re.findall(r'INF-\d+', section_body)))
+    for fname in sorted(os.listdir(sch_dir)):
+        if not (fname.startswith('SCH-') and fname.endswith('.md')):
+            continue
+        path = os.path.join(sch_dir, fname)
+        fm = read_frontmatter(path)
+        sch_id = (fm.get('sch-id') or fname[:-3]).strip()
+        table = (fm.get('table') or '').strip().strip("\"'")
+        raw_inf = (fm.get('inf') or '').strip()
+        if raw_inf.startswith('[') and raw_inf.endswith(']'):
+            raw_inf = raw_inf[1:-1]
+        inf_refs = [x.strip() for x in raw_inf.split(',') if x.strip()]
+        # frontmatter에 없으면 본문에서 보강 (H1 테이블명 / INF 참조)
+        if not table or not inf_refs:
+            txt = open(path, encoding='utf-8').read()
+            if not table:
+                hm = re.search(r'^#\s+SCH-[\w-]+\s*[:\-]+\s*(\S+)', txt, re.M)
+                if hm:
+                    table = hm.group(1)
+            if not inf_refs:
+                inf_refs = sorted(set(re.findall(r'INF-[A-Z]*-?\d+', txt)))
         schs.append({
             'id': sch_id,
             'table': table,
             'inf_refs': inf_refs,
-            'rel_path': f'./{domain}/DB_{domain}.md#{sch_id}',
+            'rel_path': f'./{domain}/SCH/{sch_id}.md',
         })
     return schs
 

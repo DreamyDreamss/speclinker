@@ -79,7 +79,7 @@ linked_docs:
 
 ## UIS-F-001: 로그인 화면
 
-> **REQ-F:** [REQ-F-001](../../01_요구사항정의서/RD_v1.0.md#REQ-F-001) | **SRS-F:** [SRS-F-001](../../03_기능명세서/SRS_v1.0.md#SRS-F-001) | **API:** [INF-001](./API_{도메인}.md#INF-001), [INF-003](./API_{도메인}.md#INF-003) | **DB:** [SCH-001](./DB_{도메인}.md#SCH-001) | **RTM:** [↗](../../02_추적표/RTM_v1.0.md)
+> **REQ-F:** [REQ-F-001](../../01_요구사항정의서/RD_v1.0.md#REQ-F-001) | **SRS-F:** [SRS-F-001](../../03_기능명세서/SRS_v1.0.md#SRS-F-001) | **API:** [INF-001](./API_{도메인}.md#INF-001), [INF-003](./API_{도메인}.md#INF-003) | **DB:** [SCH-001](./SCH/SCH-001.md) | **RTM:** [↗](../../02_추적표/RTM_v1.0.md)
 
 **근거 소스:** `pages/auth/login.tsx`, `components/AuthForm.tsx`
 
@@ -218,7 +218,7 @@ flowchart LR
 
 ## UIS-F-002: {화면명}
 
-> **REQ-F:** [REQ-F-XXX](../../01_요구사항정의서/RD_v1.0.md#REQ-F-XXX) | **SRS-F:** [SRS-F-XXX](../../03_기능명세서/SRS_v1.0.md#SRS-F-XXX) | **API:** [INF-XXX](./API_{도메인}.md#INF-XXX) | **DB:** [SCH-XXX](./DB_{도메인}.md#SCH-XXX) | **RTM:** [↗](../../02_추적표/RTM_v1.0.md)
+> **REQ-F:** [REQ-F-XXX](../../01_요구사항정의서/RD_v1.0.md#REQ-F-XXX) | **SRS-F:** [SRS-F-XXX](../../03_기능명세서/SRS_v1.0.md#SRS-F-XXX) | **API:** [INF-XXX](./API_{도메인}.md#INF-XXX) | **DB:** [SCH-XXX](./SCH/SCH-XXX.md) | **RTM:** [↗](../../02_추적표/RTM_v1.0.md)
 
 **근거 소스:** `{소스 파일 경로}`
 

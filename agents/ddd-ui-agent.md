@@ -408,7 +408,7 @@ revision_history:
 
 # UIS-F-{uisId:03d}: {화면명}
 
-> **UIS-ID:** UIS-F-{uisId:03d} | **INF:** [INF-XXX]({infDir}INF-XXX.md) | **DB:** [SCH-XXX](../../DB_{domain}.md#SCH-XXX)
+> **UIS-ID:** UIS-F-{uisId:03d} | **INF:** [INF-XXX]({infDir}INF-XXX.md) | **DB:** [SCH-XXX](../../SCH/SCH-XXX.md)
 
 **근거 소스:** `{filePath}`
 

@@ -40,7 +40,7 @@ linked_docs:
 
 | domain | REQ-ID | 요구사항명 | SRS-ID | UIS-ID | INF-ID | SCH-ID | TC-ID | SR-ID | 상태 |
 |--------|--------|-----------|--------|--------|--------|--------|-------|-------|------|
-| auth | [REQ-F-001](../01_요구사항정의서/RD_v1.0.md#REQ-F-001) | | SRS-F-001 | [UIS-F-001](../05_설계서/auth/UI_auth.md#UIS-F-001) | [INF-001](../05_설계서/auth/API_auth.md#INF-001) | [SCH-001](../05_설계서/auth/DB_auth.md#SCH-001) | TC-F-001 | | ⬜ |
+| auth | [REQ-F-001](../01_요구사항정의서/RD_v1.0.md#REQ-F-001) | | SRS-F-001 | [UIS-F-001](../05_설계서/auth/UI_auth.md#UIS-F-001) | [INF-001](../05_설계서/auth/API_auth.md#INF-001) | [SCH-001](../05_설계서/auth/SCH/SCH-001.md) | TC-F-001 | | ⬜ |
 | order | [REQ-F-002](../01_요구사항정의서/RD_v1.0.md#REQ-F-002) | | SRS-F-002 | [UIS-F-002](../05_설계서/order/UI_order.md#UIS-F-002) | [INF-003](../05_설계서/order/API_order.md#INF-003) | | | | ⬜ |
 
 > 파일 링크 규칙:
