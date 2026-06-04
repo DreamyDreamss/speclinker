@@ -9,22 +9,45 @@ def _read(path):
         return None
 
 def build_sch_map(design_root):
+    """{도메인}/SCH/SCH-*.md (또는 SCH/{도메인}/) 의 frontmatter/H1에서
+    테이블명 -> {sch_id, domain} 맵 생성."""
     sch_map = {}
     if not os.path.isdir(design_root):
         return sch_map
     for dirpath, _, filenames in os.walk(design_root):
+        # SCH/ 디렉토리(또는 그 하위 도메인 폴더) 안의 파일만 본다
+        if os.path.basename(dirpath) != 'SCH' and os.path.basename(os.path.dirname(dirpath)) != 'SCH':
+            continue
         for fname in filenames:
-            if not (fname.startswith('DB_') and fname.endswith('.md')):
+            if not (fname.startswith('SCH-') and fname.endswith('.md')):
                 continue
             content = _read(os.path.join(dirpath, fname))
             if not content:
                 continue
-            rel = os.path.relpath(dirpath, design_root)
-            domain = rel.split(os.sep)[0] if rel != '.' else ''
-            for m in re.finditer(r'^#{1,3}\s+(SCH-[\w-]+)\s*[:\-]+\s*([\w_]+)', content, re.MULTILINE):
-                key = m.group(2).strip().lower()
+            domain = ''
+            table = ''
+            sch_id = fname[:-3]
+            fm = re.match(r'^---\s*\n(.*?)\n---', content, re.DOTALL)
+            if fm:
+                for line in fm.group(1).split('\n'):
+                    s = line.strip()
+                    mt = re.match(r'^table\s*:\s*(.+)$', s)
+                    md = re.match(r'^domain\s*:\s*(.+)$', s)
+                    mi = re.match(r'^sch-id\s*:\s*(.+)$', s)
+                    if mt:
+                        table = mt.group(1).strip().strip("\"'")
+                    if md:
+                        domain = md.group(1).strip().strip("\"'")
+                    if mi:
+                        sch_id = mi.group(1).strip().strip("\"'")
+            if not table:
+                hm = re.search(r'^#\s+SCH-[\w-]+\s*[:\-]+\s*([\w_]+)', content, re.MULTILINE)
+                if hm:
+                    table = hm.group(1).strip()
+            if table:
+                key = table.lower()
                 if key not in sch_map:
-                    sch_map[key] = {'sch_id': m.group(1).strip(), 'domain': domain}
+                    sch_map[key] = {'sch_id': sch_id, 'domain': domain}
     return sch_map
 
 def extract_tables_fm(content):
