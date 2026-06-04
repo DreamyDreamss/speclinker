@@ -1,9 +1,10 @@
 ---
 name: sl-change
 description: >
-  DELTA 핵심 커맨드 — SR 한 건을 받아 유형 분류·정보검증·AS-IS조회·영향분석·
+  DELTA 단일 커맨드 — `--full`(기본)은 SR 한 건을 받아 유형 분류·정보검증·AS-IS조회·영향분석·
   TO-BE설계·SR산출물 생성·프로젝트스펙 현행화·RTM갱신까지 전 주기를 처리한다.
-  로컬 요구사항 파일(docs/변경관리/{SR-ID}/00_요구사항.md)과 Jira 양쪽을 지원.
+  `--quick`은 SR 없이 소규모 변경을 경량 처리한다. 로컬 요구사항 파일과 Jira 양쪽 지원.
+  (구 sl-plan/sl-analyze/sl-quick 흡수. 추적 축 = SR 단일.)
 triggers:
   - /sl-change
 ---
@@ -29,10 +30,73 @@ triggers:
 
 ## 호출 형식
 
+| 형식 | 용도 |
+|------|------|
+| `/sl-change <SR-ID>` | 전주기(`--full` 기본): CIA→TO-BE→스펙동기화→RTM (예: `/sl-change SR-001`) |
+| `/sl-change --full <SR-ID>` | 명시적 전주기 |
+| `/sl-change <Jira-KEY>` | Jira SR 전주기 (예: `/sl-change PROJ-456`) |
+| `/sl-change --quick "설명"` | SR 없이 소규모 경량 변경 (구 sl-quick) |
+| `/sl-change --new SR-001` | 로컬 요구사항 파일 템플릿 생성 후 중단 |
+
+`--quick`이면 아래 경량 경로로 처리하고 종료한다. 그 외(기본/`--full`)는 `## Step 1 — SR 수집`부터 전주기를 수행한다.
+
+---
+
+## `/sl-change --quick "설명"` — 경량 경로 (SR 없이)
+
+단순 버그픽스·소규모 수정 전용. 전체 SR 파이프라인(Step 1~10) 없이 빠르게 변경하되 스펙 동기화는 유지한다.
+아래 분기로 처리하고 완료 후 종료한다(Step 1+ 전주기로 내려가지 않음).
+
+**스코프 기준 (초과 시 `--full` 권장):** 단일 목표 · INF 1~2개 · SCH 변경 없음.
+
+| 조건 | 동작 |
+|------|------|
+| INF 3개 이상 영향 | 경고 + "--full 사용 권장. 계속?" |
+| SCH 변경 예상 | 경고 + "--full 사용 권장. 계속?" |
+| `docs/05_설계서/` 없음 | 중단 → "/sl-recon 먼저 실행" |
+
+### Q1. 스코프 + 영향 미리보기 (구 sl-plan 경량)
+
+수정 의도에서 키워드 추출 → 영향 INF 매핑 + 규모 분류:
+```bash
+!grep -rl "{키워드}" docs/05_설계서/*/INF/ --include="*.md" 2>/dev/null | wc -l
 ```
-/sl-change <SR-ID>          예: /sl-change SR-001
-/sl-change <Jira-KEY>       예: /sl-change PROJ-456
-/sl-change --new SR-001     로컬 요구사항 파일 템플릿 생성 후 중단
+INF 3개 이상이면 경고 후 사용자 확인.
+
+### Q2. 인라인 스펙 기록
+
+영향 INF 파일 1~2개를 특정하고, 각 파일 하단 `## 변경 이력`에 행 추가(별도 SR 문서 미생성):
+```markdown
+## 변경 이력
+
+| 날짜 | 변경 내용 | 변경자 |
+|------|---------|-------|
+| {YYYY-MM-DD} | {변경 한 줄 요약} | /sl-change --quick (auto) |
+```
+
+### Q3. project-context.md 로드
+```bash
+!cat docs/project-context.md 2>/dev/null | head -80
+```
+없으면 경고 후 계속.
+
+### Q4. TDD 구현 (dev-agent 위임)
+
+> dev-agent에게:
+> - 수정 목표: {설명} / 영향 INF: {INF-ID 목록}
+> - project-context.md 패턴 준수, TDD(RED→GREEN→REFACTOR), linked_func 주석 삽입.
+
+### Q5. 경량 게이트 (Layer 1만)
+
+인라인으로 Layer 1(스펙 일치)만 점검. 보안·회귀(Layer 2/3)는 생략.
+(본격 검증 필요 시 `/sl-aidd` story 루프의 qa-agent 게이트 사용.) CRITICAL 결함 없으면 완료.
+
+### Q6. 완료 보고
+```
+/sl-change --quick 완료
+수정 내용: {설명} / 영향 INF: {INF-ID 목록}
+변경 이력: 각 INF 파일 하단 기록 / Layer 1: PASS
+수정 파일: {소스 목록} + {INF 변경이력}
 ```
 
 ---
