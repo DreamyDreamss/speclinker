@@ -21,7 +21,7 @@ SI/ITO 개발 전주기 자동화 플러그인 — 요구사항 정의부터 코
 │   ├── sl-rtm               /sl-rtm              RTM 커버리지 재계산·게시
 │   ├── sl-analyze           /sl-analyze          변경영향분석서(CIA) 작성
 │   ├── sl-change            /sl-change           SR 전주기 처리 (로컬 파일·Jira)
-│   └── sl-viewer            /sl-viewer           산출물 뷰어
+│   └── sl-viewer            /sl-viewer           SpecLens 산출물 웹 뷰어
 │
 ├── agents/                  ← 산출물 생성 서브에이전트 (14개)
 │   ├── spec-agent.md           파이프라인 오케스트레이터

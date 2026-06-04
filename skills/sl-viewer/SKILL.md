@@ -1,12 +1,12 @@
 ---
 name: sl-viewer
-description: speclinker 산출물 Docsify 웹 뷰어 실행 (대시보드·INF/UIS·IA 트리)
+description: SpecLens — speclinker 산출물 웹 뷰어 실행 (대시보드·INF/UIS/SCH·IA 트리)
 argument-hint: [port]
 ---
 
-# /sl-viewer — 스펙 웹 뷰어 실행
+# /sl-viewer — SpecLens (스펙 웹 뷰어) 실행
 
-speclinker RECON 산출물을 브라우저에서 탐색하는 Docsify 뷰어를 시작한다.
+**SpecLens** — speclinker RECON/GENESIS 산출물을 브라우저에서 탐색하는 Docsify 기반 웹 뷰어를 시작한다.
 
 > 구 Obsidian 기반 뷰어(`gen_obsidian_index.py`)는 deprecated — 이 스킬로 대체됨.
 

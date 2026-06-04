@@ -121,6 +121,7 @@
 | 코드 생성 | `agents/dev-agent.md` | Sonnet | 반복 실행 태스크 |
 | 테스트 | `agents/test-agent.md` | Sonnet | 반복 실행 태스크 |
 
+> v2.60: 뷰어 이름 **SpecLens** 명명 — index.html 타이틀·docsify-sl.js 로고/대시보드·/sl-viewer 스킬·README 반영. (플러그인명 Speclinker는 유지, 뷰어 정체성만 SpecLens)
 > v2.59: SCH 생성 멱등성 — sl-recon STEP 5-0 `build_sch_todo.py` 신설(INF tables: 합집합 vs 기존 SCH frontmatter 비교 → 누락 테이블 있는 도메인만 `_tmp/sch_todo.json`). 누락 0 도메인은 ddd-db-agent 미호출, 부분 도메인은 `existing` 전달해 누락분만 생성. ddd-db-agent에 "이미 생성된 SCH 테이블 재생성 금지" 입력 추가. INF의 group_already_done과 동형 — recon 재실행 시 INF·SCH 모두 스킵.
 > v2.58: sl-recon-uis 도메인 선택 체크포인트 추가 — 인수 없이 실행하면 도메인 목록(도메인별 goto form 화면 수 미리보기)을 보여주고 전체/특정 도메인을 사용자에게 질문(INF 도메인선택과 동형). 인수 주어지면 프롬프트 생략. 도메인 필터는 build_uis_goto_plan.py 3번째 인자(relPath 기반 assign_file_domains)로 goto 플랜에 적용. RECON_PIPELINE.md Phase 2 정합.
 > v2.57: RECON 문서 현행화 + 참조문서 동기화 강제. legacy `/sl-recon-inf` 삭제(INF·SCH 생성은 v2.53 도메인선택형 리팩토링으로 이미 `/sl-recon` STEP 4-3/5에 통합됨). `link_inf_sch_new.py`를 `/sl-recon` STEP 5-1로 재배선(INF→SCH 링크 패치 누락 복구). sl-recon STEP 5 SCH 프롬프트를 개별파일 구조로 정정. RECON_PIPELINE.md/README/SETUP_GUIDE/scripts-README의 stale recon-inf·DB_Schema_{domain} 참조 일괄 제거. CLAUDE.md에 "참조 문서 동기화(MUST)" 레지스트리+DoD 신설.

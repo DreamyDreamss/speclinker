@@ -56,7 +56,7 @@
       : renderIaTree();
 
     sidebar.innerHTML = `
-      <div class="sl-logo">⚡ Speclinker</div>
+      <div class="sl-logo">⚡ SpecLens</div>
       <div>
         <span class="sl-nav-link" onclick="SlViewer.showGuide()">📖 사용자 가이드</span>
         <span class="sl-nav-link" onclick="SlViewer.showDashboard()">🏠 대시보드</span>
@@ -162,7 +162,7 @@
       ['/sl-rtm', 'RTM 추적 매트릭스 — REQ→SRS→UIS→INF→SCH 체인 매핑', 'docs/02_추적표/'],
     ]},
     { name: '뷰어', color: 'var(--accent)', cmds: [
-      ['/sl-viewer [port]', '이 Docsify 웹 뷰어 실행 (대시보드·INF/UIS·IA 트리)', 'docs/05_설계서/'],
+      ['/sl-viewer [port]', 'SpecLens (이 웹 뷰어) 실행 (대시보드·INF/UIS/SCH·IA 트리)', 'docs/05_설계서/'],
     ]},
   ];
 
@@ -300,7 +300,7 @@
 
     main.innerHTML = `
       <div class="sl-dashboard">
-        <h2 style="color:var(--accent);margin-top:0">📊 Speclinker Dashboard</h2>
+        <h2 style="color:var(--accent);margin-top:0">📊 SpecLens Dashboard</h2>
         <div class="sl-summary-cards">${cards}</div>
         <table class="sl-domain-table">
           <thead><tr>
