@@ -214,7 +214,6 @@ def make_bundle(func_id, root, env, func_map):
     return {
         'func_id'     : func_id,
         'description' : entry['description'],
-        'mode'        : mode,
         'status'      : entry['status'],
         'ids'         : ids,
         'spec_content': {'inf': inf_content, 'sch': sch_content, 'uis': uis_content},
@@ -236,8 +235,8 @@ def main():
     func_map = parse_func_map(root)
 
     if not func_map:
-        print(json.dumps({'error': 'FUNC_MAP.md 없음 — /sl-recon 또는 /sl-spec 먼저 실행'}),
-              ensure_ascii=False)
+        print(json.dumps({'error': 'FUNC_MAP.md 없음 — /sl-recon 또는 /sl-spec 먼저 실행'},
+                         ensure_ascii=False))
         sys.exit(1)
 
     if cmd == '--list':
@@ -263,8 +262,8 @@ def main():
 
     func_id = cmd
     if func_id not in func_map:
-        print(json.dumps({'error': f'{func_id} not found in FUNC_MAP'}),
-              ensure_ascii=False)
+        print(json.dumps({'error': f'{func_id} not found in FUNC_MAP'},
+                         ensure_ascii=False))
         sys.exit(1)
 
     bundle = make_bundle(func_id, root, env, func_map)
