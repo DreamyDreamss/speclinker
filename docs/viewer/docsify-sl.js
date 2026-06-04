@@ -347,8 +347,15 @@
           ? uis.map(renderUisCard).join('')
           : '<div style="padding:16px;color:var(--text-muted)">UIS 파일 없음</div>'
       }</div>`;
+    } else if (ACTIVE_TAB === 'sch') {
+      const schs = (INDEX.schs || []).filter(s => s.domain === domain);
+      body = `<div class="sl-inf-list">${
+        schs.length > 0
+          ? schs.map(renderSchCard).join('')
+          : '<div style="padding:16px;color:var(--text-muted)">SCH 파일 없음</div>'
+      }</div>`;
     } else {
-      body = `<div style="padding:24px;color:var(--text-muted)">SCH/BAT 뷰 — 준비 중</div>`;
+      body = `<div style="padding:24px;color:var(--text-muted)">BAT 뷰 — 준비 중</div>`;
     }
 
     main.innerHTML = `
@@ -357,6 +364,16 @@
         <div class="sl-tabs">${tabs}</div>
       </div>
       ${body}`;
+  }
+
+  function renderSchCard(sch) {
+    const infs = (sch.inf || []).join(', ');
+    return `
+      <div class="sl-inf-card" onclick="SlViewer.openSpec('${escAttr(sch.file)}')">
+        <span class="sl-method-badge" style="background:var(--status-done)">SCH</span>
+        <span class="sl-inf-id">${sch.id}</span>
+        <span class="sl-inf-path">${escAttr(sch.table || '')}${infs ? ' · ' + escAttr(infs) : ''}</span>
+      </div>`;
   }
 
   function renderInfCard(inf) {
@@ -464,6 +481,8 @@
       if (!INDEX) return;
       const inf = INDEX.infs && INDEX.infs.find(i => i.id === id);
       if (inf) { this.openSpec(inf.file); return; }
+      const sch = INDEX.schs && INDEX.schs.find(s => s.id === id);
+      if (sch) { this.openSpec(sch.file); return; }
       const ui = INDEX.uis && INDEX.uis.find(u => u.id === id);
       if (ui) this.openSpec(ui.file);
     },
