@@ -22,7 +22,7 @@ triggers:
 
 ## 기본 실행 (`/sl-rtm`)
 
-linked_req + linked_func 스캔 → si-graph 갱신 → 커버리지 출력
+linked_func 스캔 → si-graph 갱신 → 커버리지 출력
 
 ```python
 !python3 -c "
