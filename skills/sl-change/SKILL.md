@@ -167,8 +167,19 @@ Jira에서 가져온 내용을 `docs/변경관리/{SR-ID}/00_요구사항.md`에
 (HWP는 텍스트 추출 제한 — 내용을 직접 붙여넣기 요청할 수 있습니다)
 ```
 
-파싱 가능한 첨부파일(pdf, xlsx, docx, txt, md, png/jpg)은 내용을 추출하여 분석에 활용한다.  
+파싱 가능한 첨부파일(pptx, docx, xlsx, pdf, txt, md, png/jpg)은 내용을 추출하여 분석에 활용한다.  
 HWP 등 파싱 불가 파일은 사용자에게 주요 내용 텍스트 입력을 요청한다.
+
+### 1-D. 첨부 본문 추출 (extract_attachments.py)
+
+Jira 첨부를 `docs/변경관리/{SR-ID}/attachments/`에 다운로드(MCP `jira_download_attachments`)한 뒤 텍스트를 추출한다:
+
+```bash
+!python "{PLUGIN_PATH}/scripts/extract_attachments.py" docs/변경관리/{SR-ID}/attachments
+```
+
+산출 `docs/변경관리/{SR-ID}/_extracted.md`(PPT/Word/Excel 본문)를 요구사항 분석에 **병합**한다 — 고객사 요청자료가 분석에 실제로 반영됨.
+PDF·이미지는 Read 도구로 직접 읽는다. 라이브러리(pptx/docx/openpyxl) 미설치 포맷은 `[추출 불가]`로 표기되며 사용자에게 내용 입력을 요청한다.
 
 ---
 
@@ -344,29 +355,26 @@ SR-1234 키워드: "주문 목록", "ORDER_LIST", "order"
 
 ---
 
-## Step 5 — AS-IS 조회 (선택적 로드)
+## Step 5 — AS-IS 그라운딩 (그래프 영향슬라이스 + 소스앵커 JIT read)
 
-### 5-1. RTM에서 해당 도메인 행 추출
+> 요약 스펙을 통째로 로드하지 않는다(lossy·stale). 그래프로 **영향슬라이스를 정밀 특정**하고 **근거소스 앵커(file:line)를 직접 read**하여 최신·정밀 AS-IS를 확보한다.
 
-최신 `docs/02_추적표/RTM_v*.md`를 로드한다.  
-`domain = {특정된_도메인}` 행만 필터링하여 관련 ID 목록을 추출한다:
+### 5-1. 영향슬라이스 + 앵커 브리프 (build_change_context.py)
 
-```
-[AS-IS ID 목록 — domain: order]
-INF:   INF-067, INF-068, INF-069
-SCH:   SCH-023, SCH-024
-UIS:   UIS-F-012, UIS-F-013
+SR 본문 + `_extracted.md`에서 엔티티(테이블명·INF-ID·path 키워드)를 추출해 그래프 기반 영향집합을 만든다:
+
+```bash
+!python "{PLUGIN_PATH}/scripts/build_change_context.py" . --sr {SR-ID} --entities "{엔티티 쉼표구분}"
 ```
 
-### 5-2. 도메인 스펙 파일 로드
+산출 `docs/변경관리/{SR-ID}/_asis_brief.md`에는 **영향 INF/SCH + 근거소스 앵커(file:line) + ⚠️ ripple 경고**(공유테이블의 시드 외 사용처 — 교차도메인 포함)가 담긴다. `spec_graph.json`이 없어도 INF/SCH frontmatter에서 그래프를 빌드한다.
 
-RTM 도메인 색인에서 해당 파일 경로를 확인하고 로드한다:
+### 5-2. JIT 실소스 read (요약 대신 실코드)
 
-```
-docs/05_설계서/order/API_order.md  → INF-067, INF-068, INF-069 섹션 확인
-docs/05_설계서/order/DB_order.md   → SCH-023, SCH-024 섹션 확인
-docs/05_설계서/order/UI_order.md   → UIS-F-012, UIS-F-013 섹션 확인
-```
+브리프의 소스앵커 `file:line`을 **Read 도구로 직접 읽어** 현재 비즈니스 규칙·구현을 정밀 확인한다(요약 스펙의 손실 회피).
+**ripple 경고의 사용처는 회귀 영향분석(Step 6)에 반드시 반영**한다.
+
+> 프로세 INF/SCH 본문(`{도메인}/INF/`, `{도메인}/SCH/`)은 앵커가 비거나 소스 파일이 없을 때만 **폴백**으로 로드한다. RTM 도메인 색인은 보조 참조.
 
 ### 5-3. DB 실제 현황 조회 (MCP)
 
