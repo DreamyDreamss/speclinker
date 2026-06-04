@@ -996,32 +996,33 @@ print(f'처리 도메인: {len(plan[\"domains\"])}개')
 !python "{PLUGIN_PATH}/scripts/build_sch_todo.py" .
 ```
 
-> 누락 테이블이 0인 도메인은 ddd-db-agent를 **호출하지 않는다**. 부분 생성된 도메인은 `existing`을 에이전트에 넘겨 **누락분만** 생성한다.
+> 누락 테이블이 0인 도메인은 스킵된다(sch_todo.json에서 제외). 부분 생성 도메인은 `existing`을 넘겨 **누락분만** 생성한다.
 
-`ddd-db-agent`를 **생성 대상 도메인(`_tmp/sch_todo.json`)만** 호출한다 (동시에 3도메인씩):
+### STEP 5-A: 정적 스켈레톤 생성 (build_sch_static.py — zero-token)
 
+사실(컬럼·타입·인덱스·FK·mini-ERD·크로스링크·도메인개요·전역색인)을 **스크립트로** 생성한다. LLM 토큰 0.
+의미 섹션(코드값·비즈니스 주의사항·컬럼 한글설명)은 `<!-- LLM-TODO -->` 마커로 남긴다.
+
+```bash
+!python "{PLUGIN_PATH}/scripts/build_sch_static.py" .
 ```
-_tmp/sch_todo.json의 각 도메인(생성 대상만)에 대해 Agent 도구 호출:
-  subagent_type: "speclinker:ddd-db-agent"
-  description: "{domain.name}({domain.code}) SCH 생성"
-  prompt: |
-    도메인: {domain.name}
-    도메인 코드: {domain.code}
-    도메인 설명: {domain.description}
-    INF 디렉토리: docs/05_설계서/{domain.name}/INF/
-    sch_draft 디렉토리: _tmp/sch_draft/{domain.name}/ (없으면 INF tables: frontmatter + SQL 분석)
-    MCP_DB 서버: {_tmp/mcp_status.json의 가용 DB MCP 서버 별칭 — 없으면 "없음"}
-    워크스페이스: {현재 작업 디렉토리 절대경로}
-    이미 생성된 SCH 테이블 (재생성 금지 — 건너뛸 것): {todo.existing}  ← _tmp/sch_todo.json
-    생성 대상 누락 테이블만 SCH 작성: {todo.missing}
 
-    완료 후 (테이블당 개별 파일 구조 — INF와 대칭):
-    - docs/05_설계서/{domain.name}/SCH/SCH-{domain.code}-NNN.md (테이블 1개=파일 1개, frontmatter 필수)
-    - docs/05_설계서/{domain.name}/DB_{domain.name}.md (슬림 개요: 도메인 ERD + 테이블 목록, DDL 없음)
-    - docs/05_설계서/DB_Schema.md (전역 색인, 파일 직링크)
-    - 각 SCH 파일은 INF tables: 와 양방향 링크 포함
-    ※ 3NF 검증 결과·통과 여부 섹션은 작성하지 않는다.
+> **컬럼 타입 권위 순위**: DB 드라이버(project.env `DB_TYPE`/`DB_HOST`/…) > `CREATE TABLE`(*.sql) > ORM > sch_draft(이름만).
+> 무DB·무DDL이면 컬럼명 스켈레톤 + 타입칸 `<!-- LLM-TODO -->`. 산출물: 개별 `SCH-{CODE}-NNN.md` + `DB_{도메인}.md` + `DB_Schema.md` + `_tmp/sch_enrich_todo.json`(의미보강 필요 도메인).
+> 기존 SCH는 재생성하지 않고 채번을 이어간다(멱등). 3NF 검증 결과·통과 여부는 작성하지 않는다.
+
+### STEP 5-B: 의미 enrichment 디스패치 (dispatch_sch_gen.py)
+
+코드성 컬럼/INF 비즈규칙이 있어 보강이 필요한 도메인(`_tmp/sch_enrich_todo.json`)만,
+`ddd-db-agent`(enrichment 모드)를 **서브프로세스로 병렬 호출**해 `<!-- LLM-TODO -->`만 채운다.
+사실 섹션은 건드리지 않으며, 메인 컨텍스트에 SCH 본문이 쌓이지 않는다(컨텍스트 격리).
+
+```bash
+!python "{PLUGIN_PATH}/scripts/dispatch_sch_gen.py" .
 ```
+
+> exit 0 = 완료(또는 enrichment 대상 없음 — 전부 정적으로 충분).
+> exit 1이면 `_tmp/sch_dispatch_status.json`의 `failed` 확인 후 재실행 — 완료 도메인은 자동 스킵.
 
 ---
 
