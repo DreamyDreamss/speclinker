@@ -121,6 +121,7 @@
 | 코드 생성 | `agents/dev-agent.md` | Sonnet | 반복 실행 태스크 |
 | 테스트 | `agents/test-agent.md` | Sonnet | 반복 실행 태스크 |
 
+> v2.58: sl-recon-uis 도메인 선택 체크포인트 추가 — 인수 없이 실행하면 도메인 목록(도메인별 goto form 화면 수 미리보기)을 보여주고 전체/특정 도메인을 사용자에게 질문(INF 도메인선택과 동형). 인수 주어지면 프롬프트 생략. 도메인 필터는 build_uis_goto_plan.py 3번째 인자(relPath 기반 assign_file_domains)로 goto 플랜에 적용. RECON_PIPELINE.md Phase 2 정합.
 > v2.57: RECON 문서 현행화 + 참조문서 동기화 강제. legacy `/sl-recon-inf` 삭제(INF·SCH 생성은 v2.53 도메인선택형 리팩토링으로 이미 `/sl-recon` STEP 4-3/5에 통합됨). `link_inf_sch_new.py`를 `/sl-recon` STEP 5-1로 재배선(INF→SCH 링크 패치 누락 복구). sl-recon STEP 5 SCH 프롬프트를 개별파일 구조로 정정. RECON_PIPELINE.md/README/SETUP_GUIDE/scripts-README의 stale recon-inf·DB_Schema_{domain} 참조 일괄 제거. CLAUDE.md에 "참조 문서 동기화(MUST)" 레지스트리+DoD 신설.
 > v2.56: SCH 명세 테이블당 개별파일 구조 + 뷰어 경로/링크 라우팅 수정. SCH가 INF와 대칭(`{도메인}/SCH/SCH-{CODE}-NNN.md` 개별파일 + 슬림 `DB_{도메인}.md`(도메인 ERD+목록) + `DB_Schema.md` 파일직링크 색인). 앵커(#SCH) 전면 폐기 → INF↔SCH 정확 네비게이션. gen_docsify scan_schs(spec_index.schs[]) + docsify-sl.js goToId SCH해소·SCH탭 + link_inf_sch/merge_index SCH/스캔. 뷰어는 프로젝트 루트 서빙 + 동적 basePath + 자산 자동복사(gen_docsify). 3NF 검증결과/통과여부 산출물에서 제외.
 > v2.55: INF 생성 병렬화 개선 — dispatch_inf_gen.py domain_lock 제거(INF-ID 사전배정 신뢰 → 단일 도메인도 병렬 3) + 타임아웃 600→1800초 + stagger 누적버그 수정(간격 방식). ddd-api-agent infIdStart 절대준수(폴더스캔 채번 금지).

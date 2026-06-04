@@ -28,21 +28,59 @@ triggers:
 
 ---
 
-## 실행 인수 파싱
+## ✋ 도메인 선택 (인수 또는 사용자 확인 — 필수)
 
-인수가 있으면 도메인 필터 / 실행 모드를 결정한다.
+INF 생성과 동일하게, **전체 도메인을 처리할지 특정 도메인만 처리할지 먼저 결정**한다.
 
-| 인수 형식 | 설명 |
-|---------|------|
-| (없음) | 전체 BFS + 전체 UIS 생성 |
-| `방송관리` | 해당 GNB만 BFS + UIS 생성 (타 도메인 보존) |
-| `--spec-only 방송관리` | BFS 없이 기존 캡처 기반 UIS spec 재생성만 |
+### A. 인수가 주어진 경우 → 프롬프트 생략
 
-**지금 실행된 인수를 확인하고 Write 도구로 `_tmp/_recon_uis_mode.json`을 생성하세요:**
+| 인수 형식 | 동작 | `_tmp/_recon_uis_mode.json` |
+|---------|------|------------------------------|
+| `방송관리` | 해당 도메인만 처리 (타 도메인 보존) | `{"domain_filter": "방송관리", "spec_only": false}` |
+| `--spec-only 방송관리` | 캡처 없이 기존 캡처 기반 UIS spec 재생성만 | `{"domain_filter": "방송관리", "spec_only": true}` |
 
-- 인수가 `--spec-only 방송관리` 형식 → `{"domain_filter": "방송관리", "spec_only": true}`
-- 인수가 `방송관리`만 → `{"domain_filter": "방송관리", "spec_only": false}`
-- 인수가 없음 → `{"domain_filter": null, "spec_only": false}`
+→ Write 도구로 위 모드 JSON을 작성하고 **「실행 전 확인」 STEP으로 이동**한다.
+
+### B. 인수가 없는 경우 → 도메인 목록 제시 후 사용자에게 질문 (필수)
+
+먼저 처리 가능 도메인과 도메인별 캡처 대상(goto form 화면) 수를 집계해 보여준다:
+
+```bash
+!python -c "
+import os, sys, json
+try: sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+except: pass
+env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8') if '=' in l and not l.startswith('#'))
+plugin = env.get('PLUGIN_PATH','')
+
+dp = 'docs/05_설계서/_domain_plan.json'
+domains = [d['name'] for d in json.load(open(dp, encoding='utf-8')).get('domains',[])] if os.path.exists(dp) else []
+
+counts = {}
+si = '_tmp/source_index.json'
+if plugin and os.path.exists(si):
+    sys.path.insert(0, os.path.join(plugin, 'scripts'))
+    try:
+        from build_uis_goto_plan import build_goto_plan
+        from collections import Counter
+        counts = Counter(s['domain'] for s in build_goto_plan(json.load(open(si, encoding='utf-8'))))
+    except Exception as e:
+        print('[WARN] form 화면 집계 실패:', e)
+
+print('처리 가능 도메인:')
+for i, d in enumerate(domains, 1):
+    print(f'  {i:2}. {d:<24} goto form화면 {counts.get(d, 0)}개')
+if not domains:
+    print('  (도메인 없음 — /sl-recon 먼저 실행)')
+"
+```
+
+> 위 목록을 사용자에게 보여주고 **반드시 질문한다 (사용자 응답 전 다음 STEP 진행 금지):**
+> *"UIS를 전체 도메인으로 생성할까요, 특정 도메인만 할까요? (전체 = `all` / 또는 도메인명·번호 입력)"*
+>
+> 사용자 응답을 받아 Write 도구로 `_tmp/_recon_uis_mode.json`을 작성한다:
+> - `전체` / `all` → `{"domain_filter": null, "spec_only": false}`
+> - 특정 도메인명(또는 번호로 지목한 도메인) → `{"domain_filter": "<도메인>", "spec_only": false}`
 
 ```bash
 !python -c "

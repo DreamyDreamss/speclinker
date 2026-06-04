@@ -30,6 +30,7 @@
   STEP 6     완료 체크포인트(phase=recon-analysis) → 다음: /sl-recon-uis
 
 /sl-recon-uis  (STEP 6-*)  ── 화면 탐색·UIS 설계서
+  (도메인 선택) ✋ 인수 없으면 전체/특정 도메인 사용자 확인 → _recon_uis_mode.json
   STEP 6-0-GOTO  form URL 직접 goto 캡처 (기본 모드)
   STEP 6-0       정적 Fallback (앱 미실행 시)
   STEP 6-1       Chrome + 로그인 (브라우저 환경 준비)
@@ -83,6 +84,7 @@
 
 | STEP | 핵심 동작 | 스크립트 / 에이전트 | 주요 출력 |
 |------|----------|-------------------|----------|
+| (선택) | ✋ 도메인 선택 — 인수 없으면 전체/특정 도메인 사용자 확인 (form 화면 수 미리보기) | 인라인 + `build_uis_goto_plan.py` | `_tmp/_recon_uis_mode.json` (domain_filter) |
 | 6-0-GOTO | form URL 직접 goto 캡처 (기본) | `capture.js` | preview.png |
 | 6-0 | 정적 Fallback (앱 미실행) | 인라인 | `screen_inventory_static.json` 기반 |
 | 6-1 | Chrome + 로그인 | `runtime_capture.js --bootstrap` | `.preview-storage.json` |
