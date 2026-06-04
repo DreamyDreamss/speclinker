@@ -14,7 +14,6 @@ model: claude-sonnet-4-6
 | INF 디렉토리(`docs/05_설계서/{도메인}/INF/`) 없음 | 중단 → "ddd-api-agent 먼저 실행 필요" |
 | Profile 없음 | 경고 없이 SQL 직접 패턴 탐색으로 계속 |
 | DB MCP 연결 실패 | 경고 + 스펙 기준으로만 계속 (실제 DB 미검증 경고 각주 추가) |
-| 3NF 검증 실패 | 정규화 위반 목록 SCH 파일 하단에 `## 정규화 주의` 섹션으로 출력 (중단 없음) |
 | ERD Mermaid 렌더 오류 (테이블 40개+ 등) | ERD 생략 + `[TODO: ERD — 테이블 수 초과]` 표기 |
 
 ---
@@ -183,22 +182,12 @@ for root in roots:
 
 ---
 
-## Phase 2: 3NF 정규화 검증
+## Phase 2: 정규화 원칙 (참고)
 
-> **3NF 체크리스트:** 각 테이블을 작성한 뒤 아래를 순서대로 확인한다.
+> 테이블 설계 시 아래만 지킨다. **정규화 검증 결과·통과 여부는 산출물에 기록하지 않는다.**
 
-```
-1NF: 모든 컬럼이 원자값인가? (배열·복합 타입은 별도 테이블로)
-  위반 예: users.tags = "admin,user" → tags 테이블 분리
-
-2NF: 복합 PK가 있는 경우, 비키 컬럼이 PK 전체에 함수적으로 의존하는가?
-  위반 예: order_items(order_id, product_id, product_name) → product_name이 product_id에만 의존
-
-3NF: 비키 컬럼 간 이행적 함수 의존이 없는가?
-  위반 예: users(user_id, dept_id, dept_name) → dept_name이 dept_id에 의존 → dept 테이블 분리
-```
-
-정규화 위반 발견 시 → 즉시 테이블 분리 후 재검증
+- 다중값 컬럼(`tags = "admin,user"`)은 별도 테이블로 분리
+- 비키 컬럼이 다른 비키 컬럼에 종속(`dept_name` ← `dept_id`)되면 별도 테이블로 분리
 
 ---
 
@@ -215,9 +204,9 @@ for root in roots:
 
 | SCH-ID  | 테이블명 | INF-ID |
 |---------|---------|--------|
-| SCH-AUTH-001 | [users](./auth/DB_auth.md#SCH-AUTH-001) | INF-AUTH-001 |
-| SCH-AUTH-002 | [sessions](./auth/DB_auth.md#SCH-AUTH-002) | INF-AUTH-001, INF-AUTH-003 |
-| SCH-DSH-001 | [bi_daily_summary](./dashboard/DB_dashboard.md#SCH-DSH-001) | INF-DSH-001 |
+| SCH-AUTH-001 | [users](./auth/SCH/SCH-AUTH-001.md) | INF-AUTH-001 |
+| SCH-AUTH-002 | [sessions](./auth/SCH/SCH-AUTH-002.md) | INF-AUTH-001, INF-AUTH-003 |
+| SCH-DSH-001 | [bi_daily_summary](./dashboard/SCH/SCH-DSH-001.md) | INF-DSH-001 |
 
 ## 도메인별 파일 목록
 
@@ -230,22 +219,35 @@ for root in roots:
 **파서 주의사항:**
 - 헤더: `| SCH-ID | 테이블명 | INF-ID |` (정확히 이 텍스트)
 - 1열: `SCH-{CODE}-NNN` (순수 ID — 링크 없음, 예: `SCH-ORD-001`)
-- 2열: `[테이블명](./도메인/DB_도메인.md#SCH-{CODE}-NNN)` (Obsidian 링크)
+- 2열: `[테이블명](./도메인/SCH/SCH-{CODE}-NNN.md)` (개별 파일 직링크 — 앵커 없음)
 - 3열: `INF-{CODE}-NNN` (여러 개면 쉼표 구분)
-- SCH 순번: 기존 `SCH-{CODE}-*.md` 스캔 후 max+1 자동 채번 (범위 사전 배정 없음)
+- SCH 순번: 기존 `{도메인}/SCH/SCH-{CODE}-*.md` 스캔 후 max+1 자동 채번 (범위 사전 배정 없음)
 - **이 파일에 DDL이나 컬럼 목록을 절대 작성하지 않는다**
 
-### 3-2. 도메인 상세 파일 (`docs/05_설계서/{도메인}/DB_{도메인}.md`)
+### 3-2. 개별 테이블 파일 (`docs/05_설계서/{도메인}/SCH/SCH-{CODE}-NNN.md`)
 
-> **경로 규칙**: `docs/05_설계서/{도메인}/DB_{도메인}.md` — API·DB·UI가 동일 도메인 폴더에 위치해야 상대경로 링크(`./API_{도메인}.md`, `./UI_{도메인}.md`)가 작동한다.
+> **경로 규칙**: 테이블 1개 = 파일 1개. `{도메인}/SCH/` 하위에 둔다 (INF의 `{도메인}/INF/`와 대칭).
+> 상대경로 기준점이 한 단계 깊으므로 INF 링크는 `../INF/…`, 상위 산출물은 `../../../…`.
 
-**각 테이블 항목 필수 구조:**
+**frontmatter (색인·뷰어 네비게이션용 — 필수):**
+
+```yaml
+---
+sch-id: SCH-{CODE}-NNN
+table: {테이블명}
+domain: {도메인}
+domain-code: {CODE}
+inf: [INF-{CODE}-NNN, ...]
+---
+```
+
+**본문 필수 구조:**
 
 ```markdown
-## SCH-{CODE}-001: users
+# SCH-{CODE}-001: users
 
-> GENESIS: **REQ-F:** [REQ-F-001](../../01_요구사항정의서/RD_v1.0.md#REQ-F-001) | **SRS-F:** [SRS-F-001](../../03_기능명세서/SRS_v1.0.md#SRS-F-001) | **API:** [INF-{CODE}-001](./INF/INF-{CODE}-001.md) | **화면:** [UIS-{CODE}-001](./UI/UIS-{CODE}-001_화면명/spec.md)
-> RECON: **FUNC-ID:** [FUNC-{도메인}-001](../../00_FUNC/FUNC_v1.0.md) | **SRS-F:** [TBD] | **API:** [INF-{CODE}-001](./INF/INF-{CODE}-001.md) | **화면:** [UIS-{CODE}-001](./UI/UIS-{CODE}-001_화면명/spec.md)
+> GENESIS: **REQ-F:** [REQ-F-001](../../../01_요구사항정의서/RD_v1.0.md#REQ-F-001) | **SRS-F:** [SRS-F-001](../../../03_기능명세서/SRS_v1.0.md#SRS-F-001) | **API:** [INF-{CODE}-001](../INF/INF-{CODE}-001.md) | **화면:** [UIS-{CODE}-001](../UI/UIS-{CODE}-001_화면명/spec.md)
+> RECON: **FUNC-ID:** [FUNC-{도메인}-001](../../../00_FUNC/FUNC_v1.0.md) | **SRS-F:** [TBD] | **API:** [INF-{CODE}-001](../INF/INF-{CODE}-001.md) | **화면:** [UIS-{CODE}-001](../UI/UIS-{CODE}-001_화면명/spec.md)
 
 **근거 소스:** `{모델/ORM 파일 경로:라인번호}`
 
@@ -299,7 +301,7 @@ CREATE INDEX idx_users_email ON users(email);
 |---------|-----------|----------|
 | — | — | — |
 
-### ERD (도메인 내 관계)
+### mini-ERD (이 테이블 + 직결 FK 이웃만)
 ```mermaid
 erDiagram
     users {
@@ -329,11 +331,32 @@ erDiagram
 2. sch_draft evidence 파일(서비스 구현체)에서 INSERT/UPDATE 조건 확인
 3. 소스 주석(한글 주석, feat: 표기 등) 그대로 인용 가능
 
-### 3NF 검증 결과
-- 1NF: 통과 (모든 컬럼 원자값)
-- 2NF: 해당없음 (단일 PK)
-- 3NF: 통과 (이행 의존 없음)
 ```
+
+> **ERD 분리 원칙:** 개별 SCH 파일은 mini-ERD(자기 테이블+직결 FK 이웃)만 그린다.
+> 도메인 전체 ERD는 아래 3-3 슬림 개요에 1개만 둔다.
+
+### 3-3. 슬림 도메인 개요 (`docs/05_설계서/{도메인}/DB_{도메인}.md`)
+
+> **DDL 절대 없음.** 도메인 전체 ERD 1개 + 테이블 색인만 둔다.
+> (INF의 `API_{도메인}.md` 도메인 색인 + 도메인 ERD 를 겸하는 역할)
+
+```markdown
+# {도메인} DB 개요
+
+## 도메인 ERD
+
+(mermaid erDiagram — 도메인 내 모든 테이블·관계 1개 다이어그램)
+
+## 테이블 목록
+
+| SCH-ID | 테이블명 | INF-ID |
+|--------|---------|--------|
+| SCH-{CODE}-001 | [users](./SCH/SCH-{CODE}-001.md) | INF-{CODE}-001 |
+| SCH-{CODE}-002 | [sessions](./SCH/SCH-{CODE}-002.md) | INF-{CODE}-001, INF-{CODE}-003 |
+```
+
+> 2열은 `[테이블명](./SCH/SCH-{CODE}-NNN.md)` 파일 직링크. DDL/컬럼은 개별 파일에만.
 
 ---
 
@@ -350,23 +373,22 @@ erDiagram
 [ ] 이 테이블을 참조하는 INF가 있을 때 `### 비즈니스 주의사항`이 있는가?
     → INF의 ## 비즈니스 규칙에 이 테이블 관련 내용 있으면 복사·요약하여 추가
 
-[ ] 3NF 검증: 모든 테이블이 3NF 체크리스트를 통과했는가?
-    → 실패 테이블 발견 시 즉시 분리
-
 [ ] DDL 문법: 모든 DDL에 PRIMARY KEY, NOT NULL, DEFAULT가 명시되었는가?
 
-[ ] ERD 다이어그램: 도메인별 ERD가 mermaid erDiagram 형식으로 작성되었는가?
+[ ] ERD 분리: 개별 SCH 파일은 mini-ERD(자기+직결 FK 이웃), DB_{도메인}.md는 도메인 전체 ERD 1개인가?
 
-[ ] 도메인 파일 분리: 색인 파일(DB_Schema.md)에 DDL이 없는가?
-    → 있으면 도메인 파일로 이동
+[ ] 개별 파일 분리: 각 테이블이 {도메인}/SCH/SCH-{CODE}-NNN.md 1파일로 생성됐는가?
+    → DB_Schema.md(색인)·DB_{도메인}.md(개요)에 DDL이 없는가? 있으면 개별 파일로 이동
+[ ] frontmatter: 모든 SCH 파일에 sch-id/table/domain/domain-code/inf 가 있는가?
+    → 없으면 gen_docsify가 색인하지 못해 뷰어 SCH 네비게이션이 끊긴다
 
 [ ] 크로스링크 완결: 모든 SCH 항목 상단에 REQ-F·SRS-F·API·화면·RTM 링크 블록이 있는가?
     → 없으면 `> **REQ-F:** [...] | **SRS-F:** [...] | **API:** [...] | **화면:** [...] | **RTM:** [↗]` 추가
     → SRS-F 링크: `../../03_기능명세서/SRS_v1.0.md#SRS-F-XXX`
 
-[ ] 상대경로 정확성: 링크 경로가 `../../01_요구사항정의서/`, `./API_{도메인}.md`, `./UI_{도메인}.md` 형식인가?
+[ ] 상대경로 정확성: 개별 SCH 파일(한 단계 깊음)의 링크가 `../../../01_요구사항정의서/`, `../INF/INF-...md` 형식인가?
 
-[ ] 색인 Obsidian 링크: DB_Schema.md 2열이 `[테이블명](./도메인/DB_도메인.md#SCH-NNN)` 형식인가?
+[ ] 색인 링크: DB_Schema.md 2열이 `[테이블명](./도메인/SCH/SCH-{CODE}-NNN.md)` 파일 직링크(앵커 없음)인가?
 
 [ ] 누락 테이블: INF 요청/응답에 등장한 모든 주요 객체가 테이블로 정의되었는가?
     (특히 auth 토큰 저장, audit log, 설정 테이블 등 공통 테이블 누락 주의)
@@ -390,11 +412,11 @@ SCH 항목: {N}건 (테이블 {N}개)
 도메인별: {도메인: SCH수} ...
 
 파일:
-- docs/05_설계서/DB_Schema.md (파싱 색인 + 도메인 nav 테이블)
-- docs/05_설계서/{도메인}/DB_{도메인}.md × {N}개 (크로스링크 포함)
+- docs/05_설계서/DB_Schema.md (전역 색인)
+- docs/05_설계서/{도메인}/DB_{도메인}.md (슬림 개요 + 도메인 ERD)
+- docs/05_설계서/{도메인}/SCH/SCH-{CODE}-NNN.md × {N}개 (개별 테이블)
 
-3NF 검증: 전체 통과 / 위반 후 분리 {M}건
-ERD: 도메인별 mermaid 다이어그램 포함
+ERD: 개별=mini-ERD, 도메인=전체 ERD 1개
 
 다음: rtm-agent에 SCH 목록 전달
 ```
