@@ -253,7 +253,7 @@ Write-Output "디렉토리 생성 완료"
 | docs/변경관리/ | SR별 분석서·변경명세·TC (sl-change 생성) |
 | 06_소스코드/src/ | 프로덕션 소스코드 |
 | 06_소스코드/tests/ | 단위 테스트 |
-| 06_소스코드/reviews/ | 코드 리뷰 결과 (sl-dev --review) |
+| 06_소스코드/reviews/ | 코드 리뷰 결과 (sl-aidd qa-agent 게이트) |
 
 생성일: {CREATED} | 작성자: Claude
 ```
