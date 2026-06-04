@@ -1,6 +1,6 @@
 ﻿# STATUS: 완료
 """
-merge_index.py — RECON/GENESIS 공통 색인 머징기
+merge_index.py — RECON 색인 머징기
 
 도메인별 INF/SCH/UIS 파일과 _TOC.md를 스캔해서 전체 색인 3종을 생성한다.
 LLM 호출 없이 단순 마크다운 파싱 + 머징.
@@ -149,7 +149,7 @@ def collect_uis(domain):
         if not uis_id:
             continue
         screen_name = fm.get('화면명') or fm.get('screen-name') or screen_dir
-        req_f = fm.get('REQ-F') or fm.get('req-f') or '[TBD]'
+        req_f = fm.get('req-f') or '[TBD]'
         rows.append({
             'id': uis_id,
             'name': screen_name,
@@ -180,7 +180,7 @@ def generate_api_design(project_name, domains, all_inf):
         '',
         '## INF 색인',
         '',
-        '| INF-ID | 엔드포인트·기능명 | FUNC-ID / REQ-ID |',
+        '| INF-ID | 엔드포인트·기능명 | FUNC-ID |',
         '|--------|-----------------|------------------|',
     ]
     for inf in all_inf:
@@ -218,7 +218,7 @@ def generate_ui_spec(project_name, domains, all_uis):
         '',
         '## 화면 색인',
         '',
-        '| UIS-ID | 화면명 | FUNC-ID / REQ-ID |',
+        '| UIS-ID | 화면명 | FUNC-ID |',
         '|--------|--------|------------------|',
     ]
     for u in all_uis:

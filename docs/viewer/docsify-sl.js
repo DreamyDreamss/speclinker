@@ -35,7 +35,7 @@
         `<div style="padding:48px 40px;color:var(--text-muted);text-align:center">
           <div style="font-size:40px;margin-bottom:8px">📭</div>
           <h3 style="color:var(--accent);margin:0 0 8px">아직 표시할 산출물이 없습니다</h3>
-          <p style="font-size:13px">RECON/GENESIS로 INF·UIS를 생성한 뒤 인덱스를 갱신하세요:</p>
+          <p style="font-size:13px">RECON으로 INF·UIS·SCH를 생성한 뒤 인덱스를 갱신하세요:</p>
           <code>python scripts/gen_docsify.py .</code>
           <p style="margin-top:24px">
             <span class="sl-nav-link" style="display:inline-block;border:1px solid var(--accent);color:var(--accent);padding:7px 18px;border-radius:6px;cursor:pointer"
@@ -115,9 +115,6 @@
   const GUIDE_VERSION = '2.53.0';
 
   const GUIDE_PIPELINES = [
-    { icon: '🆕', title: '새 프로젝트 (AIDD)',
-      steps: ['sl-init', 'sl-genesis', 'sl-aidd', 'sl-test'],
-      desc: '기획 문서로 설계서→코드 순방향 생성' },
     { icon: '🔍', title: '기존 코드 (RECON)',
       steps: ['sl-init', 'sl-recon', 'sl-recon-uis', '납품'],
       desc: '소스코드를 역분석해 설계서 추출' },
@@ -131,10 +128,9 @@
 
   const GUIDE_CATEGORIES = [
     { name: '시작 & 초기화', color: 'var(--accent)', cmds: [
-      ['/sl-init', '프로젝트 초기화 — 디렉토리·환경·모드 설정. RECON 모드면 소스 스캔 + 도메인 카탈로그 자동 생성', '제일 먼저 실행'],
+      ['/sl-init', '프로젝트 초기화 — 디렉토리·환경 설정 + 소스 스캔 + 도메인 카탈로그 자동 생성', '제일 먼저 실행'],
     ]},
-    { name: '산출물 생성 — GENESIS (순방향)', color: 'var(--status-done)', cmds: [
-      ['/sl-genesis [파일]', '기획 문서 → REQ·SRS·INF·SCH·UIS 설계 산출물 순방향 생성', 'docs/00_입력자료/'],
+    { name: 'AIDD 자동개발', color: 'var(--status-done)', cmds: [
       ['/sl-aidd [FUNC-ID]', 'FUNC 단위 AI 자동개발 루프 (스펙수집→코드→TC→커버리지)', 'FUNC_MAP.md'],
     ]},
     { name: '역분석 — RECON', color: 'var(--status-prog)', cmds: [
@@ -159,7 +155,7 @@
     { name: '개발 · 테스트 · 추적', color: '#3fb950', cmds: [
       ['/sl-dev', 'TO-BE 설계서 기반 코드 생성 (TDD, linked_func 주석)', 'docs/05_설계서/'],
       ['/sl-test', '테스트 케이스 작성 + 실행 → 결과 보고서', '06_소스코드/'],
-      ['/sl-rtm', 'RTM 추적 매트릭스 — REQ→SRS→UIS→INF→SCH 체인 매핑', 'docs/02_추적표/'],
+      ['/sl-rtm', 'RTM 추적 매트릭스 — FUNC→SRS→UIS→INF→SCH 체인 매핑', 'docs/02_추적표/'],
     ]},
     { name: '뷰어', color: 'var(--accent)', cmds: [
       ['/sl-viewer [port]', 'SpecLens (이 웹 뷰어) 실행 (대시보드·INF/UIS/SCH·IA 트리)', 'docs/05_설계서/'],
@@ -167,9 +163,9 @@
   ];
 
   const GUIDE_MODES = [
-    ['GENESIS', '순방향', '기획 문서 → 설계서 → 코드. 신규 프로젝트.', 'var(--status-done)'],
-    ['RECON', '역분석', '기존 소스 → 설계서 역추출. 문서 없는 레거시.', 'var(--status-prog)'],
-    ['DELTA', '변경', '변경요청 → 영향분석 → 스펙수정 → 코드. 운영·유지보수.', 'var(--status-review)'],
+    ['RECON', '역분석', '기존 소스 → 설계서 역추출. 운영 중 시스템.', 'var(--status-prog)'],
+    ['AIDD', '자동개발', 'FUNC 단위로 코드·테스트 자동 생성.', 'var(--status-done)'],
+    ['DELTA', '변경', '변경요청(SR) → 영향분석 → 스펙수정 → 코드. 운영·유지보수.', 'var(--status-review)'],
   ];
 
   function renderGuide() {
@@ -232,9 +228,9 @@
         <div class="sl-g-section-h">🧭 동작 방식</div>
         <div class="sl-g-modes">${modes}</div>
         <div class="sl-g-note">
-          <b>FUNC-ID 체이닝</b> — 모든 산출물(REQ·SRS·UIS·INF·SCH)과 소스코드가
+          <b>FUNC-ID 체이닝</b> — 모든 산출물(SRS·UIS·INF·SCH)과 소스코드가
           <code>FUNC-{도메인}-{NNN}</code>로 연결됩니다. <code>FUNC_MAP.md</code>가 단일 진실의 원천(SSoT).
-          <br><b>추적 체인</b> — REQ → SRS → UIS / INF / SCH / BAT → 코드(linked_func) → TC
+          <br><b>추적 체인</b> — FUNC → SRS → UIS / INF / SCH / BAT → 코드(linked_func) → TC
         </div>
 
         <div class="sl-g-footer">

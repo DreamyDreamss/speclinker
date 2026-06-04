@@ -41,7 +41,7 @@ def parse_func_map(root):
         entry = {'id': func_id, 'description': desc,
                  'req': [], 'srs': [], 'inf': [], 'sch': [], 'uis': [], 'status': '미구현'}
 
-        for field, key in [('REQ', 'req'), ('SRS', 'srs'), ('INF', 'inf'),
+        for field, key in [('SRS', 'srs'), ('INF', 'inf'),
                             ('SCH', 'sch'), ('UIS', 'uis')]:
             pat = re.search(rf'[-*]\s*\*\*{field}\*\*\s*:\s*(.+)', sec)
             if pat:
@@ -205,12 +205,7 @@ def make_bundle(func_id, root, env, func_map):
     sch_content = find_sch_content(root, ids['sch'])
     uis_content = find_uis_content(root, ids['uis'])
 
-    mode = env.get('MODE', 'GENESIS')
-    if mode == 'RECON':
-        annotation = f'linked_func: {func_id}'
-    else:
-        req_ids = ', '.join(entry['req']) if entry['req'] else func_id
-        annotation = f'linked_req: {req_ids}'
+    annotation = f'linked_func: {func_id}'
 
     # 이미 구현된 파일 확인
     cache = load_linked_func_cache(root)

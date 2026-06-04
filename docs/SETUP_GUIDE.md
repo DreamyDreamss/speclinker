@@ -107,10 +107,6 @@ Step 0    소스 경로 수집
            - 각 소스의 레이블(예: api)과 절대 경로 입력
            - 경로 유효성 즉시 확인 (없으면 재입력)
 
-Step 0-B  모드 선택
-           1) RECON   — 기존 소스코드 있음, 설계서 역분석
-           2) GENESIS — 신규 프로젝트, 기획 문서로 순방향 생성
-
 Step 1    네트워크 환경 선택
            1) open   — 사내망/인터넷 (DB·Jira·Wiki MCP 활성화)
            2) closed — 폐쇄망 (로컬 파일만)
@@ -217,12 +213,6 @@ Chrome 창이 열리면:
 /sl-recon       (소스 스캔, 도메인 확정, INF·SCH 생성)
 /sl-recon-uis   (화면 캡처, UIS 설계서)
 /sl-recon-doc   (FUNC/SRS/RTM/IA 생성)
-```
-
-### GENESIS 모드 (신규 프로젝트)
-
-```
-/sl-genesis docs/00_입력자료/interview.md
 ```
 
 ---

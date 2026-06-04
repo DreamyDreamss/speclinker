@@ -11,7 +11,6 @@ SI/ITO 개발 전주기 자동화 플러그인 — 요구사항 정의부터 코
 │
 ├── skills/                  ← Claude Code 슬래시 커맨드 (13개)
 │   ├── sl-init              /sl-init            프로젝트 초기화
-│   ├── sl-genesis           /sl-genesis          인터뷰→설계서 순방향 생성
 │   ├── sl-recon             /sl-recon            기존 코드 역분석 (소스 스캔 + INF/SCH 생성)
 │   ├── sl-recon-uis         /sl-recon-uis        RECON Phase-2: 화면 캡처·UIS 설계서
 │   ├── sl-recon-doc         /sl-recon-doc        RECON Phase-3: 문서·RTM 생성
@@ -119,17 +118,17 @@ Claude Code에서 아무 프로젝트 디렉토리를 열고:
 /sl-init
 ```
 
-`project.env` 파일이 생성되고 프로젝트 모드(GENESIS / RECON / DELTA)를 물어보면 정상 설치된 것입니다.
+`project.env` 파일이 생성되고 소스 스캔·도메인 카탈로그가 만들어지면 정상 설치된 것입니다.
 
 ---
 
 ## 워크플로
 
-### 신규 프로젝트 (설계서 없음)
+### 운영 중 시스템 (현행 소스 → 스펙 → AIDD)
 
 ```
-/sl-init          → 프로젝트 초기화 (project.env 생성)
-/sl-genesis [파일] → 인터뷰·회의록에서 RD/SRS/SAD/API/DB/UI 설계서 자동 생성
+/sl-init          → 프로젝트 초기화 (project.env 생성 + 소스 스캔)
+/sl-recon         → 현행 소스 역분석 → INF/SCH/UIS/FUNC 스펙 생성
 /sl-aidd          → FUNC 단위로 코드 + 테스트 자동 생성
 /sl-test          → TC 작성·실행·TR 생성
 ```
