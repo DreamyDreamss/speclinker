@@ -560,7 +560,7 @@ else:
 
 ```
 ┌───────────────────────────────────────┐
-│  /sl-dev, /sl-aidd 실행 조건:          │
+│  /sl-aidd 실행 조건:                   │
 │  ✓ .speclinker/approved/{SR-ID}.lock  │
 │  ✓ TO-BE 스펙 업데이트 완료            │
 │  ✗ 위 조건 없으면 → 실행 거부          │
@@ -604,7 +604,7 @@ mcp-atlassian 호출:
 
       RTM: REQ-C-{번호} 추가, 관련 항목 상태 → 🔁 변경중
 
-      다음 단계: /sl-dev {SR-ID}
+      다음 단계: /sl-aidd {SR-ID}
 ```
 
 ### 11-3. 로컬 완료 출력
@@ -627,7 +627,7 @@ mcp-atlassian 호출:
    docs/05_설계서/order/UI_order.md   (UIS-F-012 섹션)
    docs/02_추적표/RTM_v1.0.md        (변경 행 추가)
 
- 다음 단계: /sl-dev SR-1234
+ 다음 단계: /sl-aidd SR-1234
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 

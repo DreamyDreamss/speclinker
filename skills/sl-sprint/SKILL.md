@@ -116,5 +116,5 @@ backlog: {N} | ready-for-dev: {N} | in-progress: {N} | review: {N} | done: {N}
   연결 UIS: {UIS-ID}
   이유: {추천 이유}
 
-시작하려면: /sl-check {FUNC-ID}
+시작하려면: /sl-aidd {FUNC-ID}
 ```

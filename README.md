@@ -14,8 +14,7 @@ SI/ITO 개발 전주기 자동화 플러그인 — 요구사항 정의부터 코
 │   ├── sl-recon             /sl-recon            기존 코드 역분석 (소스 스캔 + INF/SCH 생성)
 │   ├── sl-recon-uis         /sl-recon-uis        RECON Phase-2: 화면 캡처·UIS 설계서
 │   ├── sl-recon-doc         /sl-recon-doc        RECON Phase-3: 문서·RTM 생성
-│   ├── sl-aidd              /sl-aidd             FUNC 단위 AI 개발 파이프라인
-│   ├── sl-dev               /sl-dev              코드·단위테스트 자동 생성
+│   ├── sl-aidd              /sl-aidd             FUNC=story 단위 AIDD 루프 (story→승인→구현→QA→테스트)
 │   ├── sl-test              /sl-test             TC 작성·실행·TR 생성
 │   ├── sl-rtm               /sl-rtm              RTM 커버리지 재계산·게시
 │   ├── sl-analyze           /sl-analyze          변경영향분석서(CIA) 작성

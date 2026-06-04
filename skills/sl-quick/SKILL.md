@@ -85,13 +85,10 @@ dev-agent에 위임한다:
 
 ---
 
-## STEP 5: /sl-review --quick (Layer 1만)
+## STEP 5: 경량 스펙 일치 점검 (Layer 1만)
 
-```
-/sl-review {INF-ID} --quick
-```
-
-Layer 1(스펙 감사)만 실행. Layer 2/3 생략.
+소규모 변경이므로 인라인으로 Layer 1(스펙 감사)만 실행한다. Layer 2/3(보안·회귀)은 생략.
+(본격 검증이 필요하면 `/sl-aidd` story 루프의 qa-agent 게이트를 사용)
 
 CRITICAL 결함 없으면 완료. CRITICAL 있으면 수정 후 재실행.
 

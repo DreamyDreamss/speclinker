@@ -8,7 +8,7 @@ description: RECON 결과물 + 소스코드 샘플을 분석해 프로젝트 고
 ## 역할
 
 RECON으로 생성된 INF/UIS/SCH와 소스코드 샘플을 분석해 **이 프로젝트 고유의** 코딩 패턴·규칙을 귀납적으로 추출한다.  
-생성된 `docs/project-context.md`는 `/sl-dev` 실행 시 AI가 자동으로 로드하는 **persistent facts**가 된다.
+생성된 `docs/project-context.md`는 `/sl-aidd` 실행 시 AI가 자동으로 로드하는 **persistent facts**가 된다.
 
 ```
 호출:
@@ -137,6 +137,6 @@ INF 분석: {N}개 파일
   인증 방식: {한 줄 요약}
   명명 규칙: {한 줄 요약}
 
-다음: /sl-dev 실행 시 이 파일이 자동으로 로드됩니다.
+다음: /sl-aidd 실행 시 이 파일이 자동으로 로드됩니다.
 ═══════════════════════════════════
 ```

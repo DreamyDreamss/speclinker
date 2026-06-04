@@ -250,7 +250,7 @@ else:
 - _tmp/ia-map.json                      (화면 계층 구조 + 화면↔INF 연결 매트릭스)
   → /understand-dashboard 실행 후 "IA" 탭에서 확인 가능
 
-다음 단계: /sl-dev (코드 수정 필요 시) 또는 납품
+다음 단계: /sl-aidd (코드 구현·수정 필요 시) 또는 납품
 ```
 
 > **POC 모드 사용자 안내** (POC_MODE=true 였을 때):  

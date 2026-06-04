@@ -112,7 +112,7 @@
   }
 
   // ── 사용자 가이드 ────────────────────────────────────────────
-  const GUIDE_VERSION = '2.53.0';
+  const GUIDE_VERSION = '3.1.0';
 
   const GUIDE_PIPELINES = [
     { icon: '🔍', title: '기존 코드 (RECON)',
@@ -122,7 +122,7 @@
       steps: ['sl-analyze', 'sl-change', 'sl-aidd'],
       desc: '변경요청(SR) 영향분석→스펙수정→코드' },
     { icon: '⚙️', title: 'SDD 전체 파이프라인',
-      steps: ['sl-recon', 'sl-ia', 'sl-context', 'sl-plan', 'sl-check', 'sl-dev', 'sl-review'],
+      steps: ['sl-recon', 'sl-ia', 'sl-context', 'sl-plan', 'sl-aidd'],
       desc: '스펙 주도 개발(Spec-Driven) 풀 사이클' },
   ];
 
@@ -131,7 +131,7 @@
       ['/sl-init', '프로젝트 초기화 — 디렉토리·환경 설정 + 소스 스캔 + 도메인 카탈로그 자동 생성', '제일 먼저 실행'],
     ]},
     { name: 'AIDD 자동개발', color: 'var(--status-done)', cmds: [
-      ['/sl-aidd [FUNC-ID]', 'FUNC 단위 AI 자동개발 루프 (스펙수집→코드→TC→커버리지)', 'FUNC_MAP.md'],
+      ['/sl-aidd [FUNC-ID]', 'FUNC=story 단위 AIDD 루프 (story→승인→구현→QA게이트→테스트→커버리지)', 'FUNC_MAP.md'],
     ]},
     { name: '역분석 — RECON', color: 'var(--status-prog)', cmds: [
       ['/sl-recon', '소스코드 역분석 → 도메인 선택 → INF·SCH 명세 생성', 'project.env, 소스'],
@@ -142,8 +142,6 @@
     { name: 'SDD 파이프라인', color: '#a371f7', cmds: [
       ['/sl-context', 'project-context.md 생성 — 프레임워크·공통패턴 학습', 'INF 존재'],
       ['/sl-plan [설명]', '변경 영향분석 초안 — 키워드→스펙 매핑→규모 분류', 'docs/05_설계서/'],
-      ['/sl-check <ID>', '개발 착수 게이트 — 승인 토큰·INF 완전성 검증', '.speclinker/'],
-      ['/sl-review <ID>', '3단계 리뷰 — 스펙·보안·회귀 감사', 'TO-BE INF'],
       ['/sl-sprint', '스프린트 대시보드 — FUNC 상태·진행률 관리', 'FUNC_MAP.md'],
       ['/sl-drift', '스펙-코드 드리프트 감지 — 소스 변경 vs INF 미갱신', 'git, INF'],
       ['/sl-quick "설명"', '소규모 변경 경량 경로 (SR 없이 INF≤2 인라인 처리)', 'INF, context'],
@@ -153,7 +151,6 @@
       ['/sl-change <SR-ID>', '변경명세 생성 → before/after diff → 승인 토큰', 'docs/05_설계서/'],
     ]},
     { name: '개발 · 테스트 · 추적', color: '#3fb950', cmds: [
-      ['/sl-dev', 'TO-BE 설계서 기반 코드 생성 (TDD, linked_func 주석)', 'docs/05_설계서/'],
       ['/sl-test', '테스트 케이스 작성 + 실행 → 결과 보고서', '06_소스코드/'],
       ['/sl-rtm', 'RTM 추적 매트릭스 — FUNC→SRS→UIS→INF→SCH 체인 매핑', 'docs/02_추적표/'],
     ]},
