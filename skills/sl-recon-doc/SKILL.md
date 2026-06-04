@@ -235,9 +235,10 @@ else:
 [상세 설계]
 - docs/05_설계서/{도메인}/INF/INF-XXX.md × N개  (인터페이스 개별 파일)
 - docs/05_설계서/{도메인}/UI/{화면ID}/spec.md × N개
-- docs/05_설계서/{도메인}/DB_{도메인}.md × N개
+- docs/05_설계서/{도메인}/SCH/SCH-XXX.md × N개  (DB 스키마 개별 파일)
+- docs/05_설계서/{도메인}/DB_{도메인}.md  (슬림 도메인 개요: 도메인 ERD + 테이블 목록, DDL 없음)
 - docs/05_설계서/{도메인}/BAT/BAT-XXX.md × N개  (배치 명세 — 배치 파일 존재 시)
-- docs/05_설계서/API_Design.md / DB_Schema.md / UI_Spec_v1.0.md  (전체 색인)
+- docs/05_설계서/API_Design.md / DB_Schema.md / UI_Spec_v1.0.md  (전체 색인, 파일 직링크)
 
 [기능 명세]
 - docs/00_FUNC/FUNC_v1.0.md             (구현 기능 목록 — RD 대체)

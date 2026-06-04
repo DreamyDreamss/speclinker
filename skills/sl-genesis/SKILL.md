@@ -127,6 +127,12 @@ print(f'\n총 {len(plan[\"domains\"])}개 도메인')
     가용 DB MCP 서버: []  ← GENESIS는 MCP 없음
     MODE: GENESIS
     워크스페이스: {현재 작업 디렉토리 절대경로}
+
+    산출물 (테이블당 개별 파일 구조 — INF와 대칭):
+    - docs/05_설계서/{도메인명}/SCH/SCH-{CODE}-NNN.md (테이블 1개=파일 1개, frontmatter 필수)
+    - docs/05_설계서/{도메인명}/DB_{도메인명}.md (슬림 개요: 도메인 ERD + 테이블 목록, DDL 없음)
+    - docs/05_설계서/DB_Schema.md (전역 색인, 파일 직링크)
+    ※ 3NF 검증 결과·통과 여부 섹션은 작성하지 않는다.
 ```
 
 **[그룹 C] ddd-ui-agent — 도메인당 1호출 (그룹A 완료 후 3개씩 배치 병렬)**

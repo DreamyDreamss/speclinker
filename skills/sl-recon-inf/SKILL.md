@@ -61,8 +61,9 @@ for i, d in enumerate(plan['domains'], 1):
     # INF 개수
     inf_dir = f'docs/05_설계서/{name}/INF'
     inf_done = len([f for f in os.listdir(inf_dir) if f.startswith('INF-')]) if os.path.isdir(inf_dir) else 0
-    # SCH 개수
-    sch_done = len([f for f in os.listdir(f'docs/05_설계서/{name}') if f.startswith('SCH-')]) if os.path.isdir(f'docs/05_설계서/{name}') else 0
+    # SCH 개수 ({도메인}/SCH/ 하위 개별 파일)
+    sch_dir = f'docs/05_설계서/{name}/SCH'
+    sch_done = len([f for f in os.listdir(sch_dir) if f.startswith('SCH-') and f.endswith('.md')]) if os.path.isdir(sch_dir) else 0
     api_hints_cnt = hints_by_domain.get(name, 0)
     print(f'  {i:2}. {name:20} UIS:{uis_done:3}개  api_hints:{api_hints_cnt:3}개  INF:{inf_done:3}개  SCH:{sch_done:2}개')
 
@@ -442,6 +443,12 @@ else:
       - 목록이 비어있으면 MCP 없이 sch_draft + ORM/SQL 보강만으로 SCH 생성
     MODE: RECON
     워크스페이스: {현재 작업 디렉토리 절대경로}
+
+    산출물 (테이블당 개별 파일 구조 — INF와 대칭):
+    - docs/05_설계서/{도메인명}/SCH/SCH-{CODE}-NNN.md (테이블 1개=파일 1개, frontmatter 필수)
+    - docs/05_설계서/{도메인명}/DB_{도메인명}.md (슬림 개요: 도메인 ERD + 테이블 목록, DDL 없음)
+    - docs/05_설계서/DB_Schema.md (전역 색인, 파일 직링크 / 앵커 금지)
+    ※ 3NF 검증 결과·통과 여부 섹션은 작성하지 않는다.
 
     ⚠️ 토큰 절약 의무:
     - sch_draft를 1차 사실로 사용, evidence 파일 재Read 금지
