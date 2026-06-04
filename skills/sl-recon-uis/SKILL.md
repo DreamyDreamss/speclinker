@@ -1376,13 +1376,13 @@ for d in target_domains:
         c = open(spec, encoding='utf-8').read()
         uis_id  = re.search(r'^UIS-ID:\s*(\S+)', c, re.M)
         screen  = re.search(r'^화면명:\s*(.+)',   c, re.M)
-        req_f   = re.search(r'^REQ-F:\s*(\S+)',   c, re.M)
+        req_f   = re.search(r'^req-f:\s*(\S+)',   c, re.M)
         cap_tag = '[캡처]' if os.path.isdir(os.path.join(ui_dir, dname, 'captures')) else '[와이어]'
         if uis_id:
             rows.append((uis_id.group(1),
                          screen.group(1).strip() if screen else dname,
                          req_f.group(1) if req_f else '[TBD]', dname, cap_tag))
-    toc = '# UI 화면 목록 - ' + domain + '\n\n| UIS-ID | 화면명 | REQ-ID | 유형 |\n|--------|--------|--------|------|\n'
+    toc = '# UI 화면 목록 - ' + domain + '\n\n| UIS-ID | 화면명 | FUNC-ID | 유형 |\n|--------|--------|--------|------|\n'
     for uid, nm, req, dn, tag in rows:
         toc += '| ' + uid + ' | [' + nm + '](./' + dn + '/spec.md) | ' + req + ' | ' + tag + ' |\n'
     open(os.path.join(ui_dir, '_TOC.md'), 'w', encoding='utf-8').write(toc)

@@ -1,7 +1,7 @@
 {
   "name": "speclinker",
-  "description": "SI/ITO SDD 전주기 자동화 — 산출물↔소스 FUNC-ID 체이닝. v2.51: SDD 파이프라인 전체 구현 — sl-context/plan/check/review/sprint/drift/quick 신규 + sl-analyze/change/dev 강화. v2.50: INF/SCH/BAT/UIS/FUNC_MAP 템플릿 SM+AIDD 최적화.",
-  "version": "2.60.0",
+  "description": "SM(운영 시스템) 스펙 역생성 + AIDD 자동화 — 현행 소스에서 INF/SCH/UIS/FUNC 역추출, FUNC-ID 체이닝, 변경관리(SR). (SI/신규구축용은 별도 플러그인)",
+  "version": "3.0.0",
   "author": {
     "name": "DreamyDreamss"
   },

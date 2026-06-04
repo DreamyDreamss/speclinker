@@ -6,7 +6,7 @@ argument-hint: [port]
 
 # /sl-viewer — SpecLens (스펙 웹 뷰어) 실행
 
-**SpecLens** — speclinker RECON/GENESIS 산출물을 브라우저에서 탐색하는 Docsify 기반 웹 뷰어를 시작한다.
+**SpecLens** — speclinker RECON 산출물을 브라우저에서 탐색하는 Docsify 기반 웹 뷰어를 시작한다.
 
 > 구 Obsidian 기반 뷰어(`gen_obsidian_index.py`)는 deprecated — 이 스킬로 대체됨.
 

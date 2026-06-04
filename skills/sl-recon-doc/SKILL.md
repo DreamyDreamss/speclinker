@@ -90,7 +90,7 @@ else:
 ```
 
 도메인별 INF/SCH/UIS 파일을 스캔해서 색인 3종(API_Design.md, DB_Schema.md, UI_Spec_v1.0.md)을 자동 생성한다.  
-**spec-agent Phase-C는 GENESIS 전용 (REQ 역합성·RTM)으로만 호출된다.** RECON에서는 호출하지 않는다.
+색인은 merge_index.py가 자동 생성한다 (spec-agent 호출 없음).
 
 **9-2. FUNC 생성** — `agents/rd-agent.md`를 서브에이전트로 실행 (RECON 모드, **Sonnet**):
 
@@ -103,7 +103,7 @@ Agent 도구 호출:
     RECON 모드.
     `_tmp/funcs_index.json` 을 1차 입력으로 사용한다 (spec.md/INF cat 금지).
     `docs/00_FUNC/FUNC_v1.0.md`와 `docs/00_FUNC/domains/FUNC_{도메인}.md`를 생성하라.
-    REQ-F 없음. FUNC-{도메인}-{NNN} ID 체계. 구현 사실만 기록.
+    FUNC-{도메인}-{NNN} ID 체계. 구현 사실만 기록.
 
     Screen-first 신호 활용 (funcs_index.json 내):
     - screens 섹션: 각 UIS-F-XXX의 screen_name·route·api_hints 목록
@@ -175,7 +175,7 @@ Agent 도구 호출:
 
     출력: `docs/00_FUNC/FUNC_MAP.md`
 
-    결과 반환: "✅ FUNC_MAP {N}행 생성완료, linked-req-cache 저장" 1줄만.
+    결과 반환: "✅ FUNC_MAP {N}행 생성완료, linked-func-cache 저장" 1줄만.
 ```
 
 ```bash

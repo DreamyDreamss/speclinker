@@ -17,7 +17,7 @@ triggers:
 ```
 
 - `project.env` 존재
-- `docs/05_설계서/` 존재 (GENESIS 또는 RECON으로 생성된 AS-IS 스펙)
+- `docs/05_설계서/` 존재 (RECON으로 생성된 AS-IS 스펙)
 - `docs/02_추적표/RTM_v*.md` 존재
 - SR 인풋 소스 (둘 중 하나):
   - **로컬 파일**: `docs/변경관리/{SR-ID}/00_요구사항.md` 존재 (NETWORK=closed 가능)
@@ -289,7 +289,6 @@ SR-1234 키워드: "주문 목록", "ORDER_LIST", "order"
 
 ```
 [AS-IS ID 목록 — domain: order]
-REQ-F: REQ-F-045, REQ-F-046, REQ-F-047
 INF:   INF-067, INF-068, INF-069
 SCH:   SCH-023, SCH-024
 UIS:   UIS-F-012, UIS-F-013
@@ -444,7 +443,6 @@ SR 영향범위 기준으로 해당 기능의 테스트케이스만 작성한다
 - **Surgical edit**: 변경 대상 `## ID` 섹션만 교체. 나머지 섹션 무수정.
 - **SR 태그 추가**: 변경된 섹션 상단에 `> [변경: {SR-ID}] {날짜}` 한 줄 추가.
 - **버전 전략**:
-  - `RD_v1.0.md` → `RD_v1.1.md` (새 파일 생성 + 해당 REQ 행 수정)
   - 도메인 설계 파일 (`API_order.md` 등) → 인플레이스 수정 (도메인 파일은 작고 git이 이력 관리)
   - `RTM` → Step 10에서 처리
 
@@ -625,7 +623,6 @@ mcp-atlassian 호출:
    docs/변경관리/SR-1234/03_TC.md
 
  현행화:
-   docs/01_요구사항정의서/RD_v1.1.md  (신규)
    docs/05_설계서/order/API_order.md  (INF-067 섹션)
    docs/05_설계서/order/UI_order.md   (UIS-F-012 섹션)
    docs/02_추적표/RTM_v1.0.md        (변경 행 추가)

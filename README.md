@@ -51,13 +51,12 @@ SI/ITO 개발 전주기 자동화 플러그인 — 요구사항 정의부터 코
 │   ├── build_funcs_index.py     rd/srs/rtm 공유 인덱스 빌더
 │   ├── build_si_graph.py        SI 트레이싱 그래프 (스펙↔코드 매핑) 빌더
 │   ├── func_context_bundle.py   FUNC별 컨텍스트 자동 수집
-│   ├── req_scan.py              REQ/FUNC 커버리지 스캔
+│   ├── req_scan.py              FUNC 커버리지 스캔
 │   ├── merge_index.py           RECON 색인 머징
 │   ├── screen_inventory.py      BFS 캡처 소스 경로 역매핑 보강
 │   └── link_inf_sch.py          INF→SCH 연결 패치
 │
 ├── templates/               ← 산출물 문서 템플릿 (10개)
-│   ├── RD_template.md           요구사항 정의서
 │   ├── SRS_template.md          소프트웨어 요구사항 명세
 │   ├── SAD_template.md          아키텍처 설계서
 │   ├── API_Design_template.md   API 설계서

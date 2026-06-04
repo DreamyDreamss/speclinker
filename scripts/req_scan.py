@@ -1,8 +1,7 @@
-﻿# STATUS: 완료
+# STATUS: 완료
 #!/usr/bin/env python3
 """
 req_scan.py — 크로스플랫폼 소스 스캔 (Windows/Mac/Linux)
-linked_req: REQ-F-XXX  →  linked-req-cache.json
 linked_func: FUNC-XXX  →  linked-func-cache.json
 
 Usage: python req_scan.py [project_root]
@@ -15,7 +14,6 @@ PROJECT_ROOT = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else os.getcwd(
 UA_DIR       = os.path.join(PROJECT_ROOT, ".understand-anything")
 os.makedirs(UA_DIR, exist_ok=True)
 
-REQ_CACHE  = os.path.join(UA_DIR, "linked-req-cache.json")
 FUNC_CACHE = os.path.join(UA_DIR, "linked-func-cache.json")
 
 EXTS = {".java", ".kt", ".ts", ".tsx", ".js", ".jsx", ".py",
@@ -23,7 +21,6 @@ EXTS = {".java", ".kt", ".ts", ".tsx", ".js", ".jsx", ".py",
 SKIP = {"node_modules", ".git", "dist", "build", "__pycache__",
         ".gradle", "target", "vendor", ".next", ".idea", ".vscode"}
 
-REQ_PAT  = re.compile(r'linked[_\s]req\s*:\s*(REQ-[A-Z]+-\d+(?:\s*,\s*REQ-[A-Z]+-\d+)*)',  re.IGNORECASE)
 FUNC_PAT = re.compile(r'linked[_\s]func\s*:\s*(FUNC-[\w-]+(?:\s*,\s*FUNC-[\w-]+)*)', re.IGNORECASE)
 
 # ── 스캔 대상 디렉토리 결정 ────────────────────────────────────────────────────
@@ -74,7 +71,7 @@ def collect_scan_dirs() -> list[str]:
     return result
 
 # ── 재귀 스캔 ─────────────────────────────────────────────────────────────────
-def scan_dir(base_dir: str, req_map: dict, func_map: dict, counter: list[int]):
+def scan_dir(base_dir: str, func_map: dict, counter: list[int]):
     try:
         entries = list(os.scandir(base_dir))
     except PermissionError:
@@ -84,7 +81,7 @@ def scan_dir(base_dir: str, req_map: dict, func_map: dict, counter: list[int]):
             return
         if e.is_dir(follow_symlinks=False):
             if e.name not in SKIP:
-                scan_dir(e.path, req_map, func_map, counter)
+                scan_dir(e.path, func_map, counter)
         elif e.is_file():
             _, ext = os.path.splitext(e.name)
             if ext.lower() not in EXTS:
@@ -95,13 +92,7 @@ def scan_dir(base_dir: str, req_map: dict, func_map: dict, counter: list[int]):
             except OSError:
                 continue
             rel = os.path.relpath(e.path, PROJECT_ROOT).replace("\\", "/")
-            for lineno, line in enumerate(lines, 1):
-                for m in REQ_PAT.finditer(line):
-                    ids = [x.strip() for x in m.group(1).split(",") if x.strip()]
-                    for rid in ids:
-                        req_map.setdefault(rel, [])
-                        if rid not in req_map[rel]:
-                            req_map[rel].append(rid)
+            for line in lines:
                 for m in FUNC_PAT.finditer(line):
                     ids = [x.strip() for x in m.group(1).split(",") if x.strip()]
                     for fid in ids:
@@ -112,23 +103,18 @@ def scan_dir(base_dir: str, req_map: dict, func_map: dict, counter: list[int]):
 # ── 메인 ──────────────────────────────────────────────────────────────────────
 scan_dirs = collect_scan_dirs()
 if not scan_dirs:
-    json.dump({}, open(REQ_CACHE,  "w", encoding="utf-8"))
     json.dump({}, open(FUNC_CACHE, "w", encoding="utf-8"))
     print("req_scan: 스캔할 src 디렉토리 없음 → 빈 캐시 생성")
     sys.exit(0)
 
-req_map: dict[str, list[str]] = {}
 func_map: dict[str, list[str]] = {}
 counter = [0]
 
 for d in scan_dirs:
-    scan_dir(d, req_map, func_map, counter)
+    scan_dir(d, func_map, counter)
 
-json.dump(req_map,  open(REQ_CACHE,  "w", encoding="utf-8"), indent=2, ensure_ascii=False)
 json.dump(func_map, open(FUNC_CACHE, "w", encoding="utf-8"), indent=2, ensure_ascii=False)
 
-req_total  = sum(len(v) for v in req_map.values())
 func_total = sum(len(v) for v in func_map.values())
 print(f"req_scan 완료: {counter[0]}개 파일 스캔")
-print(f"  linked_req  → {len(req_map)}개 파일, {req_total}개 REQ-ID  ({REQ_CACHE})")
 print(f"  linked_func → {len(func_map)}개 파일, {func_total}개 FUNC-ID ({FUNC_CACHE})")

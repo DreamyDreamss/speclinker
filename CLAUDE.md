@@ -119,6 +119,7 @@
 | 코드 생성 | `agents/dev-agent.md` | Sonnet | 반복 실행 태스크 |
 | 테스트 | `agents/test-agent.md` | Sonnet | 반복 실행 태스크 |
 
+> **v3.0.0**: SM 전용 전환 — GENESIS 모드·REQ-ID/RD·MODE 개념 전면 제거. 추적 축 = FUNC-ID(RECON) + SR(DELTA). sl-genesis/RD_template/미참조 legacy 스크립트 삭제, 공유 에이전트(rd/srs/spec/sad/rtm) RECON 경로만 보존, 항상 linked_func, ddd-* 크로스링크 FUNC-ID만. SI(신규구축)용은 별도 플러그인. plugin.json description SM 중심으로 갱신.
 > v2.60: 뷰어 이름 **SpecLens** 명명 — index.html 타이틀·docsify-sl.js 로고/대시보드·/sl-viewer 스킬·README 반영. (플러그인명 Speclinker는 유지, 뷰어 정체성만 SpecLens)
 > v2.59: SCH 생성 멱등성 — sl-recon STEP 5-0 `build_sch_todo.py` 신설(INF tables: 합집합 vs 기존 SCH frontmatter 비교 → 누락 테이블 있는 도메인만 `_tmp/sch_todo.json`). 누락 0 도메인은 ddd-db-agent 미호출, 부분 도메인은 `existing` 전달해 누락분만 생성. ddd-db-agent에 "이미 생성된 SCH 테이블 재생성 금지" 입력 추가. INF의 group_already_done과 동형 — recon 재실행 시 INF·SCH 모두 스킵.
 > v2.58: sl-recon-uis 도메인 선택 체크포인트 추가 — 인수 없이 실행하면 도메인 목록(도메인별 goto form 화면 수 미리보기)을 보여주고 전체/특정 도메인을 사용자에게 질문(INF 도메인선택과 동형). 인수 주어지면 프롬프트 생략. 도메인 필터는 build_uis_goto_plan.py 3번째 인자(relPath 기반 assign_file_domains)로 goto 플랜에 적용. RECON_PIPELINE.md Phase 2 정합.

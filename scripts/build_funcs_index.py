@@ -322,7 +322,7 @@ def main():
                 'srs':        srs_ids,
                 'dbTables':   db_tables,
                 'rules':      rules,
-                'reqF':       fm.get('REQ-F') or fm.get('req-f') or '[TBD]',
+                'reqF':       fm.get('req-f') or '[TBD]',
             }
             funcs.append(func_entry)
             domain_func_counts[domain] += 1

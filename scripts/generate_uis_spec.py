@@ -396,7 +396,7 @@ def build_spec(ui_dir, uis_id, screen_id, screen_name, route, domain, workspace_
 화면명: {screen_name}
 라우트: {route}
 도메인: {domain}
-REQ-F: "[TBD]"
+req-f: "[TBD]"
 UIS-ID: {uis_id}{_api_hints_yaml}
 revision_history:
   - version: 1.0
