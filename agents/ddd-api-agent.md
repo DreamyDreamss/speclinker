@@ -40,7 +40,6 @@ model: claude-sonnet-4-6
 도메인 코드: {domainCode}          ← INF-{CODE}-NNN 형식의 CODE
 도메인 설명: {domainDescription}
 관련 레이어: {layer}
-MODE: {RECON | GENESIS}
 프로젝트 루트: {절대경로}
 프로젝트 Profile: .speclinker/profile.yaml (선택)
 ```
@@ -236,7 +235,7 @@ method: {GET|POST|PUT|DELETE}
 path: {/api/path}
 domain: {도메인}
 domain-code: {CODE}
-req-f: {FUNC-DOMAIN-NNN | REQ-F-NNN | [TBD]}
+req-f: {FUNC-DOMAIN-NNN | [TBD]}
 srs-f: {SRS-F-NNN | [TBD]}
 screens: []
 tables:
@@ -345,7 +344,7 @@ print('_tmp/INF-{NNN}_sch_required.json 저장')
 [ ] 각 파일의 INF 번호가 파일별 배정 범위 안에서 순번으로 부여됐는가?
 [ ] 파일 간 INF 번호가 겹치지 않는가?
 [ ] 각 INF 파일에 요청 파라미터 표, 응답 예시, 오류 표, curl 예시가 있는가?
-[ ] RECON 모드: req-f가 FUNC-ID 또는 [TBD]인가? (REQ-F-NNN 형식 금지)
+[ ] req-f가 FUNC-ID 또는 [TBD]인가? (REQ-F 형식 금지)
 [ ] 근거 소스에 파일경로:라인번호가 명시됐는가?
 [ ] 응답 페이로드(data, body, result 등)가 빈 {} 또는 미기술 상태인 INF가 있는가?
     → 있으면 Step 2~4를 재실행하여 실제 필드를 도출 후 재작성. 끝까지 추적해도 정적으로 알 수 없을 때만 "(동적 — 런타임 결정)" 허용

@@ -38,7 +38,6 @@ INF 생성 단계에서 `resolve_call_chain.py`가 미리 만들어 둔 **sch_dr
 - **`사전추출 SCH draft 경로`**: `_tmp/sch_draft/{도메인}/` ← 1차 신호
 - `프로젝트 Profile`: `.speclinker/profile.yaml` (선택 — `backend.persistence.technologies` 로 ORM/SQL 전략 선택)
 - `가용 DB MCP 서버`: 별칭 배열
-- `MODE`: RECON | GENESIS
 - `워크스페이스`: 절대경로
 - **`이미 생성된 SCH 테이블`**(선택, 멱등성): 재생성 금지 목록. 주어지면 그 테이블은 **건너뛰고 누락 테이블만** SCH 파일로 작성한다. (recon STEP 5-0 `build_sch_todo.py`가 산출) — 기존 `{도메인}/SCH/SCH-*.md`는 덮어쓰지 않으며, 채번은 기존 max+1로 이어간다.
 
@@ -76,14 +75,7 @@ else:
 > - 자기 도메인 INF 디렉토리만 읽는다.  
 > - knowledge-graph는 자기 도메인 rootPaths 범위로 필터링.
 
-```bash
-!cat project.env | grep MODE
-```
-
-> **RECON 모드 주의:**  
-> `MODE=RECON`이면 SCH 항목 링크 블록에서 `REQ-F` 대신 `FUNC-ID` 를 사용한다.  
-> GENESIS 모드: `> **REQ-F:** [REQ-F-NNN](...) | **SRS-F:** ...`  
-> RECON 모드: `> **FUNC-ID:** [FUNC-{도메인}-NNN](../../00_FUNC/FUNC_v1.0.md#...) | **SRS-F:** [TBD]`
+> **링크 블록 규칙:** SCH 항목 링크 블록은 `> **FUNC-ID:** [FUNC-{도메인}-NNN](../../00_FUNC/FUNC_v1.0.md#...) | **SRS-F:** [TBD] | **API:** … | **화면:** …` 형식을 사용한다.
 
 자기 도메인의 INF 목록만 확인:
 
@@ -247,8 +239,7 @@ inf: [INF-{CODE}-NNN, ...]
 ```markdown
 # SCH-{CODE}-001: users
 
-> GENESIS: **REQ-F:** [REQ-F-001](../../../01_요구사항정의서/RD_v1.0.md#REQ-F-001) | **SRS-F:** [SRS-F-001](../../../03_기능명세서/SRS_v1.0.md#SRS-F-001) | **API:** [INF-{CODE}-001](../INF/INF-{CODE}-001.md) | **화면:** [UIS-{CODE}-001](../UI/UIS-{CODE}-001_화면명/spec.md)
-> RECON: **FUNC-ID:** [FUNC-{도메인}-001](../../../00_FUNC/FUNC_v1.0.md) | **SRS-F:** [TBD] | **API:** [INF-{CODE}-001](../INF/INF-{CODE}-001.md) | **화면:** [UIS-{CODE}-001](../UI/UIS-{CODE}-001_화면명/spec.md)
+> **FUNC-ID:** [FUNC-{도메인}-001](../../../00_FUNC/FUNC_v1.0.md) | **SRS-F:** [TBD] | **API:** [INF-{CODE}-001](../INF/INF-{CODE}-001.md) | **화면:** [UIS-{CODE}-001](../UI/UIS-{CODE}-001_화면명/spec.md)
 
 **근거 소스:** `{모델/ORM 파일 경로:라인번호}`
 
@@ -383,8 +374,8 @@ erDiagram
 [ ] frontmatter: 모든 SCH 파일에 sch-id/table/domain/domain-code/inf 가 있는가?
     → 없으면 gen_docsify가 색인하지 못해 뷰어 SCH 네비게이션이 끊긴다
 
-[ ] 크로스링크 완결: 모든 SCH 항목 상단에 REQ-F·SRS-F·API·화면·RTM 링크 블록이 있는가?
-    → 없으면 `> **REQ-F:** [...] | **SRS-F:** [...] | **API:** [...] | **화면:** [...] | **RTM:** [↗]` 추가
+[ ] 크로스링크 완결: 모든 SCH 항목 상단에 FUNC-ID·SRS-F·API·화면 링크 블록이 있는가?
+    → 없으면 `> **FUNC-ID:** [...] | **SRS-F:** [...] | **API:** [...] | **화면:** [...]` 추가
     → SRS-F 링크: `../../03_기능명세서/SRS_v1.0.md#SRS-F-XXX`
 
 [ ] 상대경로 정확성: 개별 SCH 파일(한 단계 깊음)의 링크가 `../../../01_요구사항정의서/`, `../INF/INF-...md` 형식인가?
