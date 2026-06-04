@@ -6,7 +6,6 @@ set -e
 source project.env
 
 mkdir -p docs/00_입력자료 \
-         docs/01_요구사항정의서 docs/01_요구사항정의서/req \
          docs/02_추적표 \
          docs/03_기능명세서 docs/03_기능명세서/srs \
          docs/04_아키텍처설계서 \
@@ -23,9 +22,7 @@ cat > README_DIRS.md << EOF
 | 폴더 | 역할 |
 |------|------|
 | docs/00_입력자료/ | 기획 문서·인터뷰·회의록 원본 (sl-spec 입력) |
-| docs/01_요구사항정의서/ | 요구사항 정의서 (RD_v1.0.md) |
-| docs/01_요구사항정의서/req/ | 대형 프로젝트 시 REQ 개별 파일 분리 |
-| docs/02_추적표/ | 요구사항 추적 매트릭스 |
+| docs/02_추적표/ | FUNC 추적 매트릭스 (RTM, FUNC 기반) |
 | docs/03_기능명세서/ | 기능 명세서 (SRS_v1.0.md) |
 | docs/03_기능명세서/srs/ | 도메인별 SRS 분리 파일 |
 | docs/04_아키텍처설계서/ | 시스템 아키텍처 설계서 |
