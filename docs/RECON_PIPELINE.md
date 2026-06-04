@@ -26,7 +26,8 @@
              4-3 INF 생성 (dispatch_inf_gen.py → ddd-api-agent ×N배치) + INF/_TOC.md
              4-B BAT 생성 (ddd-batch-agent)
   STEP 5-0   SCH 스킵 게이트 (build_sch_todo.py) — 이미 생성된 테이블 제외(idempotent)
-  STEP 5     SCH 생성 (ddd-db-agent) — 테이블당 개별 파일 (생성 대상 도메인만)
+  STEP 5-A   SCH 정적 스켈레톤 (build_sch_static.py) — 컬럼·인덱스·FK·ERD·링크·색인 zero-token, 의미는 LLM-TODO
+  STEP 5-B   SCH 의미 enrichment (dispatch_sch_gen.py → ddd-db-agent) — 코드값·비즈주의만, 필요 도메인 병렬
   STEP 5-1   INF→SCH 링크 패치 (link_inf_sch_new.py)
   STEP 6     완료 체크포인트(phase=recon-analysis) → 다음: /sl-recon-uis
 
@@ -70,7 +71,8 @@
 | 4-3 | **INF 생성** | `dispatch_inf_gen.py` → `ddd-api-agent` (sonnet, ×N배치) | `{도메인}/INF/INF-*.md`, `{도메인}/INF/_TOC.md` |
 | 4-B | BAT 생성 | `ddd-batch-agent` (sonnet) | `{도메인}/BAT/BAT-*.md` |
 | 5-0 | SCH 스킵 게이트 (idempotent) | `build_sch_todo.py` | `_tmp/sch_todo.json` (생성 대상 도메인+누락 테이블) |
-| 5 | **SCH 생성** | `ddd-db-agent` (sonnet, ×3도메인 배치, 생성 대상만) | `{도메인}/SCH/SCH-{CODE}-NNN.md`, `{도메인}/DB_{도메인}.md`(슬림 개요), `DB_Schema.md`(색인) |
+| 5-A | **SCH 정적 스켈레톤** | `build_sch_static.py` (zero-token: sch_facts → sch_draft+DDL+ORM+선택 DB드라이버) | `{도메인}/SCH/SCH-{CODE}-NNN.md`(사실+LLM-TODO), `{도메인}/DB_{도메인}.md`, `DB_Schema.md`, `sch_enrich_todo.json` |
+| 5-B | **SCH 의미 enrichment** | `dispatch_sch_gen.py` → `ddd-db-agent`(enrichment, 서브프로세스 병렬, 필요 도메인만) | LLM-TODO 마커 채움(코드값·비즈주의·컬럼설명) |
 | 5-1 | INF→SCH 링크 패치 | `link_inf_sch_new.py` | INF `## 참조 테이블` `[TBD]`→`[[SCH-XXX]]` |
 | 6 | 완료 체크포인트 | 인라인 | `_tmp/recon_checkpoint.json` (phase=recon-analysis) |
 
@@ -123,7 +125,7 @@
 | `spec-agent` | recon 2-1 | sonnet | Phase-A: SAD + 도메인 확정 |
 | `ddd-api-agent` | recon 4-3 | sonnet | INF(API 명세) 생성 |
 | `ddd-batch-agent` | recon 4-B | sonnet | BAT(배치 명세) 생성 |
-| `ddd-db-agent` | recon 5 | sonnet | SCH(DB 스키마) 생성 — 개별 파일 |
+| `ddd-db-agent` | recon 5-B | sonnet | SCH enrichment — 코드값·비즈주의·컬럼설명만(사실은 build_sch_static) |
 | `ddd-ui-agent` | recon-uis 6-3 | sonnet | UIS(화면 설계서) 생성 |
 | `rd-agent` | recon-doc 9-2 | sonnet | FUNC 생성 |
 | `srs-agent` | recon-doc 9-3 | sonnet | SRS 생성 |
