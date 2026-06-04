@@ -40,6 +40,7 @@ INF 생성 단계에서 `resolve_call_chain.py`가 미리 만들어 둔 **sch_dr
 - `가용 DB MCP 서버`: 별칭 배열
 - `MODE`: RECON | GENESIS
 - `워크스페이스`: 절대경로
+- **`이미 생성된 SCH 테이블`**(선택, 멱등성): 재생성 금지 목록. 주어지면 그 테이블은 **건너뛰고 누락 테이블만** SCH 파일로 작성한다. (recon STEP 5-0 `build_sch_todo.py`가 산출) — 기존 `{도메인}/SCH/SCH-*.md`는 덮어쓰지 않으며, 채번은 기존 max+1로 이어간다.
 
 ### Profile 활용 (Phase 1 신규)
 

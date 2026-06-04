@@ -25,7 +25,8 @@
              4-1 router_inventory / 4-2 call chain 사전계산(+sch_draft)
              4-3 INF 생성 (dispatch_inf_gen.py → ddd-api-agent ×N배치) + INF/_TOC.md
              4-B BAT 생성 (ddd-batch-agent)
-  STEP 5     SCH 생성 (ddd-db-agent) — 테이블당 개별 파일
+  STEP 5-0   SCH 스킵 게이트 (build_sch_todo.py) — 이미 생성된 테이블 제외(idempotent)
+  STEP 5     SCH 생성 (ddd-db-agent) — 테이블당 개별 파일 (생성 대상 도메인만)
   STEP 5-1   INF→SCH 링크 패치 (link_inf_sch_new.py)
   STEP 6     완료 체크포인트(phase=recon-analysis) → 다음: /sl-recon-uis
 
@@ -68,7 +69,8 @@
 | 4-2 | call chain 사전계산 | `resolve_call_chain.py` | `_tmp/router_inventory_with_chain.json`, `_tmp/sch_draft/{도메인}/` |
 | 4-3 | **INF 생성** | `dispatch_inf_gen.py` → `ddd-api-agent` (sonnet, ×N배치) | `{도메인}/INF/INF-*.md`, `{도메인}/INF/_TOC.md` |
 | 4-B | BAT 생성 | `ddd-batch-agent` (sonnet) | `{도메인}/BAT/BAT-*.md` |
-| 5 | **SCH 생성** | `ddd-db-agent` (sonnet, ×3도메인 배치) | `{도메인}/SCH/SCH-{CODE}-NNN.md`, `{도메인}/DB_{도메인}.md`(슬림 개요), `DB_Schema.md`(색인) |
+| 5-0 | SCH 스킵 게이트 (idempotent) | `build_sch_todo.py` | `_tmp/sch_todo.json` (생성 대상 도메인+누락 테이블) |
+| 5 | **SCH 생성** | `ddd-db-agent` (sonnet, ×3도메인 배치, 생성 대상만) | `{도메인}/SCH/SCH-{CODE}-NNN.md`, `{도메인}/DB_{도메인}.md`(슬림 개요), `DB_Schema.md`(색인) |
 | 5-1 | INF→SCH 링크 패치 | `link_inf_sch_new.py` | INF `## 참조 테이블` `[TBD]`→`[[SCH-XXX]]` |
 | 6 | 완료 체크포인트 | 인라인 | `_tmp/recon_checkpoint.json` (phase=recon-analysis) |
 
