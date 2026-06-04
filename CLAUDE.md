@@ -88,6 +88,7 @@
 | 코드 생성 | `agents/dev-agent.md` | Sonnet | 반복 실행 태스크 |
 | 테스트 | `agents/test-agent.md` | Sonnet | 반복 실행 태스크 |
 
+> v2.56: SCH 명세 테이블당 개별파일 구조 + 뷰어 경로/링크 라우팅 수정. SCH가 INF와 대칭(`{도메인}/SCH/SCH-{CODE}-NNN.md` 개별파일 + 슬림 `DB_{도메인}.md`(도메인 ERD+목록) + `DB_Schema.md` 파일직링크 색인). 앵커(#SCH) 전면 폐기 → INF↔SCH 정확 네비게이션. gen_docsify scan_schs(spec_index.schs[]) + docsify-sl.js goToId SCH해소·SCH탭 + link_inf_sch/merge_index SCH/스캔. 뷰어는 프로젝트 루트 서빙 + 동적 basePath + 자산 자동복사(gen_docsify). 3NF 검증결과/통과여부 산출물에서 제외.
 > v2.55: INF 생성 병렬화 개선 — dispatch_inf_gen.py domain_lock 제거(INF-ID 사전배정 신뢰 → 단일 도메인도 병렬 3) + 타임아웃 600→1800초 + stagger 누적버그 수정(간격 방식). ddd-api-agent infIdStart 절대준수(폴더스캔 채번 금지).
 > v2.54: 뷰어 사용자 가이드 추가 — docsify-sl.js renderGuide(사이드바 📖 가이드 → 빠른시작 파이프라인·전체 명령어·동작방식·FUNC-ID 체이닝). spec_index 없어도 접근 가능.
 > v2.53: 도메인 선택형 RECON + UIS goto 캡처 + **범용성 강화**. scan_source.js에 Next.js/Nuxt 파일경로 라우팅 인식(inferFileBasedRoutes) 추가 — tree-sitter AST 미감지 라우트 보강. build_domain_catalog.py(relPath 디렉토리 기반 범용 도메인 분류, Java+Next.js 검증) + build_uis_goto_plan.py(form URL goto 플랜) 신규. sl-init Step5.5(스캔+카탈로그) / sl-recon STEP1.7(도메인 선택→POC_DOMAINS) / sl-recon-uis STEP6-0-GOTO(form URL 직접 캡처, BFS 폴백). 도메인 분류 기준=relPath(package 전용 금지).
