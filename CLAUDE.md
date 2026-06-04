@@ -2,8 +2,10 @@
 
 ## 개요
 
-이 파일은 SI/ITO 개발 전주기 자동화 플러그인 Speclinker의 라우팅 규칙을 정의합니다.
+이 파일은 SM(운영 중 시스템) 스펙 역생성 + AIDD 자동화 플러그인 Speclinker의 라우팅 규칙을 정의합니다.
+현행 소스에서 INF/SCH/UIS/FUNC를 역추출(RECON)하고, FUNC-ID 단위 AIDD·변경관리(DELTA)를 수행합니다.
 사용자 입력을 분석하여 적절한 스킬(Skill)로 라우팅하고, 서브에이전트를 조율합니다.
+(SI/신규구축용은 별도 플러그인 — 이 플러그인에 GENESIS 순방향 모드는 없습니다.)
 
 ## ⚠️ 핵심 설계 원칙 — 범용성 (MUST)
 
@@ -65,14 +67,13 @@
 
 ## 커맨드 라우팅 규칙
 
-| 사용자 입력 | 라우팅 스킬 | 전제 조건 | 모드 |
+| 사용자 입력 | 라우팅 스킬 | 전제 조건 | 분류 |
 |-----------|-----------|---------|------|
-| `/sl-init` | `skills/sl-init/SKILL.md` | 없음 | GENESIS, RECON |
-| `/sl-genesis [파일]` | `skills/sl-genesis/SKILL.md` | project.env, docs/00_입력자료/ | GENESIS |
+| `/sl-init` | `skills/sl-init/SKILL.md` | 없음 | 공통 |
 | `/sl-recon` | `skills/sl-recon/SKILL.md` | project.env, 소스코드 존재 | RECON |
 | `/sl-recon-uis` | `skills/sl-recon-uis/SKILL.md` | _tmp/recon_checkpoint.json | RECON |
 | `/sl-recon-doc` | `skills/sl-recon-doc/SKILL.md` | docs/05_설계서/ INF 존재, _tmp/recon_checkpoint.json | RECON |
-| `/sl-aidd [FUNC-ID]` | `skills/sl-aidd/SKILL.md` | docs/00_FUNC/FUNC_MAP.md 존재 | GENESIS, RECON |
+| `/sl-aidd [FUNC-ID]` | `skills/sl-aidd/SKILL.md` | docs/00_FUNC/FUNC_MAP.md 존재 | AIDD |
 | `/sl-analyze` | `skills/sl-analyze/SKILL.md` | project.env, docs/05_설계서/ | DELTA |
 | `/sl-change <SR-ID>` | `skills/sl-change/SKILL.md` | project.env, docs/05_설계서/ (로컬 파일 또는 NETWORK=open) | DELTA |
 | `/sl-rtm` | `skills/sl-rtm/SKILL.md` | docs/02_추적표/ 또는 docs/00_FUNC/ | 전체 |
@@ -99,20 +100,17 @@
 
 ### 산출물 생성 파이프라인 (spec-agent 오케스트레이터 → 전문 서브에이전트)
 
-| 에이전트 | 역할 | 모델 (GENESIS) | 모델 (RECON) | 기법 |
-|--------|------|--------------|-------------|------|
-| `agents/spec-agent.md` | 파이프라인 오케스트레이터 | Opus | **Sonnet** (Phase-A만) | 순차/병렬 조율 |
-| `agents/rd-agent.md` | REQ-ID 추출 + RD/FUNC 생성 | Opus | **Sonnet** | ReAct + Tree-of-Thoughts (GENESIS) / 인덱스 포맷팅 (RECON) |
-| `agents/srs-agent.md` | SRS 상세화 | Opus | **Sonnet** | Chain-of-Thought + Reflexion (GENESIS) / 사실 집계 (RECON) |
-| `agents/sad-agent.md` | 아키텍처 설계서 | Opus | Opus | 패턴 매칭 + Self-Critique |
-| `agents/ddd-api-agent.md` | API 명세 (INF-XXX) | Sonnet | Sonnet | DSPy-style 구조화 출력 |
-| `agents/ddd-db-agent.md` | DB 스키마 (SCH-XXX) | Sonnet | Sonnet | 3NF 검증 + ERD 생성 |
-| `agents/ddd-ui-agent.md` | 화면 설계 (UIS-F-XXX) | Sonnet | Sonnet | 소스 증거 원칙 (preview는 capture.js가 처리) |
-| `agents/ddd-batch-agent.md` | 배치 명세 (BAT-XXX) | Sonnet | Sonnet | 배치 확정 판별 + MCP DB 스케줄 조회 |
-| `agents/rtm-agent.md` | RTM 체인 + 품질 게이트 | Opus | Opus | Constitutional AI (양쪽 모두 추론 필요) |
-
-> RECON 모드 model 다운그레이드는 sl-recon SKILL.md에서 Agent 도구 호출 시 `model: "sonnet"` 파라미터로 처리.  
-> agent 파일 frontmatter는 GENESIS 기본값을 유지한다.
+| 에이전트 | 역할 | 모델 | 기법 |
+|--------|------|------|------|
+| `agents/spec-agent.md` | Phase-A(SAD+도메인 확정) | **Sonnet** | 순차/병렬 조율 |
+| `agents/rd-agent.md` | FUNC_v1.0 생성 | **Sonnet** | 인덱스 포맷팅 |
+| `agents/srs-agent.md` | SRS 집약 | **Sonnet** | 사실 집계 |
+| `agents/sad-agent.md` | 아키텍처 설계서 | Opus | 패턴 매칭 + Self-Critique |
+| `agents/ddd-api-agent.md` | API 명세 (INF-XXX) | Sonnet | DSPy-style 구조화 출력 |
+| `agents/ddd-db-agent.md` | DB 스키마 (SCH-XXX) | Sonnet | 3NF 검증 + ERD 생성 |
+| `agents/ddd-ui-agent.md` | 화면 설계 (UIS-F-XXX) | Sonnet | 소스 증거 원칙 (preview는 capture.js가 처리) |
+| `agents/ddd-batch-agent.md` | 배치 명세 (BAT-XXX) | Sonnet | 배치 확정 판별 + MCP DB 스케줄 조회 |
+| `agents/rtm-agent.md` | FUNC_MAP 체인 + 품질 게이트 | Opus | Constitutional AI |
 
 ### 코드·테스트 에이전트
 
@@ -136,23 +134,14 @@
 
 ## FUNC-ID 체이닝 원칙 (범용 주축)
 
-- **FUNC-ID가 개발 추적의 범용 주축** — GENESIS·RECON 모두 동일
+- **FUNC-ID가 개발 추적의 주축**
 - FUNC-ID 형식: `FUNC-{도메인}-{NNN}` (예: `FUNC-order-001`)
-- REQ-ID는 GENESIS에서 계약·납품 문서용으로 생성되지만, 개발 추적은 FUNC 기준
 - FUNC_MAP.md가 단일 진실의 원천(Single Source of Truth)
-- REQ → FUNC 매핑: 1 REQ = 1~3 FUNC (GENESIS에서 spec-agent가 자동 분해)
+- 변경관리는 `SR-ID`(변경요청)로 추적 — `/sl-change` 워크플로우
 
 ### 추적 주석 형식
 
-| 모드 | 주석 | 예시 |
-|------|------|------|
-| GENESIS | `linked_req: REQ-F-XXX` + `linked_func: FUNC-domain-NNN` | 둘 다 삽입 |
-| RECON   | `linked_func: FUNC-domain-NNN` | FUNC만 |
-
-## REQ-ID 원칙 (납품·계약용, GENESIS 한정)
-
-- REQ-ID 형식: `REQ-F-XXX` (기능), `REQ-NF-XXX` (비기능), `REQ-C-XXX` (변경)
-- RTM은 REQ → FUNC 매핑 테이블로서 납품 문서에 포함
+- 모든 생성 코드 상단에 `linked_func: FUNC-domain-NNN` 주석 삽입.
 
 ## 환경 분기 원칙
 
@@ -168,7 +157,7 @@
 | 타입 | 폴더 구조 | 대상 |
 |------|----------|------|
 | `dev` | specs/req/ api/ db/ | 개발자 전용 빠른 참조 |
-| `biz` (기본) | docs/01_요구사항정의서 ~ docs/08_테스트결과보고서 | PM·고객사·QA 포함 표준 구조 |
+| `biz` (기본) | docs/00_FUNC ~ docs/08_테스트결과보고서 | PM·고객사·QA 포함 표준 구조 |
 | `split` | docs/specs/ + docs/artifacts/ | ITO 운영 최적, 전체 이해관계자 |
 
 ## 에러 처리
@@ -176,7 +165,7 @@
 | 상황 | 대응 |
 |------|------|
 | project.env 없음 | `/sl-init` 실행 안내 |
-| docs/05_설계서/ 없음 | `/sl-genesis` 실행 안내 |
+| docs/05_설계서/ 없음 | `/sl-recon` 실행 안내 |
 | 06_소스코드/ 없음 | `/sl-dev` 실행 안내 |
 | MCP 연결 실패 | 로컬 파일 fallback 안내 |
 | UA 미설치 | `npm install -g understand-anything` 안내 |
@@ -185,9 +174,7 @@
 
 | 상황 | 파이프라인 |
 |------|-----------|
-| 새 프로젝트 (AIDD) | sl-init → sl-genesis → **sl-aidd** → sl-test |
-| 새 프로젝트 (수동) | sl-init → sl-genesis → sl-dev → sl-test |
-| 기존 코드 (RECON + AIDD) | sl-init → sl-recon → **sl-aidd** → 납품 |
+| 기존 코드 (RECON + AIDD) | sl-init → sl-recon → **sl-aidd** → sl-test |
 | 기존 코드 (RECON 분석만) | sl-init(스캔+카탈로그) → sl-recon(도메인 선택) → sl-recon-uis(goto 캡처) → 납품 |
 | 변경·유지보수 (Jira) | sl-analyze → sl-change → **sl-aidd** |
 | 변경·유지보수 (로컬) | sl-change --new SR-001 → (요구사항 작성) → sl-change SR-001 → **sl-aidd** |
@@ -217,7 +204,6 @@ FUNC 선택 → func_context_bundle.py (스펙 자동수집)
 
 # 사용
 /sl-init          # 프로젝트 초기화
-/sl-genesis docs/00_입력자료/interview.md   # 산출물 생성
-/sl-dev           # 코드 생성
-/sl-test          # TC 작성 및 테스트
+/sl-recon         # 현행 소스 → 스펙(INF/SCH/UIS/FUNC) 역생성
+/sl-aidd          # FUNC 단위 AI 개발 (코드+테스트)
 ```
