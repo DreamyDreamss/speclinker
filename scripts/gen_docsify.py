@@ -284,12 +284,115 @@ def build_ia_tree(uis: list) -> dict:
     return tree
 
 
+def _norm_path(p: str) -> str:
+    """쿼리/프래그먼트 제거 + 끝 슬래시 정리."""
+    p = (p or '').split('?')[0].split('#')[0].strip()
+    if len(p) > 1 and p.endswith('/'):
+        p = p[:-1]
+    return p
+
+
+_INF_ID_RE = re.compile(r'INF-[A-Z]+-\d+')
+
+
+def resolve_uis_inf(uis: list, infs: list) -> None:
+    """각 UIS의 api_hints/apis를 INF id로 해소 → uis[i]['inf_ids']. in-place 보강.
+
+    실제 api_hints 항목 형식(권위: link_uis_inf.py 산출):
+      - "POST [INF-PRD-490](../../INF/INF-PRD-490.md)"  (이미 ID 해소됨 — 1차)
+      - "POST /app/product/prdreg/save"                 (미해소 raw — 2차 path 매칭)
+      - 따옴표 래핑/메서드 접두 가능
+    해소 순서: ① 항목에 박힌 INF-ID 직접 추출 ② METHOD 토큰 제거 후 경로 추출 →
+    INF path 정확매칭 → 컨텍스트 접두(/app 등) 차이 보정 위해 suffix 매칭. 실패분은 무시."""
+    by_path = {}
+    for inf in infs:
+        np = _norm_path(inf.get('path', ''))
+        if np:
+            by_path.setdefault(np, inf['id'])
+    valid_ids = {inf['id'] for inf in infs}
+    for u in uis:
+        ids = []
+        for a in (u.get('apis') or []):
+            s = str(a).strip().strip('"\'').strip()
+            hit = None
+            # ① 이미 INF-ID가 박힌 경우 직접 추출
+            m = _INF_ID_RE.search(s)
+            if m and m.group(0) in valid_ids:
+                hit = m.group(0)
+            else:
+                # ② "METHOD path" → '/'로 시작하는 첫 토큰을 경로로
+                path_tok = next((p for p in s.split() if p.startswith('/')), None)
+                na = _norm_path(path_tok) if path_tok else ''
+                if na:
+                    if na in by_path:
+                        hit = by_path[na]
+                    elif len(na) > 1:
+                        # 컨텍스트 접두 차이(/app/x vs /x): 한쪽이 다른쪽 경로꼬리이면 매칭
+                        for np, iid in by_path.items():
+                            if np == na or np.endswith(na) or na.endswith(np):
+                                hit = iid
+                                break
+            if hit and hit not in ids:
+                ids.append(hit)
+        u['inf_ids'] = ids
+
+
+def build_inf_sch_index(infs: list, schs: list) -> None:
+    """schs[].inf[] 역인덱스 → infs[i]['sch_ids']. in-place 보강."""
+    rev = {}
+    for s in schs:
+        for iid in (s.get('inf') or []):
+            rev.setdefault(iid, [])
+            if s['id'] not in rev[iid]:
+                rev[iid].append(s['id'])
+    for inf in infs:
+        inf['sch_ids'] = rev.get(inf['id'], [])
+
+
+def load_func_links(spec_root: str, infs: list, uis: list, schs: list) -> None:
+    """FUNC_MAP.md에서 산출물ID→FUNC-ID 역매핑 → 각 항목 ['func'] 보강.
+    파일/매핑 없으면 'func' 미설정(graceful)."""
+    fp = os.path.join(spec_root, 'docs', '00_FUNC', 'FUNC_MAP.md')
+    if not os.path.exists(fp):
+        return
+    with open(fp, encoding='utf-8') as f:
+        text = f.read()
+    mapping = {}  # 산출물ID -> FUNC-ID
+    func_re = re.compile(r'FUNC-[a-zA-Z]+-\d+')
+    art_re = re.compile(r'(?:INF|UIS|SCH|BAT)-[A-Za-z]+-\d+')
+    for line in text.splitlines():
+        funcs = func_re.findall(line)
+        if not funcs:
+            continue
+        fid = funcs[0]
+        for art in art_re.findall(line):
+            mapping.setdefault(art, fid)
+    for coll in (infs, uis, schs):
+        for item in coll:
+            if item['id'] in mapping:
+                item['func'] = mapping[item['id']]
+
+
+def compute_gaps(infs: list, uis: list) -> dict:
+    """연결 끊긴 산출물 집계(품질 가시화)."""
+    return {
+        'inf_no_sch': sum(1 for i in infs if not i.get('sch_ids')),
+        'uis_no_inf': sum(1 for u in uis if not u.get('inf_ids')),
+    }
+
+
 def generate_index(spec_root: str, output_path: str) -> dict:
     """전체 스캔 실행 → spec_index.json 저장 → index dict 반환."""
     infs = scan_infs(spec_root)
     uis = scan_uis(spec_root)
     schs = scan_schs(spec_root)
     sprint = load_sprint_status(spec_root)
+
+    # ── 관계 데이터 보강 (SpecLens 재설계) ──
+    resolve_uis_inf(uis, infs)
+    build_inf_sch_index(infs, schs)
+    load_func_links(spec_root, infs, uis, schs)
+    gaps = compute_gaps(infs, uis)
 
     domains: dict = {}
     for inf in infs:
@@ -319,6 +422,7 @@ def generate_index(spec_root: str, output_path: str) -> dict:
         'infs': infs,
         'uis': uis,
         'schs': schs,
+        'gaps': gaps,
         'ia_tree': build_ia_tree(uis),
     }
 

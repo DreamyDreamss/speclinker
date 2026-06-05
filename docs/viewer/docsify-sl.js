@@ -20,6 +20,7 @@
   let ACTIVE_DOMAIN = null;
   let ACTIVE_TAB = 'inf';
   let SIDEBAR_MODE = 'domain'; // 'domain' | 'ia'
+  let DASH_SORT = { key: null, dir: -1 }; // 대시보드 도메인 테이블 정렬
 
   // ── 인덱스 로드 ────────────────────────────────────────────
   async function loadIndex() {
@@ -57,6 +58,11 @@
 
     sidebar.innerHTML = `
       <div class="sl-logo">⚡ SpecLens</div>
+      <div class="sl-search-wrap">
+        <input id="sl-search" class="sl-search" type="text" placeholder="🔎 INF·화면·테이블·경로"
+               oninput="SlViewer.search(this.value)" autocomplete="off">
+        <div id="sl-search-results"></div>
+      </div>
       <div>
         <span class="sl-nav-link" onclick="SlViewer.showGuide()">📖 사용자 가이드</span>
         <span class="sl-nav-link" onclick="SlViewer.showDashboard()">🏠 대시보드</span>
@@ -78,7 +84,7 @@
     const entries = Object.entries(INDEX.domains);
     if (entries.length === 0) return '<div style="padding:8px 16px;color:var(--text-muted);font-size:12px">도메인 없음</div>';
     return entries.map(([name, info]) =>
-      `<div class="sl-domain-item ${ACTIVE_DOMAIN === name ? 'active' : ''}"
+      `<div class="sl-domain-item ${ACTIVE_DOMAIN === name ? 'active' : ''}" role="button" tabindex="0"
             onclick="SlViewer.selectDomain('${escAttr(name)}')">
         <span style="flex:1">${name}</span>
         <span style="font-size:11px;color:var(--text-muted)">${info.inf || 0}</span>
@@ -166,6 +172,8 @@
     const main = document.getElementById('sl-main');
     if (!main) return;
     removeQuickNav();
+    removeRelationPanel();
+    document.getElementById('sl-breadcrumb')?.remove();
     ACTIVE_DOMAIN = null;
     renderSidebar();
 
@@ -240,6 +248,8 @@
     const main = document.getElementById('sl-main');
     if (!main || !INDEX) return;
     removeQuickNav();
+    removeRelationPanel();
+    document.getElementById('sl-breadcrumb')?.remove();
     ACTIVE_DOMAIN = null;
     renderSidebar();
 
@@ -255,7 +265,29 @@
         <div class="sl-card-label">${c.label}</div>
       </div>`).join('');
 
-    const rows = Object.entries(INDEX.domains).map(([name, d]) => {
+    let staleNote = '';
+    const gen = Date.parse((INDEX.generated_at || '').replace(' ', 'T'));
+    if (gen && (Date.now() - gen) > 7 * 864e5) {
+      staleNote = `<span style="color:var(--status-review)"> · ⚠ 인덱스가 오래되었습니다 — gen_docsify.py 재실행 권장</span>`;
+    }
+
+    const gapHtml = INDEX.gaps ? `
+      <div class="sl-gap-bar">
+        <span class="sl-gap-item ${INDEX.gaps.uis_no_inf ? 'warn' : ''}">화면-API 미연결 ${INDEX.gaps.uis_no_inf}</span>
+        <span class="sl-gap-item ${INDEX.gaps.inf_no_sch ? 'warn' : ''}">API-테이블 미연결 ${INDEX.gaps.inf_no_sch}</span>
+      </div>` : '';
+
+    let domEntries = Object.entries(INDEX.domains);
+    if (DASH_SORT.key) {
+      const k = DASH_SORT.key;
+      domEntries.sort((a, b) => {
+        const va = (k === 'name') ? a[0] : (a[1][k] || 0);
+        const vb = (k === 'name') ? b[0] : (b[1][k] || 0);
+        return (va < vb ? -1 : va > vb ? 1 : 0) * DASH_SORT.dir;
+      });
+    }
+
+    const rows = domEntries.map(([name, d]) => {
       const infTotal = d.inf || 0;
       const tbd = d.tbd_total || 0;
       const specPct = infTotal > 0 ? Math.round(((infTotal - Math.min(tbd, infTotal)) / infTotal) * 100) : 0;
@@ -292,16 +324,20 @@
       <div class="sl-dashboard">
         <h2 style="color:var(--accent);margin-top:0">📊 SpecLens Dashboard</h2>
         <div class="sl-summary-cards">${cards}</div>
+        ${gapHtml}
         <table class="sl-domain-table">
           <thead><tr>
-            <th style="text-align:left">도메인</th>
-            <th>INF</th><th>UIS</th><th>SCH</th><th>BAT</th>
+            <th style="text-align:left" role="button" tabindex="0" onclick="SlViewer.sortDash('name')">도메인</th>
+            <th role="button" tabindex="0" onclick="SlViewer.sortDash('inf')">INF</th>
+            <th role="button" tabindex="0" onclick="SlViewer.sortDash('uis')">UIS</th>
+            <th role="button" tabindex="0" onclick="SlViewer.sortDash('sch')">SCH</th>
+            <th role="button" tabindex="0" onclick="SlViewer.sortDash('bat')">BAT</th>
             <th>스펙완성도</th><th>개발완료율</th>
           </tr></thead>
           <tbody>${rows || '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:20px">도메인 없음 — gen_docsify.py를 실행하세요</td></tr>'}</tbody>
         </table>
         <div style="margin-top:12px;font-size:11px;color:var(--text-muted)">
-          생성: ${INDEX.generated_at} &nbsp;—&nbsp;
+          생성: ${INDEX.generated_at}${staleNote} &nbsp;—&nbsp;
           <code>python scripts/gen_docsify.py .</code> 로 갱신
         </div>
       </div>`;
@@ -314,11 +350,14 @@
     const main = document.getElementById('sl-main');
     if (!main || !INDEX) return;
     removeQuickNav();
+    removeRelationPanel();
+    document.getElementById('sl-breadcrumb')?.remove();
     renderSidebar();
 
     const d = INDEX.domains[domain] || {};
-    const tabs = ['inf', 'uis', 'sch', 'bat'].map(t =>
-      `<div class="sl-tab ${ACTIVE_TAB === t ? 'active' : ''}"
+    const tabKeys = ['inf', 'uis', 'sch'].concat((d.bat || 0) > 0 ? ['bat'] : []);
+    const tabs = tabKeys.map(t =>
+      `<div class="sl-tab ${ACTIVE_TAB === t ? 'active' : ''}" role="button" tabindex="0"
             onclick="SlViewer.selectTab('${t}')">${t.toUpperCase()} ${d[t] || 0}</div>`
     ).join('');
 
@@ -345,7 +384,7 @@
           : '<div style="padding:16px;color:var(--text-muted)">SCH 파일 없음</div>'
       }</div>`;
     } else {
-      body = `<div style="padding:24px;color:var(--text-muted)">BAT 뷰 — 준비 중</div>`;
+      body = `<div style="padding:24px;color:var(--text-muted)">BAT 산출물 없음</div>`;
     }
 
     main.innerHTML = `
@@ -359,7 +398,7 @@
   function renderSchCard(sch) {
     const infs = (sch.inf || []).join(', ');
     return `
-      <div class="sl-inf-card" onclick="SlViewer.openSpec('${escAttr(sch.file)}')">
+      <div class="sl-inf-card" role="button" tabindex="0" onclick="SlViewer.openSpec('${escAttr(sch.file)}')">
         <span class="sl-method-badge" style="background:var(--status-done)">SCH</span>
         <span class="sl-inf-id">${sch.id}</span>
         <span class="sl-inf-path">${escAttr(sch.table || '')}${infs ? ' · ' + escAttr(infs) : ''}</span>
@@ -375,7 +414,7 @@
     };
     const bg = colors[inf.method] || '#555';
     return `
-      <div class="sl-inf-card" onclick="SlViewer.openSpec('${escAttr(inf.file)}')">
+      <div class="sl-inf-card" role="button" tabindex="0" onclick="SlViewer.openSpec('${escAttr(inf.file)}')">
         <span class="sl-method-badge" style="background:${bg}">${inf.method || '?'}</span>
         <span class="sl-inf-id">${inf.id}</span>
         ${inf.name ? `<span class="sl-inf-name">${escAttr(inf.name)}</span>` : ''}
@@ -390,13 +429,13 @@
       ? `<img src="${previewSrc}" alt="preview" onerror="this.parentNode.innerHTML='🖥️'">`
       : '🖥️';
     return `
-      <div class="sl-uis-card" onclick="SlViewer.openSpec('${escAttr(ui.file)}')">
+      <div class="sl-uis-card" role="button" tabindex="0" onclick="SlViewer.openSpec('${escAttr(ui.file)}')">
         <div class="sl-uis-preview">${preview}</div>
         <div class="sl-uis-info">
           <div class="sl-uis-id">${ui.id}${ui.anchor_count ? ` <span class="sl-anchor" title="JIT 소스앵커 ${ui.anchor_count}개">⚓${ui.anchor_count}</span>` : ''}</div>
           <div class="sl-uis-name">${ui.name || '-'}</div>
           <div class="sl-uis-route">${ui.route || ''}</div>
-          ${(ui.domain || (ui.apis && ui.apis.length)) ? `<div class="sl-uis-apis">${escAttr(ui.domain || '')}${ui.apis && ui.apis.length ? ` · 연결 API ${ui.apis.length}` : ''}</div>` : ''}
+          ${(ui.domain || (ui.inf_ids && ui.inf_ids.length)) ? `<div class="sl-uis-apis">${escAttr(ui.domain || '')}${ui.inf_ids && ui.inf_ids.length ? ` · 연결 API ${ui.inf_ids.length}` : ''}</div>` : ''}
         </div>
       </div>`;
   }
@@ -445,12 +484,124 @@
     });
   }
 
+  // ── 라우트 → 엔티티 해소 ──────────────────────────────────────
+  function resolveCurrentEntity() {
+    if (!INDEX) return null;
+    const hash = decodeURIComponent(window.location.hash || '');
+    const m = hash.match(/(INF-[A-Z]+-\d+|UIS-[A-Z]+-\d+(?:-T\d+)?|SCH-[A-Z]+-\d+|BAT-[A-Z]+-\d+)/);
+    if (!m) return null;
+    const id = m[1];
+    const pools = [['inf', INDEX.infs], ['uis', INDEX.uis], ['sch', INDEX.schs]];
+    for (const [type, pool] of pools) {
+      const hit = (pool || []).find(x => x.id === id || id.startsWith(x.id));
+      if (hit) return { type, id: hit.id, domain: hit.domain, name: hit.name, entity: hit };
+    }
+    return null;
+  }
+
+  // ── 브레드크럼 ────────────────────────────────────────────────
+  function injectBreadcrumb() {
+    document.getElementById('sl-breadcrumb')?.remove();
+    const e = resolveCurrentEntity();
+    if (!e) return;
+    const bc = document.createElement('div');
+    bc.id = 'sl-breadcrumb';
+    bc.innerHTML =
+      `<span class="sl-bc-link" role="button" tabindex="0" onclick="SlViewer.showDashboard()">🏠 대시보드</span>` +
+      `<span class="sl-bc-sep">›</span>` +
+      `<span class="sl-bc-link" role="button" tabindex="0" onclick="SlViewer.selectDomain('${escAttr(e.domain || '')}')">${escAttr(e.domain || '-')}</span>` +
+      `<span class="sl-bc-sep">›</span><span class="sl-bc-type">${e.type.toUpperCase()}</span>` +
+      `<span class="sl-bc-sep">›</span><span class="sl-bc-cur">${escAttr(e.id)}</span>` +
+      `<span class="sl-bc-back" role="button" tabindex="0" onclick="SlViewer.selectDomain('${escAttr(e.domain || '')}')">← 도메인</span>`;
+    const section = document.querySelector('.markdown-section');
+    if (section) section.insertAdjacentElement('beforebegin', bc);
+  }
+
+  // ── 연결관계 패널 (INF/UIS/SCH 공통) ──────────────────────────
+  function chip(id, label, kind) {
+    return `<span class="sl-rel-chip sl-rel-${kind}" role="button" tabindex="0"
+             onclick="SlViewer.goToId('${escAttr(id)}')">${escAttr(label || id)}</span>`;
+  }
+
+  function relSection(title, html) {
+    if (!html) return '';
+    return `<div class="sl-rel-label">${title}</div><div class="sl-rel-body">${html}</div>`;
+  }
+
+  function injectRelationPanel() {
+    removeRelationPanel();
+    const e = resolveCurrentEntity();
+    if (!e || !INDEX) return;
+    const en = e.entity;
+    let sections = '';
+    if (e.type === 'uis') {
+      const infIds = en.inf_ids || [];
+      const apis = infIds.map(id => {
+        const inf = (INDEX.infs || []).find(i => i.id === id) || { id };
+        const badge = inf.method ? `<span class="sl-rel-m">${escAttr(inf.method)}</span>` : '';
+        return `<div class="sl-rel-row" role="button" tabindex="0" onclick="SlViewer.goToId('${escAttr(id)}')">${badge}${escAttr(id)} ${escAttr(inf.name || '')}</div>`;
+      }).join('');
+      const schIds = [...new Set(infIds.flatMap(id => ((INDEX.infs || []).find(i => i.id === id) || {}).sch_ids || []))];
+      sections += relSection('호출 API (' + infIds.length + ')', apis);
+      sections += relSection('관련 테이블 (' + schIds.length + ')', schIds.map(s => chip(s, ((INDEX.schs || []).find(x => x.id === s) || {}).table || s, 'sch')).join(''));
+    } else if (e.type === 'inf') {
+      const schIds = en.sch_ids || [];
+      const usedBy = (INDEX.uis || []).filter(u => (u.inf_ids || []).includes(en.id));
+      sections += relSection('관련 테이블 (' + schIds.length + ')', schIds.map(s => chip(s, ((INDEX.schs || []).find(x => x.id === s) || {}).table || s, 'sch')).join(''));
+      sections += relSection('사용 화면 (' + usedBy.length + ')', usedBy.map(u => chip(u.id, u.id, 'uis')).join(''));
+    } else if (e.type === 'sch') {
+      const infIds = en.inf || [];
+      sections += relSection('참조 API (' + infIds.length + ')', infIds.map(i => chip(i, i, 'inf')).join(''));
+    }
+    if (en.func) sections += relSection('linked FUNC', chip(en.func, en.func, 'func'));
+    if (!sections) return;
+    const panel = document.createElement('div');
+    panel.id = 'sl-rel-panel';
+    panel.innerHTML = `<div class="sl-rel-title">🔗 연결관계</div>${sections}`;
+    document.body.appendChild(panel);
+    document.querySelector('.content')?.classList.add('has-relpanel');
+  }
+
+  function removeRelationPanel() {
+    document.getElementById('sl-rel-panel')?.remove();
+    document.querySelector('.content')?.classList.remove('has-relpanel');
+  }
+
+  // ── UIS 미리보기 라이트박스 ────────────────────────────────────
+  function openLightbox(src) {
+    document.getElementById('sl-lightbox')?.remove();
+    const lb = document.createElement('div');
+    lb.id = 'sl-lightbox';
+    lb.innerHTML = `<img src="${escAttr(src)}" alt="확대"><div class="sl-lb-close" role="button" tabindex="0">✕ 닫기 (ESC)</div>`;
+    lb.onclick = () => lb.remove();
+    document.body.appendChild(lb);
+    const onEsc = (ev) => { if (ev.key === 'Escape') { lb.remove(); document.removeEventListener('keydown', onEsc); } };
+    document.addEventListener('keydown', onEsc);
+  }
+
+  function enhanceImages() {
+    const e = resolveCurrentEntity();
+    if (!e || e.type !== 'uis') return;
+    document.querySelectorAll('.markdown-section img').forEach(img => {
+      if (img.dataset.slLb) return;
+      img.dataset.slLb = '1';
+      img.classList.add('sl-zoomable');
+      img.title = '클릭하면 확대';
+      img.addEventListener('click', () => openLightbox(img.src));
+    });
+  }
+
   // ── 공개 API ──────────────────────────────────────────────────
   window.SlViewer = {
     showGuide() {
       renderGuide();
     },
     showDashboard() {
+      renderDashboard();
+    },
+    sortDash(key) {
+      if (DASH_SORT.key === key) DASH_SORT.dir *= -1;
+      else { DASH_SORT.key = key; DASH_SORT.dir = -1; }
       renderDashboard();
     },
     selectDomain(domain) {
@@ -463,12 +614,33 @@
       SIDEBAR_MODE = mode;
       renderSidebar();
     },
+    toggleSidebar() {
+      document.body.classList.toggle('sl-sidebar-hidden');
+    },
     openSpec(filePath) {
       window.location.hash = '#/' + filePath;
     },
     navigateToScreen(uisId) {
       const ui = INDEX && INDEX.uis && INDEX.uis.find(u => u.id === uisId);
       if (ui) this.openSpec(ui.file);
+    },
+    search(q) {
+      const box = document.getElementById('sl-search-results');
+      if (!box || !INDEX) return;
+      q = (q || '').trim().toLowerCase();
+      if (q.length < 2) { box.innerHTML = ''; return; }
+      const hit = (arr, type) => (arr || []).filter(x =>
+        (x.id && x.id.toLowerCase().includes(q)) ||
+        (x.name && x.name.toLowerCase().includes(q)) ||
+        (x.path && x.path.toLowerCase().includes(q)) ||
+        (x.table && x.table.toLowerCase().includes(q)) ||
+        (x.route && x.route.toLowerCase().includes(q))
+      ).slice(0, 8).map(x => ({ x, type }));
+      const results = [...hit(INDEX.infs, 'INF'), ...hit(INDEX.uis, 'UIS'), ...hit(INDEX.schs, 'SCH')].slice(0, 12);
+      box.innerHTML = results.length
+        ? results.map(r => `<div class="sl-sr-item" role="button" tabindex="0" onclick="SlViewer.goToId('${escAttr(r.x.id)}')">
+             <span class="sl-sr-type">${r.type}</span> ${escAttr(r.x.id)} <span class="sl-sr-name">${escAttr(r.x.name || r.x.table || r.x.route || '')}</span></div>`).join('')
+        : '<div class="sl-sr-empty">결과 없음</div>';
     },
     goToId(id) {
       if (!INDEX) return;
@@ -503,7 +675,15 @@
     hook.mounted(function () {
       if (!document.getElementById('sl-sidebar')) {
         document.body.insertAdjacentHTML('afterbegin',
+          '<div id="sl-burger" role="button" tabindex="0" title="사이드바 토글" onclick="SlViewer.toggleSidebar()">☰</div>' +
           '<div id="sl-sidebar"></div><div id="sl-main"></div>');
+        // 키보드 접근성: role=button 요소를 Enter/Space로 활성화
+        document.addEventListener('keydown', function (ev) {
+          if ((ev.key === 'Enter' || ev.key === ' ') && ev.target && ev.target.getAttribute('role') === 'button') {
+            ev.preventDefault();
+            ev.target.click();
+          }
+        });
         loadIndex();
       }
     });
@@ -512,8 +692,11 @@
       const hash = window.location.hash || '';
       if (hash.includes('/INF-') || hash.includes('/spec') || hash.includes('/UIS-') || hash.includes('/SCH-') || hash.includes('/BAT-') || hash.includes('/FUNC-')) {
         setTimeout(function () {
+          injectBreadcrumb();
+          injectRelationPanel();
           injectQuickNav();
           addCrosslinks();
+          enhanceImages();
         }, 150);
       }
     });
