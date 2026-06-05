@@ -228,14 +228,19 @@ const SNAPSHOT_EXPR = `(function(){
           });
         })()`);
         await pwPage.waitForTimeout(300);
+        // 실제 콘텐츠 높이 = 보이는 '의미 요소'의 최하단 + 여백.
+        // scrollHeight(빈 컨테이너 포함 과대값)·div(레이아웃 컨테이너)는 제외 → 세로 여백 부풀림 방지.
         contentH = await best.evaluate(`(function(){
-          var d=Math.max(document.documentElement.scrollHeight, document.body?document.body.scrollHeight:0);
-          var mb=0; document.querySelectorAll('input,select,textarea,button,th,td,div,form').forEach(function(el){
-            if(el.offsetWidth<4||el.offsetHeight<4) return; var r=el.getBoundingClientRect(); if(r.bottom>mb) mb=r.bottom;
+          var mb=0;
+          document.querySelectorAll('input:not([type=hidden]),select,textarea,button,a,th,td,label,img,h1,h2,h3,h4,legend').forEach(function(el){
+            if(!el.offsetParent && el.tagName!=='BODY') return;   // display:none 제외
+            var r=el.getBoundingClientRect();
+            if(r.width<3||r.height<3) return;
+            if(r.bottom>mb && r.bottom < ${MAX_H}) mb=r.bottom;
           });
-          return Math.min(Math.max(d, mb+80, 900), ${MAX_H});
+          return Math.min(Math.max(Math.round(mb)+32, 500), ${MAX_H});
         })()`);
-        contentH = Math.max(Math.round(contentH || 1080), 900);
+        contentH = Math.max(Math.round(contentH || 900), 500);
       } catch(_) {}
 
       // screenId 자동 결정 (프레임 URL 마지막 세그먼트)

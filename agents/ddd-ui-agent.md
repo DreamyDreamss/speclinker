@@ -233,33 +233,27 @@ N. {저장} → {결과/후속}
 
 ## Phase 3.5: 마커 출력 + annotate (인터랙티브 모드)
 
-**마커 = §4에 문서화한 위젯/§3 블록 그 자체**(216개 전량 금지, 손수 고른 임시목록 금지). §4의 № 순서대로 marker json을 생성한다.
+> 🚫 **선택은 AI가 하지 않는다 (누락 방지의 핵심).** "의미있는 거만 고른다"고 AI가 subset을 집으면 **계속 누락된다**(실측: 기초정보 40위젯 중 8개만 골라 32 누락). 마킹 대상 선택은 **결정론 스크립트가 전수**로 한다. 에이전트는 *고르지 않고* 그 전수 목록을 **각각 설명**만 한다.
 
-> ⚠️ **탭 마커 핵심 규칙 (공통 chrome 제외):** 각 탭 스냅샷(`dom_snapshot_tab{N}.json`)에는 항상 보이는 **공통 헤더/툴바(조회·저장·등록·삭제 등)가 포함**된다. 탭 §4.{N}과 그 마커(`preview_tab{N}`)는 **그 탭에만 있는 고유 위젯만** 담는다. 판정: **여러 탭 스냅샷에 동일 id로 반복 등장하는 위젯 = 공통** → 탭 마커에서 제외하고 개요(`preview_annotated`)에만 1회 표시. 한 탭에만 등장 = 그 탭 고유 → 해당 탭 §4.{N}·마커에. (실측 pr201: 공통 40 id 제외 시 가격탭=가격행추가/삭제, 단품탭=단품그룹/자동생성, 인증탭=안전인증조회 등 고유 버튼만 남음.)
-
-> **책임 분리(휴리스틱 금지):** 에이전트는 *무엇을 마킹할지*(§4에 적은 실재 위젯 id)만 정한다. *어디에 찍을지*(bbox)는 `build_markers.py`가 dom_snapshot에서 결정론으로 해소한다. **bbox를 손으로 베끼거나 추정 금지** — 정렬 깨짐·존재하지 않는 위젯 마킹의 원인이었다.
+**책임 분리:**
+- **선택(결정론·전수)**: `select_tab_widgets.py`가 DOM 스냅샷의 **모든 인터랙션 위젯**(button/a/select, id·onclick 보유)을 번호 매겨 출력. 공통툴바(여러 탭 반복)·탭바·상단툴바만 기계 제외. **AI 개입 없음 → 누락 0.**
+- **bbox·그리기**: build_markers/annotate (결정론).
+- **설명(AI)**: 에이전트는 전수 목록의 **모든 마커를** §4 표에 설명(동작·API). 빼면 안 됨(목록이 고정).
 
 화면(또는 탭)별로:
-1. **마커 입력 작성** — §4(또는 §4.{N})에 문서화한 위젯의 `{number, label, id}`만 적는다(bbox 없이). **탭이면 공통 위젯(전 탭 반복 id) 제외 후 그 탭 고유 위젯만.** 의미있는 버튼·이벤트·핵심입력만(216개 전량/한 띠 몰림 금지 — 폼 전체에 흩어진 실재 위젯).
-   ```json
-   // {captureDir}/preview[_tab{N}]_markers_in.json
-   [ {"number":1, "label":"조회", "id":"searchProductGrid"},
-     {"number":2, "label":"단품자동생성", "id":"btnPrdRegUntGrpAuto"},
-     {"number":3, "label":"MD코드", "name":"schMdId"} ]
-   ```
-2. **bbox 해소**(결정론):
+1. **전수 선택**:
    ```bash
-   !python {PLUGIN_PATH}/scripts/build_markers.py --snapshot {captureDir}/dom_snapshot[_tab{N}].json --markers {captureDir}/preview[_tab{N}]_markers_in.json --out {captureDir}/preview[_tab{N}]_widgets.json
+   !python {PLUGIN_PATH}/scripts/select_tab_widgets.py --captures-dir {captureDir} [--tab {N}] --out {captureDir}/preview[_tab{N}]_widgets.json
    ```
-   > 스냅샷에 없는 id는 WARN+skip → §4에 실재하지 않는 위젯을 적었다는 신호(소스/스냅샷 재확인).
-3. **annotate**:
+   출력 `[{number,id,label,bbox}]` = 그 탭의 모든 인터랙션 위젯(누락 없음).
+2. **annotate**:
    ```bash
    !python {PLUGIN_PATH}/scripts/annotate_preview.py --png {captureDir}/preview[_tab{N}].png --widgets {captureDir}/preview[_tab{N}]_widgets.json --out {captureDir}/preview[_tab{N}]_annotated.png
    ```
-4. **출력 디렉토리로 복사**: `preview.png`·`preview_annotated.png` → `{outDir}/`, 탭 annotated → `{outDir}/tabs/tab{N}_{탭명}_annotated.png`.
-5. §0에서 `![](preview_annotated.png)`, §4.{N}에서 `![](tabs/tab{N}_{탭명}_annotated.png)` 참조. 마커 번호 = §4 № = 캡처 원 번호(3중 일치).
+3. **출력 디렉토리로 복사**: `preview_annotated.png` → `{outDir}/`, 탭 annotated → `{outDir}/tabs/tab{N}_{탭명}_annotated.png`.
+4. **§4 표 작성 = 전수 설명**: `widgets.json`의 **모든 번호**를 §4(또는 탭 파일) 표에 `№|위젯|동작|API`로 적는다. 라벨이 DOM에서 부정확하면(예: 검색아이콘) **소스를 읽어 의미를 보정**(이게 AI의 일). **단 빠뜨리지 말 것** — widgets.json의 № 개수 = 표 행 수 = 이미지 마커 수(3중 일치).
 
-> 실패해도 spec 생성 중단 금지(§0는 비마커 preview로 폴백). 소스폴백 모드(스크린샷 없음)는 이 Phase 생략.
+> 실패해도 spec 생성 중단 금지. 소스폴백 모드(스크린샷 없음)는 이 Phase 생략.
 
 ## Phase 4: api_hints 출력 + INF 필요 목록
 
@@ -297,7 +291,8 @@ N. {저장} → {결과/후속}
 [ ] (소스폴백) DOM 없이 view 소스만으로 §4를 도출했는가?
 [ ] (멀티탭) 사용자가 확정한 탭을 dom_snapshot_tab{N} 기반으로 §4.{N} 서브표로 전부 문서화했는가? (활성탭 하나만 문서화 금지)
 [ ] (멀티탭) 각 탭 §4.{N}에 **이미지 + 마커 설명표가 둘 다** 있는가? **이미지에 찍힌 모든 마커(№)가 표에 설명**되는가? (이미지만 덜렁 넣기 금지 — 마커마다 위젯·동작 설명)
-[ ] (인터랙티브) 마커 = §4 문서화 위젯만으로 preview[_tab{N}]_widgets.json을 출력하고 annotate를 실행했는가? (216개 전량/임의 목록 금지)
+[ ] (인터랙티브) 마커 선택은 `select_tab_widgets.py`(결정론 전수)로 했는가? **AI가 subset을 고르지 않았는가**(누락 원인)?
+[ ] **누락 검사**: widgets.json의 № 개수 = §4(탭)표 행 수 = 이미지 마커 수가 **정확히 일치**하는가? (AI가 표에서 일부를 빠뜨리면 불일치)
 [ ] §0/§4 마커 번호가 캡처 원 번호와 1:1 일치하는가?
 ```
 
