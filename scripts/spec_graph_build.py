@@ -96,6 +96,24 @@ def build_graph(root):
         except Exception:
             pass
     _INF_RE = re.compile(r'INF-[A-Z0-9]+-\d+')
+    # path → inf-id 인덱스 (api_hints raw경로 조인용 — link_uis_inf 미실행이어도 화면→INF 연결)
+    path_to_inf = {}
+    for iid, n in graph['inf'].items():
+        p = (n.get('path') or '').lower()
+        if not p:
+            continue
+        path_to_inf[p] = iid
+        if not p.startswith('/app/'):
+            path_to_inf['/app' + p] = iid
+        else:
+            path_to_inf[re.sub(r'^/app(?=/)', '', p)] = iid
+    def _join_hint(h):
+        # "POST /product/prdreg/productList" 또는 "/product/prdreg/productList" → inf-id
+        m = re.search(r'(/[A-Za-z0-9_./\-{}]+)', h or '')
+        if not m:
+            return None
+        hp = m.group(1).split('?')[0].lower()
+        return path_to_inf.get(hp) or path_to_inf.get('/app' + hp) or path_to_inf.get(re.sub(r'^/app(?=/)', '', hp))
     for fp in glob.glob(os.path.join(design, '*', '**', 'spec.md'), recursive=True):
         try:
             fm, body = _frontmatter(open(fp, encoding='utf-8').read())
@@ -106,10 +124,17 @@ def build_graph(root):
             continue
         screen_id = fm.get('화면ID') or fm.get('screen-id') or ''
         route = fm.get('라우트') or fm.get('route') or ''
-        infs = sorted(set(_INF_RE.findall(body)))
-        anchors = []
+        # INF 연결: 본문 INF-ID(link_uis_inf 후) ∪ frontmatter api_hints 경로조인(미실행이어도)
+        infs = set(_INF_RE.findall(body))
+        for h in (fm.get('api_hints') or []):
+            j = _join_hint(h)
+            if j:
+                infs.add(j)
+        infs = sorted(infs)
+        # 앵커: frontmatter anchors(view+핸들러 full-chain) ∪ screen_inventory entryFile
+        anchors = list(fm.get('anchors') or [])
         ef = si_by_screen.get(screen_id) or si_by_route.get(route)
-        if ef:
+        if ef and ef.replace('\\', '/') not in anchors:
             anchors.append(ef.replace('\\', '/'))
         graph['uis'][uid] = {'screen_id': screen_id, 'screen_name': fm.get('화면명'),
                              'route': route, 'domain': fm.get('도메인'),
