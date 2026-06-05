@@ -20,6 +20,7 @@
   let ACTIVE_DOMAIN = null;
   let ACTIVE_TAB = 'inf';
   let SIDEBAR_MODE = 'domain'; // 'domain' | 'ia'
+  let DASH_SORT = { key: null, dir: -1 }; // 대시보드 도메인 테이블 정렬
 
   // ── 인덱스 로드 ────────────────────────────────────────────
   async function loadIndex() {
@@ -259,7 +260,23 @@
         <div class="sl-card-label">${c.label}</div>
       </div>`).join('');
 
-    const rows = Object.entries(INDEX.domains).map(([name, d]) => {
+    const gapHtml = INDEX.gaps ? `
+      <div class="sl-gap-bar">
+        <span class="sl-gap-item ${INDEX.gaps.uis_no_inf ? 'warn' : ''}">화면-API 미연결 ${INDEX.gaps.uis_no_inf}</span>
+        <span class="sl-gap-item ${INDEX.gaps.inf_no_sch ? 'warn' : ''}">API-테이블 미연결 ${INDEX.gaps.inf_no_sch}</span>
+      </div>` : '';
+
+    let domEntries = Object.entries(INDEX.domains);
+    if (DASH_SORT.key) {
+      const k = DASH_SORT.key;
+      domEntries.sort((a, b) => {
+        const va = (k === 'name') ? a[0] : (a[1][k] || 0);
+        const vb = (k === 'name') ? b[0] : (b[1][k] || 0);
+        return (va < vb ? -1 : va > vb ? 1 : 0) * DASH_SORT.dir;
+      });
+    }
+
+    const rows = domEntries.map(([name, d]) => {
       const infTotal = d.inf || 0;
       const tbd = d.tbd_total || 0;
       const specPct = infTotal > 0 ? Math.round(((infTotal - Math.min(tbd, infTotal)) / infTotal) * 100) : 0;
@@ -296,10 +313,14 @@
       <div class="sl-dashboard">
         <h2 style="color:var(--accent);margin-top:0">📊 SpecLens Dashboard</h2>
         <div class="sl-summary-cards">${cards}</div>
+        ${gapHtml}
         <table class="sl-domain-table">
           <thead><tr>
-            <th style="text-align:left">도메인</th>
-            <th>INF</th><th>UIS</th><th>SCH</th><th>BAT</th>
+            <th style="text-align:left" role="button" tabindex="0" onclick="SlViewer.sortDash('name')">도메인</th>
+            <th role="button" tabindex="0" onclick="SlViewer.sortDash('inf')">INF</th>
+            <th role="button" tabindex="0" onclick="SlViewer.sortDash('uis')">UIS</th>
+            <th role="button" tabindex="0" onclick="SlViewer.sortDash('sch')">SCH</th>
+            <th role="button" tabindex="0" onclick="SlViewer.sortDash('bat')">BAT</th>
             <th>스펙완성도</th><th>개발완료율</th>
           </tr></thead>
           <tbody>${rows || '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:20px">도메인 없음 — gen_docsify.py를 실행하세요</td></tr>'}</tbody>
@@ -564,6 +585,11 @@
       renderGuide();
     },
     showDashboard() {
+      renderDashboard();
+    },
+    sortDash(key) {
+      if (DASH_SORT.key === key) DASH_SORT.dir *= -1;
+      else { DASH_SORT.key = key; DASH_SORT.dir = -1; }
       renderDashboard();
     },
     selectDomain(domain) {

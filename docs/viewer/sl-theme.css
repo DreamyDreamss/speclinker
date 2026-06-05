@@ -67,6 +67,11 @@ blockquote { border-left: 3px solid var(--border); color: var(--text-muted); pad
 .sl-domain-table { width: 100%; border-collapse: collapse; background: var(--bg-secondary); border-radius: 8px; overflow: hidden; }
 .sl-progress-bar { background: var(--border); border-radius: 3px; height: 6px; overflow: hidden; min-width: 80px; }
 .sl-progress-fill { height: 100%; border-radius: 3px; }
+.sl-domain-table th[role="button"] { cursor: pointer; user-select: none; }
+.sl-domain-table th[role="button"]:hover { color: var(--accent); }
+.sl-gap-bar { display: flex; gap: 10px; margin: 0 0 18px; flex-wrap: wrap; }
+.sl-gap-item { font-size: 11px; color: var(--text-muted); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; }
+.sl-gap-item.warn { color: var(--status-review); border-color: var(--status-review); }
 
 /* 도메인 탭 */
 .sl-domain-header { padding: 20px 24px 0; border-bottom: 1px solid var(--border); }
