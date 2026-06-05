@@ -1,0 +1,42 @@
+---
+sch-id: SCH-PRD-004
+table: ord_card_intf_d
+domain: product
+domain-code: PRD
+inf: []
+---
+
+# SCH-PRD-004: ord_card_intf_d
+
+> **FUNC-ID:** [TBD] | **SRS-F:** [TBD] | **API:** [TBD] | **화면:** [TBD]
+
+**근거 소스:** `sch_draft`
+
+### 컬럼 설명
+| 컬럼명 | 타입 | NULL | 기본값 | 설명 |
+|--------|------|------|--------|------|
+| MAX_MMS_CUNT | <!-- LLM-TODO --> | ? | — | <!-- LLM-TODO --> |
+
+### 인덱스
+| 인덱스명 | 컬럼 | 타입 | 목적 |
+|---------|------|------|------|
+| — | — | — | — |
+
+### 코드값
+<!-- LLM-TODO: 코드성 컬럼(_CD/_TP/_STS/_YN 등) 값·의미. 없으면 섹션 생략 가능 -->
+
+### 관계 (FK)
+| 참조 컬럼 | 참조 테이블 | ON DELETE |
+|---------|-----------|----------|
+| — | — | — |
+
+### mini-ERD
+```mermaid
+erDiagram
+    ord_card_intf_d {
+        COL MAX_MMS_CUNT
+    }
+```
+
+### 비즈니스 주의사항
+<!-- LLM-TODO: 참조 INF 비즈니스 규칙/트랜잭션/사이드이펙트 기반 주의사항. 없으면 생략 -->

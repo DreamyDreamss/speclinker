@@ -226,6 +226,12 @@ GET/단순조회 API는 비즈니스 룰이 거의 없으므로 해당 항목만
 !mkdir -p "docs/05_설계서/{domain}/INF"
 ```
 
+**앵커 규칙 (full-chain — 4-1, *지침이며 INF 본문에 복사하지 말 것*):** frontmatter `anchors:` 배열에는 이 INF가
+실제로 사용한 **호출 체인 전체**(controller 진입 + service 비즈로직 + DAO/mapper SQL)를 `경로:라인범위`로 기록한다.
+dispatch_inf_gen이 전달한 사전계산 연관 파일(서비스/DAO/쿼리)이 출처다. 이는 변경 시 AI가 비즈로직·SQL까지
+**소스로 직접 회귀(JIT)**하는 근거다. 경로는 **워크스페이스 기준 상대경로**(`src/...`)로 적는다(절대경로면 prefix 제거).
+본문 `## 근거 소스`(controller)는 하위호환으로 병기한다.
+
 **INF 파일 형식:**
 
 ```markdown
@@ -250,12 +256,6 @@ anchors:
 # INF-{CODE}-{NNN}: {METHOD} {path} — {기능명}
 
 > **근거 소스:** `{controller경로}:{라인번호 범위}`
-
-> **앵커 규칙 (full-chain — 4-1):** frontmatter `anchors:` 배열에는 이 INF가 실제로 사용한 **호출 체인 전체**를
-> `경로:라인범위`로 기록한다 — controller 진입 + service 비즈로직 + DAO/mapper SQL. (dispatch_inf_gen이 전달한
-> 사전계산 연관 파일 `서비스/DAO/쿼리`가 그 출처다.) 이는 변경 시 AI가 비즈로직·SQL까지 **소스로 직접 회귀(JIT)**
-> 하는 근거이며, 산문 요약보다 우선하는 진실 포인터다. 본문 `## 근거 소스`(controller)는 하위호환으로 병기한다.
-> 경로는 **워크스페이스 기준 상대경로**(`src/...`)로 적는다(이식성). 입력이 절대경로면 워크스페이스 prefix를 제거한다.
 
 ## 요청
 
