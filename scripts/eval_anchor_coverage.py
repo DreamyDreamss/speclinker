@@ -12,12 +12,16 @@ eval_anchor_coverage.py — 앵커 체인 커버리지 + 메타 정확도 측정
 Usage: python eval_anchor_coverage.py <root> [--sample N]
 출력: docs/report/eval/anchor_coverage.json + 콘솔
 """
-import os, sys, json, random
+import os, sys, json, random, re
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import spec_graph_build as sgb
 
+def anchor_path(anchor):
+    """앵커에서 :line(-range) 접미사만 제거 (Windows 절대경로 D: 콜론 보존)."""
+    return re.sub(r':\d+(?:-\d+)?$', '', (anchor or '').strip().strip('"'))
+
 def stage(anchor):
-    p = anchor.split(':', 1)[0].lower()
+    p = anchor_path(anchor).lower()
     base = os.path.basename(p)
     if p.endswith(('.xml', '.sql')) or 'mapper' in base or base.rstrip('.java').endswith('dao') or '/dao/' in p or 'sqlmap' in p:
         return 'sql'

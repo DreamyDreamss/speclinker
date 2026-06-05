@@ -10,6 +10,9 @@ def test_stage_classify():
     assert e.stage('src/x/FooServiceImpl.java:1') == 'service'
     assert e.stage('src/x/FooMapper.xml:3-30') == 'sql'
     assert e.stage('src/x/FooDao.java:1') == 'sql'
+    # Windows 절대경로(D: 콜론) — split(':') 버그 회귀 방지
+    assert e.stage('"D:/proj/src/service/impl/FooServiceImpl.java:154-162"') == 'service'
+    assert e.stage('D:/proj/src/sqlmapper/FooMapper.xml:1148-1248') == 'sql'
     print('PASS: test_stage_classify')
 
 def _inf(d, code, n, anchors):

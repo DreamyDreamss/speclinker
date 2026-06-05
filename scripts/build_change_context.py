@@ -94,8 +94,8 @@ def freshness_warnings(root, graph, scores):
             continue
         spec_m = os.path.getmtime(spec_p)
         for a in n.get('anchors', []):
-            src_rel = a.split(':', 1)[0].strip()
-            src_p = os.path.join(root, src_rel)
+            src_rel = re.sub(r':\d+(?:-\d+)?$', '', (a or '').strip().strip('"'))
+            src_p = src_rel if os.path.isabs(src_rel) else os.path.join(root, src_rel)
             try:
                 if os.path.exists(src_p) and os.path.getmtime(src_p) > spec_m + 1:
                     stale.append((iid, src_rel))
