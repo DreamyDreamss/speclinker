@@ -292,28 +292,46 @@ def _norm_path(p: str) -> str:
     return p
 
 
+_INF_ID_RE = re.compile(r'INF-[A-Z]+-\d+')
+
+
 def resolve_uis_inf(uis: list, infs: list) -> None:
-    """각 UIS의 apis(URL/hint)를 INF id로 해소 → uis[i]['inf_ids']. 인덱스 in-place 보강.
-    정확 매칭 우선, 없으면 prefix(apis가 INF path 하위경로) 매칭. 실패분은 무시(apis raw 유지)."""
+    """각 UIS의 api_hints/apis를 INF id로 해소 → uis[i]['inf_ids']. in-place 보강.
+
+    실제 api_hints 항목 형식(권위: link_uis_inf.py 산출):
+      - "POST [INF-PRD-490](../../INF/INF-PRD-490.md)"  (이미 ID 해소됨 — 1차)
+      - "POST /app/product/prdreg/save"                 (미해소 raw — 2차 path 매칭)
+      - 따옴표 래핑/메서드 접두 가능
+    해소 순서: ① 항목에 박힌 INF-ID 직접 추출 ② METHOD 토큰 제거 후 경로 추출 →
+    INF path 정확매칭 → 컨텍스트 접두(/app 등) 차이 보정 위해 suffix 매칭. 실패분은 무시."""
     by_path = {}
     for inf in infs:
         np = _norm_path(inf.get('path', ''))
         if np:
             by_path.setdefault(np, inf['id'])
+    valid_ids = {inf['id'] for inf in infs}
     for u in uis:
         ids = []
         for a in (u.get('apis') or []):
-            na = _norm_path(a)
-            if not na:
-                continue
-            if na in by_path:
-                hit = by_path[na]
+            s = str(a).strip().strip('"\'').strip()
+            hit = None
+            # ① 이미 INF-ID가 박힌 경우 직접 추출
+            m = _INF_ID_RE.search(s)
+            if m and m.group(0) in valid_ids:
+                hit = m.group(0)
             else:
-                hit = None
-                for np, iid in by_path.items():
-                    if na == np or na.startswith(np + '/'):
-                        hit = iid
-                        break
+                # ② "METHOD path" → '/'로 시작하는 첫 토큰을 경로로
+                path_tok = next((p for p in s.split() if p.startswith('/')), None)
+                na = _norm_path(path_tok) if path_tok else ''
+                if na:
+                    if na in by_path:
+                        hit = by_path[na]
+                    elif len(na) > 1:
+                        # 컨텍스트 접두 차이(/app/x vs /x): 한쪽이 다른쪽 경로꼬리이면 매칭
+                        for np, iid in by_path.items():
+                            if np == na or np.endswith(na) or na.endswith(np):
+                                hit = iid
+                                break
             if hit and hit not in ids:
                 ids.append(hit)
         u['inf_ids'] = ids

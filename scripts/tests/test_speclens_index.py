@@ -26,6 +26,24 @@ def test_resolve_uis_inf_exact_and_prefix():
     assert uis[2]['apis'] == ['/unknown/path']
 
 
+def test_resolve_uis_inf_real_api_hints_format():
+    """실제 link_uis_inf 산출 api_hints 형식: 'METHOD [INF-ID](link)' / 'METHOD /path' / 따옴표."""
+    infs = [
+        {'id': 'INF-PRD-490', 'path': '/app/product/prdreg/x490', 'method': 'POST', 'domain': 'product'},
+        {'id': 'INF-PRD-487', 'path': '/app/product/prdreg/x487', 'method': 'POST', 'domain': 'product'},
+        {'id': 'INF-PRD-001', 'path': '/app/product/prdreg/save', 'method': 'POST', 'domain': 'product'},
+    ]
+    uis = [{'id': 'UIS-PRD-001', 'domain': 'product', 'apis': [
+        'POST /product/prdreg',                                  # 페이지 라우트 → 특정 INF 아님(미해소 OK)
+        'POST [INF-PRD-490](../../INF/INF-PRD-490.md)',          # ① 박힌 ID
+        '"POST [INF-PRD-487](../../INF/INF-PRD-487.md)"',        # ① 박힌 ID + 따옴표 래핑
+        'POST /product/prdreg/save',                             # ② 컨텍스트 접두 차이(/app 없음) suffix 매칭
+        'POST [INF-PRD-999](../../INF/INF-PRD-999.md)',          # 없는 INF → 무시
+    ]}]
+    G.resolve_uis_inf(uis, infs)
+    assert uis[0]['inf_ids'] == ['INF-PRD-490', 'INF-PRD-487', 'INF-PRD-001'], uis[0]['inf_ids']
+
+
 def test_build_inf_sch_index():
     infs = [{'id': 'INF-PRD-205'}, {'id': 'INF-PRD-206'}, {'id': 'INF-ORD-010'}]
     schs = [
