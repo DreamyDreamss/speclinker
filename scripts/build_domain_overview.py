@@ -52,14 +52,25 @@ def generate(root, domain_filter=None):
                 lines.append(f'- **{t}** ({c}개 기능에서 사용){ref}')
         else:
             lines.append('- (테이블 정보 없음)')
+        # 대표 화면(UIS) — 화면중심 사람 이해 (있으면)
+        dom_uis = [(uid, u) for uid, u in graph.get('uis', {}).items() if u.get('domain') == domain]
+        if dom_uis:
+            lines += ['', f'## 대표 화면 ({len(dom_uis)}개) — 화면으로 이해', '',
+                      '> 이 시스템은 화면으로 이해한다. 각 화면이 무슨 API를 호출하는지로 동작을 파악.', '']
+            for uid, u in sorted(dom_uis, key=lambda x: -len(x[1].get('infs', [])))[:12]:
+                infs_u = u.get('infs', [])
+                api = f"호출 API: {', '.join(infs_u[:5])}" + (' 외' if len(infs_u) > 5 else '') if infs_u else '연결 API 미확인(캡처 보강 필요)'
+                lines.append(f"- **{u.get('screen_name') or uid}** `{u.get('route','')}` — {api} [{uid}]({u.get('file','')})")
+
         lines += ['', f'## 대표 기능 ({len(infs)}개 중 진입점)', '']
         for iid, n in reps:
             lines.append(f"- {n.get('method','')} `{n.get('path','')}` — [{iid}](INF/{iid}.md)")
-        lines += ['', '## 신규자 진입점',
-                  f'1. 위 **핵심 엔티티** 상위 2~3개의 SCH(DB_{domain}.md)로 데이터 구조 파악',
-                  '2. **대표 기능**의 INF 1~2개를 열어 요청/응답·비즈니스 규칙 확인',
-                  '3. 변경 작업 시 `/sl-change`가 영향슬라이스+소스앵커로 정밀 그라운딩을 제공',
-                  f'4. 화면은 UIS, 전체 DB는 DB_{domain}.md 참조', '']
+        entry = ['1. **대표 화면**부터: 화면 1~2개를 열어 "무슨 버튼→무슨 API→무슨 결과"(UIS §5) 파악'] if dom_uis else []
+        entry += [
+            f'{len(entry)+1}. **핵심 엔티티** 상위 2~3개의 SCH(DB_{domain}.md)로 데이터 구조 파악',
+            f'{len(entry)+2}. **대표 기능** INF 1~2개로 요청/응답·비즈니스 규칙 확인',
+            f'{len(entry)+3}. 변경 시 `/sl-change`가 영향슬라이스+소스앵커로 정밀 그라운딩']
+        lines += ['', '## 신규자 진입점', *entry, '']
         out_dir = os.path.join(root, 'docs/05_설계서', domain)
         os.makedirs(out_dir, exist_ok=True)
         open(os.path.join(out_dir, f'OVERVIEW_{domain}.md'), 'w', encoding='utf-8').write('\n'.join(lines) + '\n')
