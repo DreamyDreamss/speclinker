@@ -84,6 +84,31 @@ def test_uis_reader():
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
+def test_uis_impact_in_brief():
+    """INF 변경 → 그 INF 쓰는 화면(UIS)이 영향 화면으로, 화면명 엔티티 → 연결 INF."""
+    tmp = tempfile.mkdtemp()
+    try:
+        _inf(tmp, 'product', 'PRD', 1, 'POST', '/p/list', ['PRD_M'], 'src/c.java:1-9')
+        d = os.path.join(tmp, 'docs/05_설계서/product/UIS/pr301'); os.makedirs(d, exist_ok=True)
+        open(os.path.join(d, 'spec.md'), 'w', encoding='utf-8').write(
+            "---\n화면ID: pr301\n화면명: 상품등록폼\n라우트: /p/form\n도메인: product\n"
+            "UIS-ID: UIS-PRD-001\n---\n# UIS-PRD-001\n[INF-PRD-001](../INF/INF-PRD-001.md)\n")
+        env = dict(os.environ, PYTHONUTF8='1')
+        # (a) INF 시드 → 영향 화면
+        r = subprocess.run([sys.executable, os.path.join(SCRIPTS, 'build_change_context.py'),
+                            tmp, '--entities', 'INF-PRD-001'], capture_output=True, text=True, env=env)
+        assert r.returncode == 0, r.stderr
+        c = open(os.path.join(tmp, 'docs/변경관리/_adhoc/_asis_brief.md'), encoding='utf-8').read()
+        assert '영향 화면' in c and 'UIS-PRD-001' in c, '영향 화면 누락'
+        # (b) 화면명 시드 → 연결 INF
+        r2 = subprocess.run([sys.executable, os.path.join(SCRIPTS, 'build_change_context.py'),
+                             tmp, '--sr', 'S2', '--entities', '상품등록폼'], capture_output=True, text=True, env=env)
+        c2 = open(os.path.join(tmp, 'docs/변경관리/S2/_asis_brief.md'), encoding='utf-8').read()
+        assert 'INF-PRD-001' in c2, '화면→INF 연결 누락'
+        print('PASS: test_uis_impact_in_brief')
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
 def test_freshness_gate():
     """소스 파일이 스펙보다 최신이면 STALE 경고."""
     import time
@@ -138,3 +163,4 @@ if __name__ == '__main__':
     test_freshness_gate()
     test_frontmatter_anchors()
     test_uis_reader()
+    test_uis_impact_in_brief()

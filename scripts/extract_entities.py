@@ -36,6 +36,12 @@ def extract(ws, text):
     known_paths = {(graph['inf'][i].get('path') or '') for i in graph['inf']}
     known_paths.discard('')
 
+    # UIS 어휘(화면명·UIS-ID)
+    uis = graph.get('uis', {})
+    known_screens = {u.get('screen_name') for u in uis.values() if u.get('screen_name')}
+    screens = sorted({s for s in known_screens if s and s in text})
+    uis_ids = sorted({uid for uid in uis if uid in text})
+
     up = text.upper()
     tables = sorted({t for t in known_tables if t in up})
     # 어휘에 없지만 UPPER_SNAKE인 후보(미확인 — 별도)
@@ -55,9 +61,10 @@ def extract(ws, text):
         'infs_unmatched': [i for i in infs_text if i not in known_infs],
         'paths': paths,
         'paths_candidate': [p for p in path_cand if p not in paths],
-        'screens': [],
+        'screens': screens,
+        'uis_ids': uis_ids,
         'terms': [],
-        'entities_arg': ','.join(tables + infs + paths),   # build_change_context --entities 직접 입력용
+        'entities_arg': ','.join(tables + infs + paths + screens + uis_ids),   # build_change_context --entities 직접 입력용
     }
 
 def main():

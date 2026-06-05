@@ -32,8 +32,9 @@ def parse_args(argv):
     return ws, sr, ents, ubiquity, top, hops
 
 def match_seed(graph, ents):
-    """엔티티 → 직접 매칭 INF/table 시드."""
-    inf_seed, table_seed = set(), set()
+    """엔티티 → 직접 매칭 INF/table/UIS 시드."""
+    inf_seed, table_seed, uis_seed = set(), set(), set()
+    uis = graph.get('uis', {})
     for e in ents:
         eu = e.upper()
         if eu in graph['inf']:
@@ -43,16 +44,38 @@ def match_seed(graph, ents):
         for iid, n in graph['inf'].items():
             if e and (e.lower() in (n.get('path') or '').lower()):
                 inf_seed.add(iid)
-    return inf_seed, table_seed
+        # UIS: UIS-ID 정확 / 화면명·라우트 부분일치
+        if eu in uis:
+            uis_seed.add(eu)
+        for uid, u in uis.items():
+            if e and (e == (u.get('screen_name') or '') or e.lower() in (u.get('route') or '').lower()
+                      or e == u.get('screen_id')):
+                uis_seed.add(uid)
+    return inf_seed, table_seed, uis_seed
 
-def expand(graph, inf_seed, table_seed, ubiquity=20, hops=1):
-    """forward + reverse(ripple) 확장 + 편재자원 격리 + 관련도 점수.
-    반환: scores{iid:score}, via{iid:table}, tables, schs, ubiquitous[(table,users)], ripple_n."""
+def expand(graph, inf_seed, table_seed, uis_seed=None, ubiquity=20, hops=1):
+    """forward + reverse(ripple) 확장 + 편재자원 격리 + 관련도 점수 + UIS.
+    반환: scores, via, tables, schs, ubiquitous, ripple_n, screens(set uid)."""
+    uis_seed = uis_seed or set()
+    uis = graph.get('uis', {})
+    # INF→화면 역색인
+    inf_to_screen = {}
+    for uid, infs in graph.get('screen_to_inf', {}).items():
+        for i in infs:
+            inf_to_screen.setdefault(i, []).append(uid)
+
     scores = {iid: 1.0 for iid in inf_seed}   # 직접 매칭 INF = 1.0
     via = {iid: '(직접)' for iid in inf_seed}
+    # UIS 시드 → 그 화면이 쓰는 INF를 forward 영향에 포함
+    for uid in uis_seed:
+        for iid in uis.get(uid, {}).get('infs', []):
+            scores.setdefault(iid, 0.9)
+            via.setdefault(iid, f'화면 {uid}')
+            inf_seed = inf_seed | {iid}
     tables = set(table_seed)
     for iid in inf_seed:
-        tables |= set(graph['inf'][iid]['tables'])
+        if iid in graph['inf']:
+            tables |= set(graph['inf'][iid]['tables'])
 
     ubiquitous = []          # (table, users) — 편재 공통자원(개별 나열 안 함)
     schs = set()
@@ -79,7 +102,12 @@ def expand(graph, inf_seed, table_seed, ubiquity=20, hops=1):
                     next_frontier |= set(graph['inf'].get(u, {}).get('tables', []))
         frontier = next_frontier
     ripple_n = sum(1 for iid in scores if iid not in inf_seed)
-    return scores, via, sorted(tables), schs, ubiquitous, ripple_n
+    # 영향 화면 = UIS 시드 ∪ {영향 INF를 쓰는 화면}
+    screens = set(uis_seed)
+    for iid in scores:
+        for uid in inf_to_screen.get(iid, []):
+            screens.add(uid)
+    return scores, via, sorted(tables), schs, ubiquitous, ripple_n, screens
 
 def freshness_warnings(root, graph, scores):
     """T2: 영향 INF의 앵커 소스 파일이 스펙보다 최신이면 STALE(재RECON 권장)."""
@@ -103,7 +131,7 @@ def freshness_warnings(root, graph, scores):
                 pass
     return stale
 
-def emit_brief(root, sr, graph, scores, via, tables, schs, ubiquitous, ents, top):
+def emit_brief(root, sr, graph, scores, via, tables, schs, ubiquitous, ents, top, screens=None):
     ranked = sorted(scores.items(), key=lambda kv: (-kv[1], kv[0]))
     lines = [f'# AS-IS 브리프 — {sr}', '',
              f'요청 엔티티: {", ".join(ents)}', '',
@@ -117,6 +145,13 @@ def emit_brief(root, sr, graph, scores, via, tables, schs, ubiquitous, ents, top
             lines.append(f"    - 소스: `{a}`")
     if len(scores) > top:
         lines.append(f"- … 외 {len(scores) - top}건(관련도 하위, 생략)")
+    if screens:
+        lines.append('\n## 영향 화면 (UIS)')
+        for uid in sorted(screens):
+            u = graph.get('uis', {}).get(uid, {})
+            lines.append(f"- **{uid}** {u.get('screen_name', '')} `{u.get('route', '')}`  ·  연결 INF: {', '.join(u.get('infs', [])) or '—'}  ·  {u.get('file', '')}")
+            for a in u.get('anchors', []):
+                lines.append(f"    - 소스: `{a}`")
     lines.append('\n## 영향 SCH')
     for sid in sorted(schs):
         n = graph['sch'].get(sid, {})
@@ -153,11 +188,11 @@ def main():
         print('엔티티 없음 — --entities 필요')
         return 1
     graph = sgb.build_graph(ws)
-    inf_seed, table_seed = match_seed(graph, ents)
-    scores, via, tables, schs, ubiquitous, ripple_n = expand(graph, inf_seed, table_seed, ubiquity, hops)
-    p = emit_brief(ws, sr, graph, scores, via, tables, schs, ubiquitous, ents, top)
+    inf_seed, table_seed, uis_seed = match_seed(graph, ents)
+    scores, via, tables, schs, ubiquitous, ripple_n, screens = expand(graph, inf_seed, table_seed, uis_seed, ubiquity, hops)
+    p = emit_brief(ws, sr, graph, scores, via, tables, schs, ubiquitous, ents, top, screens)
     print(f'AS-IS 브리프: {p}')
-    print(f'영향 INF {len(scores)} / SCH {len(schs)} / 테이블 {len(tables)} / ripple {ripple_n} / 광역공통자원 {len(ubiquitous)}')
+    print(f'영향 INF {len(scores)} / SCH {len(schs)} / 테이블 {len(tables)} / 화면 {len(screens)} / ripple {ripple_n} / 광역공통자원 {len(ubiquitous)}')
     return 0
 
 if __name__ == '__main__':
