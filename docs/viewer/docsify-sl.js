@@ -378,6 +378,7 @@
       <div class="sl-inf-card" onclick="SlViewer.openSpec('${escAttr(inf.file)}')">
         <span class="sl-method-badge" style="background:${bg}">${inf.method || '?'}</span>
         <span class="sl-inf-id">${inf.id}</span>
+        ${inf.name ? `<span class="sl-inf-name">${escAttr(inf.name)}</span>` : ''}
         <span class="sl-inf-path">${inf.path || ''}</span>
       </div>`;
   }

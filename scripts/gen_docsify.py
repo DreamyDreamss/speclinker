@@ -100,8 +100,18 @@ def scan_infs(spec_root: str) -> list:
             except OSError:
                 continue
             fm = parse_frontmatter(content)
+            # 기능명(한글 설명): H1 제목 `# INF-...: METHOD path — {기능명}` 의 '—'(또는 ' - ') 뒤
+            name = ''
+            m_h1 = re.search(r'^#\s*INF-\S+\s*:\s*(.+)$', content, re.M)
+            if m_h1:
+                title = m_h1.group(1).strip()
+                for sep in ('—', '–', ' - '):
+                    if sep in title:
+                        name = title.split(sep, 1)[1].strip()
+                        break
             infs.append({
                 'id': fm.get('inf-id', fname.replace('.md', '')),
+                'name': name,
                 'method': fm.get('method', ''),
                 'path': fm.get('path', ''),
                 'domain': fm.get('domain', domain_dir),

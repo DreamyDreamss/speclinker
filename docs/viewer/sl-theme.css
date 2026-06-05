@@ -80,6 +80,7 @@ blockquote { border-left: 3px solid var(--border); color: var(--text-muted); pad
 .sl-inf-card:hover { border-color: var(--accent); }
 .sl-method-badge { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; color: #fff; min-width: 52px; text-align: center; }
 .sl-inf-id { color: var(--text-muted); font-size: 11px; min-width: 110px; }
+.sl-inf-name { color: var(--text); font-size: 12px; font-weight: 500; flex: 1; min-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sl-inf-path { color: var(--text-muted); font-family: monospace; font-size: 12px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* UIS 그리드 */
