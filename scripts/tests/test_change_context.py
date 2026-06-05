@@ -45,6 +45,21 @@ def test_change_context_brief():
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
+def test_frontmatter_anchors():
+    import spec_graph_build as g
+    tmp = tempfile.mkdtemp()
+    try:
+        p = os.path.join(tmp, 'docs/05_설계서/order/INF'); os.makedirs(p, exist_ok=True)
+        open(os.path.join(p, 'INF-ORD-001.md'), 'w', encoding='utf-8').write(
+            "---\ninf-id: INF-ORD-001\nmethod: POST\npath: /o\ndomain: order\n"
+            "tables:\n  - ORDERS\nanchors:\n  - src/C.java:1-9\n  - src/S.java:2-8\n  - src/M.xml:3-30\n---\n# x\n")
+        gr = g.build_graph(tmp)
+        a = gr['inf']['INF-ORD-001']['anchors']
+        assert any('C.java' in x for x in a) and any('S.java' in x for x in a) and any('M.xml' in x for x in a), a
+        print('PASS: test_frontmatter_anchors')
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
 def test_freshness_gate():
     """소스 파일이 스펙보다 최신이면 STALE 경고."""
     import time
@@ -97,3 +112,4 @@ if __name__ == '__main__':
     test_change_context_brief()
     test_ubiquity_isolation()
     test_freshness_gate()
+    test_frontmatter_anchors()

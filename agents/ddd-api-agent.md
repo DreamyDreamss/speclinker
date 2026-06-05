@@ -241,11 +241,20 @@ screens: []
 tables:
   - TABLE_NAME_A
   - TABLE_NAME_B
+anchors:
+  - {controller경로}:{라인범위}          # 진입(라우트 핸들러)
+  - {service경로}:{라인범위}             # 비즈니스 로직(있으면)
+  - {dao_or_mapper경로}:{라인범위}        # SQL/DAO(있으면)
 ---
 
 # INF-{CODE}-{NNN}: {METHOD} {path} — {기능명}
 
-> **근거 소스:** `{파일경로}:{라인번호 범위}`
+> **근거 소스:** `{controller경로}:{라인번호 범위}`
+
+> **앵커 규칙 (full-chain — 4-1):** frontmatter `anchors:` 배열에는 이 INF가 실제로 사용한 **호출 체인 전체**를
+> `경로:라인범위`로 기록한다 — controller 진입 + service 비즈로직 + DAO/mapper SQL. (dispatch_inf_gen이 전달한
+> 사전계산 연관 파일 `서비스/DAO/쿼리`가 그 출처다.) 이는 변경 시 AI가 비즈로직·SQL까지 **소스로 직접 회귀(JIT)**
+> 하는 근거이며, 산문 요약보다 우선하는 진실 포인터다. 본문 `## 근거 소스`(controller)는 하위호환으로 병기한다.
 
 ## 요청
 

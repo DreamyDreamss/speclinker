@@ -56,9 +56,12 @@ def build_graph(root):
         if not iid:
             continue
         tables = [t.upper() for t in (fm.get('tables') or [])]
+        # 4-1: frontmatter anchors[](full-chain) + 본문 근거소스 병합(중복 제거)
+        fm_anchors = fm.get('anchors') or []
+        all_anchors = list(dict.fromkeys([*fm_anchors, *_anchors(body)]))
         graph['inf'][iid] = {'method': fm.get('method'), 'path': fm.get('path'),
                              'domain': fm.get('domain'), 'tables': tables,
-                             'anchors': _anchors(body),
+                             'anchors': all_anchors,
                              'file': os.path.relpath(fp, root).replace('\\', '/')}
         for t in tables:
             graph['table_to_inf'].setdefault(t, []).append(iid)
