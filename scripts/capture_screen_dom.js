@@ -35,6 +35,27 @@ const PORT      = arg('port', '9222');
 const WORKSPACE = path.resolve(arg('workspace', process.cwd()));
 let   SCREEN_ID = arg('screenId', '');
 const MAX_H     = parseInt(arg('maxHeight', '8000'), 10);
+const LIST_TABS = rawArgs.includes('--list-tabs');   // 탭 검출만(가이드형: 에이전트가 사용자에게 제시)
+const TAB_SEL   = arg('tab-sel', '');                // 캡처 전 클릭할 탭 CSS selector
+const TAB_TEXT  = arg('tab-text', '');               // 또는 탭 텍스트로 클릭
+const SUFFIX    = arg('suffix', '');                 // 출력 파일 접미사(예: _tab2)
+
+// 스택중립 탭 검출식: 표준 탭 패턴. 등록상태(사람 설정) 하에서만 의미.
+const TAB_DETECT_EXPR = `(function(){
+  var sels=['[role="tab"]','.contents-tab a','.nav-tabs a','ul.tab a','ul.tabs a','a[href^="#tab"]','.tab-tit a'];
+  var seen=new Set(), out=[], i=1;
+  for(var s=0;s<sels.length;s++){
+    document.querySelectorAll(sels[s]).forEach(function(el){
+      var r=el.getBoundingClientRect(); if(r.width<8||r.height<6) return;
+      var t=(el.textContent||'').replace(/\\s+/g,' ').trim().slice(0,30);
+      var key=t+'@'+Math.round(r.top); if(!t||seen.has(key)) return; seen.add(key);
+      var sel = el.id?('#'+el.id):(el.getAttribute('href')&&el.getAttribute('href').indexOf('#tab')===0?(sels[s]+'[href="'+el.getAttribute('href')+'"]'):'');
+      out.push({index:i++, text:t, href:el.getAttribute('href')||'', sel:sel});
+    });
+    if(out.length) break;   // 첫 매칭 패턴만(혼재 방지)
+  }
+  return JSON.stringify(out);
+})()`;
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
@@ -169,6 +190,30 @@ const SNAPSHOT_EXPR = `(function(){
         try { bestIframeEl = await best.frameElement(); } catch(_) { bestIframeEl = null; }
       }
 
+      // --list-tabs: 탭 검출만 하고 반환(가이드형 — 에이전트가 사용자에게 제시)
+      if (LIST_TABS) {
+        let tabs = [];
+        try { tabs = JSON.parse(await best.evaluate(TAB_DETECT_EXPR)); } catch(_) {}
+        out = { success: true, mode: 'list-tabs', frameType: bestIframeEl ? 'iframe' : 'main',
+                activeRoute: (best.url() || pwPage.url()).replace(/^https?:\/\/[^/]+/, '').split('?')[0],
+                tabCount: tabs.length, tabs };
+        console.log(JSON.stringify(out));
+        await browser.close().catch(() => {});
+        process.exit(0);
+      }
+
+      // 탭 클릭(편집상태는 사람이 사전 설정) — 캡처 전 해당 탭 활성화
+      if (TAB_SEL || TAB_TEXT) {
+        try {
+          if (TAB_SEL) {
+            await best.evaluate(`(function(s){var e=document.querySelector(s);if(e)e.click();})(${JSON.stringify(TAB_SEL)})`);
+          } else {
+            await best.evaluate(`(function(t){var as=[].slice.call(document.querySelectorAll('[role=tab],.contents-tab a,.nav-tabs a,a[href^="#tab"],.tab-tit a'));var e=as.find(function(x){return (x.textContent||'').replace(/\\s+/g,' ').trim()===t;});if(e)e.click();})(${JSON.stringify(TAB_TEXT)})`);
+          }
+          await pwPage.waitForTimeout(1200);
+        } catch(_) {}
+      }
+
       // 높이 측정 + overflow 해제(전체 화면 스크린샷)
       let contentH = 1080;
       try {
@@ -226,18 +271,22 @@ const SNAPSHOT_EXPR = `(function(){
       snap.activeRoute = activeRoute;
       snap.frameType = bestIframeEl ? 'iframe' : 'main';
 
-      if (imgBuf) fs.writeFileSync(path.join(OUT_DIR, 'preview.png'), imgBuf);
-      fs.writeFileSync(path.join(OUT_DIR, 'dom_snapshot.json'), JSON.stringify(snap, null, 2));
+      const pngName  = 'preview' + SUFFIX + '.png';        // 탭이면 preview_tab2.png
+      const snapName = 'dom_snapshot' + SUFFIX + '.json';
+      snap.suffix = SUFFIX || null;
+      if (imgBuf) fs.writeFileSync(path.join(OUT_DIR, pngName), imgBuf);
+      fs.writeFileSync(path.join(OUT_DIR, snapName), JSON.stringify(snap, null, 2));
 
       out = {
         success: true,
         screenId: SCREEN_ID,
+        suffix: SUFFIX || null,
         activeRoute,
         frameType: snap.frameType,
         title: snap.title,
         captureDir: OUT_DIR,
-        captureFile: imgBuf ? path.join(OUT_DIR, 'preview.png') : '',
-        snapshotFile: path.join(OUT_DIR, 'dom_snapshot.json'),
+        captureFile: imgBuf ? path.join(OUT_DIR, pngName) : '',
+        snapshotFile: path.join(OUT_DIR, snapName),
         widgetCount: snap.widgets.length,
         headingCount: snap.headings.length,
         captureHeight: contentH,
