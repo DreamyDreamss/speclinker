@@ -145,9 +145,19 @@ prompt: |
 
 에이전트가 소스 권위로 SOP급 UIS(§1 목적·§2 작업 시나리오·§3 블록·§4 위젯·액션[탭별 §4.{N}]·§5 권한·§6 데이터·anchors) 작성 + frontmatter `api_hints`(raw) + 마커(`preview[_tab{N}]_annotated.png`)를 출력 디렉토리에 생성.
 
-### U2-6. 다음 화면
+### U2-6. 이 화면 즉시 INF 연결 (멱등·증분)
 
-사용자가 다음 화면을 띄우고 지시하면 U2-1로 반복. "끝" 하면 STEP U3로.
+UIS 생성 직후 **그 화면만** 링크한다 — "끝" 신호 없이도 캡처할 때마다 자동 연결(그 화면의 INF가 이미 있으면 즉시 `[INF-ID]` 링크 + INF.screens 역기록, 없으면 패스).
+
+```bash
+!python "$PLUGIN/scripts/link_uis_inf.py" . --screen-id={screenId}
+```
+
+> `link_uis_inf`는 zero-LLM·멱등이라 화면마다 돌려도 안전하고, INF 미존재 시 raw 경로를 그대로 둔다(나중에 U3 전체 sweep에서 재연결).
+
+### U2-7. 다음 화면
+
+사용자가 다음 화면을 띄우고 지시하면 U2-1로 반복. **"끝/마무리"** 하면 STEP U3(전체 sweep)로.
 
 ---
 
@@ -163,7 +173,9 @@ prompt: |
 
 ---
 
-## STEP U3 — UIS ↔ INF 경로 조인 연결 (양방향)
+## STEP U3 — 마무리: 전체 sweep (모든 UIS ↔ INF 재연결)
+
+사용자가 **"끝/마무리"** 하면 실행. U2-6 증분 연결이 누락한 것(예: 나중에 만든 INF, 화면 간 공유 INF)을 **전 화면 일괄** 재연결한다.
 
 ```bash
 !python "$PLUGIN/scripts/link_uis_inf.py" .
@@ -171,7 +183,7 @@ prompt: |
 
 - UIS의 raw 경로(api_hints / §4·§6) × INF(method,path) 인덱스 → 연결 API를 INF-ID 링크로 치환.
 - INF frontmatter `screens:`에 UIS-ID 역기록(양방향).
-- **생성 순서 무관** — UIS 먼저든 INF 먼저든, INF 생기면 재실행으로 연결.
+- **생성 순서 무관·멱등** — UIS 먼저든 INF 먼저든, INF 생기면 재실행으로 연결. (U2-6 증분 + U3 sweep 이중 안전망.)
 
 ---
 
