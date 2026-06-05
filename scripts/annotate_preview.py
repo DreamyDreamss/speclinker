@@ -8,7 +8,7 @@ annotate_preview.py — preview.png + 블록 맵 → preview_annotated.png
    형식: [{"number": 1, "label": "검색조건", "bbox_pct": [0.0, 0.10, 1.0, 0.28]}, ...]
    bbox_pct = [left, top, right, bottom] 비율 (0.0~1.0, 이미지 크기 대비)
 
-2. preview_widgets.json    ← capture.js가 DOM 스캔으로 생성 (fallback)
+2. preview_widgets.json    ← ddd-ui-agent가 §4 문서화 위젯에서 생성 (마커 번호=§4 №)
    형식: [{"number": 1, "bbox": {"x":10,"y":20,"w":100,"h":30}, ...}, ...]
    또는: [{"number": 1, "bbox": [x1,y1,x2,y2], ...}, ...]
 

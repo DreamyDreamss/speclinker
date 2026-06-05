@@ -78,7 +78,7 @@ def detect_stack(files: list) -> str:
 
 def assign_file_domains(files: list):
     """라우트 보유 파일 각각에 도메인을 할당한다 (범용 핵심 로직).
-    build_catalog와 build_uis_goto_plan이 공유한다 (DRY).
+    build_catalog가 도메인 분류에 사용한다 (relPath 기반, 범용).
     반환: (pairs, common_prefix) — pairs=[(file, domain), ...]"""
     entries = [f for f in files if f.get('routes')]
     if not entries:

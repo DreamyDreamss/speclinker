@@ -40,18 +40,15 @@ SI/ITO 개발 전주기 자동화 플러그인 — 요구사항 정의부터 코
 │   ├── scan_source.js           제로-LLM 정적 소스 스캔 (form/api kind 분류)
 │   ├── dispatch_inf_gen.py      INF 생성 dispatcher (배치 병렬 실행)
 │   ├── resolve_call_chain.py    Controller→Service→DAO→Query 사전 추출 + sch_draft 생성
-│   ├── ai_nav.js                Chrome CDP BFS 탐색 (snapshot/click/capture)
-│   ├── capture.js               CDP attach 기반 화면 캡처 + 위젯 마킹
-│   ├── detect_capture_strategy.js 캡처 전략 탐지
-│   ├── generate_uis_spec.py     캡처 결과 → UIS spec.md 자동 생성
-│   ├── annotate_preview.py      preview.png + widgets.json → 번호 마커 오버레이 생성
-│   ├── link_uis_inf.py          UIS URL → INF 링크 패치
+│   ├── capture_screen_dom.js    (v3.9) 메뉴진입 현재화면 캡처 + 탭 검출/순회
+│   ├── collect_screen_slice.py  (v3.9) 화면 소스 슬라이스(core/related + 엔드포인트)
+│   ├── annotate_preview.py      preview.png + widgets → 번호 마커 오버레이 생성
+│   ├── link_uis_inf.py          UIS api_hints ↔ INF 경로조인(양방향)
 │   ├── build_funcs_index.py     rd/srs/rtm 공유 인덱스 빌더
 │   ├── build_si_graph.py        SI 트레이싱 그래프 (스펙↔코드 매핑) 빌더
 │   ├── func_context_bundle.py   FUNC별 컨텍스트 자동 수집
 │   ├── req_scan.py              FUNC 커버리지 스캔
 │   ├── merge_index.py           RECON 색인 머징
-│   ├── screen_inventory.py      BFS 캡처 소스 경로 역매핑 보강
 │   └── link_inf_sch.py          INF→SCH 연결 패치
 │
 ├── templates/               ← 산출물 문서 템플릿 (10개)

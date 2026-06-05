@@ -6,7 +6,7 @@
  * 처음 실행 시 설치, 이후엔 fast-skip.
  *
  * 체크 항목:
- *   1. playwright-core  (npm)  — ai_nav.js / capture.js CDP 연결
+ *   1. playwright-core  (npm)  — capture_screen_dom.js CDP 연결
  *   2. tree-sitter      (npm)  — scan_source.js AST 파싱 (미설치 시 regex fallback)
  *   3. Pillow           (pip)  — annotate_preview.py 마커 이미지 생성
  */

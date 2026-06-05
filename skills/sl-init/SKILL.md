@@ -130,7 +130,7 @@ SOURCE_2_PATH=<절대경로2>
 # POC_FILE_LIMIT=                  # 도메인별 INF 컨트롤러 파일 수 제한 (예: 5) — alphabetical
 
 # 미리보기 캡처 (선택 — RECON UI 스크린샷, Chrome CDP attach 기반)
-# PREVIEW_BASE_URL 설정 시 실제 dev/staging 서버를 capture.js로 캡처
+# PREVIEW_BASE_URL 설정 시 실제 dev/staging 서버를 메뉴진입 캡처(capture_screen_dom.js)
 # 미설정 시 사용자 수동 PNG 제출 또는 미리보기 생략으로 폴백
 #
 # 사용 절차:
@@ -196,11 +196,11 @@ PREVIEW_CDP_PORT=9222
   macOS   : open -a "Google Chrome" --args --remote-debugging-port=9222
   Linux   : google-chrome --remote-debugging-port=9222
 
-  로그인 완료 후 /sl-recon-uis 실행 → capture.js가 자동으로 attach하여 캡처합니다.
+  로그인 후 메뉴로 화면을 띄우고 /sl-recon-uis 가이드형 세션으로 캡처합니다.
 ```
 
 > **Note**: Chrome CDP 포트가 열려 있는 한 세션이 유지되므로 재로그인 불필요.  
-> capture.js가 Chrome에 attach하여 현재 로그인 세션을 재사용한다.
+> capture_screen_dom.js가 Chrome에 attach하여 현재 로그인 세션·화면을 재사용한다.
 
 ---
 
