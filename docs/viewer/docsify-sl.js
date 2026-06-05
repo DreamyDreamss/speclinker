@@ -58,6 +58,11 @@
 
     sidebar.innerHTML = `
       <div class="sl-logo">⚡ SpecLens</div>
+      <div class="sl-search-wrap">
+        <input id="sl-search" class="sl-search" type="text" placeholder="🔎 INF·화면·테이블·경로"
+               oninput="SlViewer.search(this.value)" autocomplete="off">
+        <div id="sl-search-results"></div>
+      </div>
       <div>
         <span class="sl-nav-link" onclick="SlViewer.showGuide()">📖 사용자 가이드</span>
         <span class="sl-nav-link" onclick="SlViewer.showDashboard()">🏠 대시보드</span>
@@ -608,6 +613,24 @@
     navigateToScreen(uisId) {
       const ui = INDEX && INDEX.uis && INDEX.uis.find(u => u.id === uisId);
       if (ui) this.openSpec(ui.file);
+    },
+    search(q) {
+      const box = document.getElementById('sl-search-results');
+      if (!box || !INDEX) return;
+      q = (q || '').trim().toLowerCase();
+      if (q.length < 2) { box.innerHTML = ''; return; }
+      const hit = (arr, type) => (arr || []).filter(x =>
+        (x.id && x.id.toLowerCase().includes(q)) ||
+        (x.name && x.name.toLowerCase().includes(q)) ||
+        (x.path && x.path.toLowerCase().includes(q)) ||
+        (x.table && x.table.toLowerCase().includes(q)) ||
+        (x.route && x.route.toLowerCase().includes(q))
+      ).slice(0, 8).map(x => ({ x, type }));
+      const results = [...hit(INDEX.infs, 'INF'), ...hit(INDEX.uis, 'UIS'), ...hit(INDEX.schs, 'SCH')].slice(0, 12);
+      box.innerHTML = results.length
+        ? results.map(r => `<div class="sl-sr-item" role="button" tabindex="0" onclick="SlViewer.goToId('${escAttr(r.x.id)}')">
+             <span class="sl-sr-type">${r.type}</span> ${escAttr(r.x.id)} <span class="sl-sr-name">${escAttr(r.x.name || r.x.table || r.x.route || '')}</span></div>`).join('')
+        : '<div class="sl-sr-empty">결과 없음</div>';
     },
     goToId(id) {
       if (!INDEX) return;
