@@ -84,7 +84,7 @@
     const entries = Object.entries(INDEX.domains);
     if (entries.length === 0) return '<div style="padding:8px 16px;color:var(--text-muted);font-size:12px">도메인 없음</div>';
     return entries.map(([name, info]) =>
-      `<div class="sl-domain-item ${ACTIVE_DOMAIN === name ? 'active' : ''}"
+      `<div class="sl-domain-item ${ACTIVE_DOMAIN === name ? 'active' : ''}" role="button" tabindex="0"
             onclick="SlViewer.selectDomain('${escAttr(name)}')">
         <span style="flex:1">${name}</span>
         <span style="font-size:11px;color:var(--text-muted)">${info.inf || 0}</span>
@@ -265,6 +265,12 @@
         <div class="sl-card-label">${c.label}</div>
       </div>`).join('');
 
+    let staleNote = '';
+    const gen = Date.parse((INDEX.generated_at || '').replace(' ', 'T'));
+    if (gen && (Date.now() - gen) > 7 * 864e5) {
+      staleNote = `<span style="color:var(--status-review)"> · ⚠ 인덱스가 오래되었습니다 — gen_docsify.py 재실행 권장</span>`;
+    }
+
     const gapHtml = INDEX.gaps ? `
       <div class="sl-gap-bar">
         <span class="sl-gap-item ${INDEX.gaps.uis_no_inf ? 'warn' : ''}">화면-API 미연결 ${INDEX.gaps.uis_no_inf}</span>
@@ -331,7 +337,7 @@
           <tbody>${rows || '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:20px">도메인 없음 — gen_docsify.py를 실행하세요</td></tr>'}</tbody>
         </table>
         <div style="margin-top:12px;font-size:11px;color:var(--text-muted)">
-          생성: ${INDEX.generated_at} &nbsp;—&nbsp;
+          생성: ${INDEX.generated_at}${staleNote} &nbsp;—&nbsp;
           <code>python scripts/gen_docsify.py .</code> 로 갱신
         </div>
       </div>`;
@@ -349,8 +355,9 @@
     renderSidebar();
 
     const d = INDEX.domains[domain] || {};
-    const tabs = ['inf', 'uis', 'sch', 'bat'].map(t =>
-      `<div class="sl-tab ${ACTIVE_TAB === t ? 'active' : ''}"
+    const tabKeys = ['inf', 'uis', 'sch'].concat((d.bat || 0) > 0 ? ['bat'] : []);
+    const tabs = tabKeys.map(t =>
+      `<div class="sl-tab ${ACTIVE_TAB === t ? 'active' : ''}" role="button" tabindex="0"
             onclick="SlViewer.selectTab('${t}')">${t.toUpperCase()} ${d[t] || 0}</div>`
     ).join('');
 
@@ -377,7 +384,7 @@
           : '<div style="padding:16px;color:var(--text-muted)">SCH 파일 없음</div>'
       }</div>`;
     } else {
-      body = `<div style="padding:24px;color:var(--text-muted)">BAT 뷰 — 준비 중</div>`;
+      body = `<div style="padding:24px;color:var(--text-muted)">BAT 산출물 없음</div>`;
     }
 
     main.innerHTML = `
@@ -391,7 +398,7 @@
   function renderSchCard(sch) {
     const infs = (sch.inf || []).join(', ');
     return `
-      <div class="sl-inf-card" onclick="SlViewer.openSpec('${escAttr(sch.file)}')">
+      <div class="sl-inf-card" role="button" tabindex="0" onclick="SlViewer.openSpec('${escAttr(sch.file)}')">
         <span class="sl-method-badge" style="background:var(--status-done)">SCH</span>
         <span class="sl-inf-id">${sch.id}</span>
         <span class="sl-inf-path">${escAttr(sch.table || '')}${infs ? ' · ' + escAttr(infs) : ''}</span>
@@ -407,7 +414,7 @@
     };
     const bg = colors[inf.method] || '#555';
     return `
-      <div class="sl-inf-card" onclick="SlViewer.openSpec('${escAttr(inf.file)}')">
+      <div class="sl-inf-card" role="button" tabindex="0" onclick="SlViewer.openSpec('${escAttr(inf.file)}')">
         <span class="sl-method-badge" style="background:${bg}">${inf.method || '?'}</span>
         <span class="sl-inf-id">${inf.id}</span>
         ${inf.name ? `<span class="sl-inf-name">${escAttr(inf.name)}</span>` : ''}
@@ -422,7 +429,7 @@
       ? `<img src="${previewSrc}" alt="preview" onerror="this.parentNode.innerHTML='🖥️'">`
       : '🖥️';
     return `
-      <div class="sl-uis-card" onclick="SlViewer.openSpec('${escAttr(ui.file)}')">
+      <div class="sl-uis-card" role="button" tabindex="0" onclick="SlViewer.openSpec('${escAttr(ui.file)}')">
         <div class="sl-uis-preview">${preview}</div>
         <div class="sl-uis-info">
           <div class="sl-uis-id">${ui.id}${ui.anchor_count ? ` <span class="sl-anchor" title="JIT 소스앵커 ${ui.anchor_count}개">⚓${ui.anchor_count}</span>` : ''}</div>
@@ -607,6 +614,9 @@
       SIDEBAR_MODE = mode;
       renderSidebar();
     },
+    toggleSidebar() {
+      document.body.classList.toggle('sl-sidebar-hidden');
+    },
     openSpec(filePath) {
       window.location.hash = '#/' + filePath;
     },
@@ -665,7 +675,15 @@
     hook.mounted(function () {
       if (!document.getElementById('sl-sidebar')) {
         document.body.insertAdjacentHTML('afterbegin',
+          '<div id="sl-burger" role="button" tabindex="0" title="사이드바 토글" onclick="SlViewer.toggleSidebar()">☰</div>' +
           '<div id="sl-sidebar"></div><div id="sl-main"></div>');
+        // 키보드 접근성: role=button 요소를 Enter/Space로 활성화
+        document.addEventListener('keydown', function (ev) {
+          if ((ev.key === 'Enter' || ev.key === ' ') && ev.target && ev.target.getAttribute('role') === 'button') {
+            ev.preventDefault();
+            ev.target.click();
+          }
+        });
         loadIndex();
       }
     });

@@ -154,6 +154,24 @@ blockquote { border-left: 3px solid var(--border); color: var(--text-muted); pad
 #sl-lightbox img { max-width: 94vw; max-height: 88vh; object-fit: contain; border-radius: 8px; box-shadow: 0 8px 40px rgba(0,0,0,.6); }
 #sl-lightbox .sl-lb-close { color: #fff; margin-top: 14px; font-size: 13px; border: 1px solid rgba(255,255,255,.4); border-radius: 6px; padding: 6px 14px; cursor: pointer; }
 
+/* 접근성 — 포커스 링 */
+[role="button"]:focus-visible, .sl-search:focus-visible, a:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px;
+}
+
+/* 반응형 — 사이드바 토글 */
+#sl-burger { position: fixed; top: 10px; left: 10px; z-index: 110; display: none;
+  background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px;
+  padding: 4px 10px; color: var(--accent); cursor: pointer; }
+@media (max-width: 900px) {
+  #sl-burger { display: block; }
+  #sl-sidebar { transform: translateX(0); transition: transform .2s; box-shadow: 2px 0 12px rgba(0,0,0,.4); }
+  body.sl-sidebar-hidden #sl-sidebar { transform: translateX(-100%); }
+  #sl-main, .content { margin-left: 0 !important; }
+  #sl-rel-panel { display: none; }
+  .content.has-relpanel, .content.has-qnav { margin-right: 0 !important; }
+}
+
 /* ── 사용자 가이드 ─────────────────────────────────────── */
 .sl-guide { padding: 28px 32px 60px; max-width: 1100px; }
 
