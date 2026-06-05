@@ -189,6 +189,26 @@ Agent 도구 호출:
 
 ---
 
+## STEP 9-5 — 도메인 SOP 개요 생성 (사람 내러티브 레이어, 4-5)
+
+기계 인덱스(INF/SCH frontmatter·앵커)와 **분리된 사람용 개요**를 도메인별로 생성한다 — 신규입사자·신규요건 분석용.
+목적·핵심 엔티티·대표 기능(코드의미 주입)·진입점. zero-LLM(그래프 기반).
+
+```bash
+!python3 -c "
+import os, sys, subprocess
+env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8') if '=' in l and not l.startswith('#'))
+plugin = env.get('PLUGIN_PATH','')
+script = os.path.join(plugin, 'scripts', 'build_domain_overview.py') if plugin else ''
+if script and os.path.exists(script):
+    subprocess.run([sys.executable, script, '.'], check=False)
+else:
+    print('build_domain_overview.py 없음 — PLUGIN_PATH 확인')
+"
+```
+
+> 산출 `docs/05_설계서/{도메인}/OVERVIEW_{도메인}.md` = **사람 SOP 레이어**(개념·완전성 부담 면제). AI 그라운딩은 별도(앵커+소스 JIT).
+
 ## STEP 10 — IA 맵 생성
 
 INF + UIS + screen_inventory를 조합하여 화면 계층 맵을 생성한다.
