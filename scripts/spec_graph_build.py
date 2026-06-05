@@ -6,7 +6,7 @@ spec_graph.json 없어도 docs/05_설계서에서 직접 구축.
 그래프: {inf:{id:{method,path,domain,tables,anchors,file}}, sch:{id:{table,domain,inf,anchors,file}},
         table_to_inf:{table:[inf-id]}, table_to_sch:{table:[sch-id]}}
 """
-import os, re, glob
+import os, re, glob, json
 
 def _frontmatter(text):
     if not text.startswith('---'):
@@ -76,4 +76,45 @@ def build_graph(root):
                              'file': os.path.relpath(fp, root).replace('\\', '/')}
         if table:
             graph['table_to_sch'].setdefault(table, []).append(sid)
+
+    # ---- UIS (화면 설계서) — 한글 frontmatter + 본문 INF 참조 + screen_inventory 소스앵커 ----
+    graph['uis'] = {}
+    graph['screen_to_inf'] = {}
+    # screen_inventory_static.json(있으면): [{route, entryFile, domain, screenId}] → screenId/route→entryFile
+    si_by_screen, si_by_route = {}, {}
+    si_path = os.path.join(root, '_tmp', 'screen_inventory_static.json')
+    if os.path.exists(si_path):
+        try:
+            for e in json.load(open(si_path, encoding='utf-8')):
+                ef = e.get('entryFile')
+                if not ef:
+                    continue
+                if e.get('screenId'):
+                    si_by_screen[e['screenId']] = ef
+                if e.get('route'):
+                    si_by_route[e['route']] = ef
+        except Exception:
+            pass
+    _INF_RE = re.compile(r'INF-[A-Z0-9]+-\d+')
+    for fp in glob.glob(os.path.join(design, '*', '**', 'spec.md'), recursive=True):
+        try:
+            fm, body = _frontmatter(open(fp, encoding='utf-8').read())
+        except OSError:
+            continue
+        uid = fm.get('UIS-ID') or fm.get('uis-id')
+        if not uid:
+            continue
+        screen_id = fm.get('화면ID') or fm.get('screen-id') or ''
+        route = fm.get('라우트') or fm.get('route') or ''
+        infs = sorted(set(_INF_RE.findall(body)))
+        anchors = []
+        ef = si_by_screen.get(screen_id) or si_by_route.get(route)
+        if ef:
+            anchors.append(ef.replace('\\', '/'))
+        graph['uis'][uid] = {'screen_id': screen_id, 'screen_name': fm.get('화면명'),
+                             'route': route, 'domain': fm.get('도메인'),
+                             'infs': infs, 'anchors': anchors,
+                             'file': os.path.relpath(fp, root).replace('\\', '/')}
+        if infs:
+            graph['screen_to_inf'].setdefault(uid, []).extend(infs)
     return graph

@@ -60,6 +60,30 @@ def test_frontmatter_anchors():
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
+def test_uis_reader():
+    import spec_graph_build as g
+    tmp = tempfile.mkdtemp()
+    try:
+        d = os.path.join(tmp, 'docs/05_설계서/product/UIS/pr301mForm'); os.makedirs(d, exist_ok=True)
+        open(os.path.join(d, 'spec.md'), 'w', encoding='utf-8').write(
+            "---\n화면ID: pr301mForm\n화면명: 상품등록폼\n라우트: /p/pr301mForm\n도메인: product\n"
+            "UIS-ID: UIS-PRD-001\napi_hints:\n  - /p/pr301List\n---\n"
+            "# UIS-PRD-001\n\n## §5 인터랙션\n조회 [INF-PRD-001](../INF/INF-PRD-001.md) 호출\n")
+        os.makedirs(os.path.join(tmp, '_tmp'), exist_ok=True)
+        json.dump([{'route': '/p/pr301mForm', 'entryFile': 'src/product/Pr301Controller.java',
+                    'domain': 'product', 'screenId': 'pr301mForm'}],
+                  open(os.path.join(tmp, '_tmp/screen_inventory_static.json'), 'w', encoding='utf-8'))
+        gr = g.build_graph(tmp)
+        assert 'UIS-PRD-001' in gr['uis'], gr['uis']
+        u = gr['uis']['UIS-PRD-001']
+        assert u['screen_name'] == '상품등록폼', u
+        assert 'INF-PRD-001' in u['infs'], u
+        assert any('Pr301Controller' in a for a in u['anchors']), u['anchors']
+        assert 'INF-PRD-001' in gr['screen_to_inf'].get('UIS-PRD-001', []), gr['screen_to_inf']
+        print('PASS: test_uis_reader')
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
 def test_freshness_gate():
     """소스 파일이 스펙보다 최신이면 STALE 경고."""
     import time
@@ -113,3 +137,4 @@ if __name__ == '__main__':
     test_ubiquity_isolation()
     test_freshness_gate()
     test_frontmatter_anchors()
+    test_uis_reader()
