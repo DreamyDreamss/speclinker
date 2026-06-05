@@ -24,6 +24,7 @@
   STEP 4     router_inventory 생성 + INF 명세 작성
              4-1 router_inventory / 4-2 call chain 사전계산(+sch_draft)
              4-3 INF 생성 (dispatch_inf_gen.py → ddd-api-agent ×N배치) + INF/_TOC.md
+                 ※ v3.8.0: INF frontmatter anchors[](full-chain) + 코드값 의도(scan_code_literals), 본문=abstract
              4-B BAT 생성 (ddd-batch-agent)
   STEP 5-0   SCH 스킵 게이트 (build_sch_todo.py) — 이미 생성된 테이블 제외(idempotent)
   STEP 5-A   SCH 정적 스켈레톤 (build_sch_static.py) — 컬럼·인덱스·FK·ERD·링크·색인 zero-token, 의미는 LLM-TODO
@@ -68,7 +69,7 @@
 | 3 | ✋ 사용자 도메인 검토 | 없음 | `_domain_plan.json` (확정) |
 | 4-1 | router_inventory 생성 | 인라인 | `_tmp/router_inventory.json` |
 | 4-2 | call chain 사전계산 | `resolve_call_chain.py` | `_tmp/router_inventory_with_chain.json`, `_tmp/sch_draft/{도메인}/` |
-| 4-3 | **INF 생성** | `dispatch_inf_gen.py` → `ddd-api-agent` (sonnet, ×N배치) | `{도메인}/INF/INF-*.md`, `{도메인}/INF/_TOC.md` |
+| 4-3 | **INF 생성** | `dispatch_inf_gen.py` → `ddd-api-agent` (sonnet, ×N배치) | `{도메인}/INF/INF-*.md`(frontmatter anchors[] full-chain, 본문 abstract), `_TOC.md` |
 | 4-B | BAT 생성 | `ddd-batch-agent` (sonnet) | `{도메인}/BAT/BAT-*.md` |
 | 5-0 | SCH 스킵 게이트 (idempotent) | `build_sch_todo.py` | `_tmp/sch_todo.json` (생성 대상 도메인+누락 테이블) |
 | 5-A | **SCH 정적 스켈레톤** | `build_sch_static.py` (zero-token: sch_facts → sch_draft+DDL+ORM+선택 DB드라이버) | `{도메인}/SCH/SCH-{CODE}-NNN.md`(사실+LLM-TODO), `{도메인}/DB_{도메인}.md`, `DB_Schema.md`, `sch_enrich_todo.json` |
@@ -110,6 +111,7 @@
 | 9-0 | FUNC 통합 인덱스 | `build_funcs_index.py` | `_tmp/funcs_index.json` |
 | 9-0-1 | SI 트레이싱 그래프 | `build_si_graph.py` | `.understand-anything/si-graph.json` |
 | 9-1 | 전체 색인 3종 | `merge_index.py` | `API_Design.md`, `DB_Schema.md`, `UI_Spec_v1.0.md` |
+| 9-5 | 도메인 SOP 개요(사람 레이어) | `build_domain_overview.py` | `{도메인}/OVERVIEW_{도메인}.md` (기계인덱스와 분리) |
 | 9-2 | FUNC 생성 | `rd-agent` (sonnet) | `docs/00_FUNC/FUNC_v1.0.md` (+ domains/) |
 | 9-3 | SRS 생성 | `srs-agent` (sonnet) | `docs/03_기능명세서/SRS_v1.0.md` (+ domains/) |
 | 9-4 | FUNC_MAP 생성 | `rtm-agent` (**opus**) | `docs/00_FUNC/FUNC_MAP.md`, `linked-func-cache.json` |
