@@ -1,5 +1,10 @@
 # 충실도 측정 결과 (T3-A, 논문 H1) — 정직한 1차 측정
 
+> ⚠️ **정정(2026-06-05):** 아래 P/R/F1은 "스펙 tables vs SQL 정규식"의 **self-consistency 프록시**이지
+> 충실도(정답 대비)가 아니다. 정답 없는 자동추출 2개 비교라 수치 자체는 무의미. **`eval_anchor_coverage.py`(4-4)로 대체** —
+> 앵커 체인 커버리지 + 메타 정확도(검증 가능·드리프트 없음·정답 불필요). 아래는 "왜 프록시가 부적절한지"의 기록으로만 보존.
+
+
 > 도구: `scripts/eval_fidelity.py --auto-tables`. 대상: nkshop-bos-admin RECON 산출(INF 657).
 > 측정일: 2026-06-05. 표본: 120 INF 무작위(seed 42).
 

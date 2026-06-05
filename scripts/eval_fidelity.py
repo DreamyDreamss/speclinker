@@ -1,7 +1,10 @@
-# STATUS: 완료
+# STATUS: DEPRECATED — eval_anchor_coverage.py(4-4)로 대체.
+# 이유: 산문/스펙 tables vs SQL 정규식 self-consistency는 *정답 없는 프록시*라 충실도가 아님
+#       (nkshop P0.70/R0.18은 측정 아티팩트). 검증 가능한 지표 = 앵커 체인 커버리지 + 메타 정확도.
 #!/usr/bin/env python3
 """
-eval_fidelity.py — 스펙 충실도 측정 하네스 (T3-A, 논문 H1)
+eval_fidelity.py — [DEPRECATED] 스펙 충실도 측정 하네스 (T3-A, 논문 H1)
+※ eval_anchor_coverage.py로 대체. 아래는 self-consistency 프록시(충실도 아님) — 참고용 보존.
 
 두 가지 측정:
   1) [자동] 테이블 추출 일치도 — INF `tables:` frontmatter vs 앵커 SQL의 실제 테이블.
