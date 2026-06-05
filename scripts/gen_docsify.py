@@ -109,6 +109,8 @@ def scan_infs(spec_root: str) -> list:
                     if sep in title:
                         name = title.split(sep, 1)[1].strip()
                         break
+            # 앵커(JIT 준비) 수 — frontmatter anchors[] 길이
+            anchor_count = len(_extract_list_field(_get_fm_block(content), 'anchors'))
             infs.append({
                 'id': fm.get('inf-id', fname.replace('.md', '')),
                 'name': name,
@@ -117,6 +119,7 @@ def scan_infs(spec_root: str) -> list:
                 'domain': fm.get('domain', domain_dir),
                 'domain_code': fm.get('domain-code', ''),
                 'tbd_count': count_tbd(content),
+                'anchor_count': anchor_count,
                 'file': os.path.relpath(fpath, spec_root).replace('\\', '/'),
             })
     return infs
@@ -175,6 +178,7 @@ def scan_uis(spec_root: str) -> list:
             'apis': _extract_list_field(fb, 'apis') or _extract_list_field(fb, 'api_hints'),
             'has_preview': prev is not None,
             'preview': prev or 'preview.png',
+            'anchor_count': len(_extract_list_field(fb, 'anchors')),
             'file': os.path.relpath(spec_path, spec_root).replace('\\', '/'),
         })
     return uis

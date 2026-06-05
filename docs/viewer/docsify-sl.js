@@ -380,6 +380,7 @@
         <span class="sl-inf-id">${inf.id}</span>
         ${inf.name ? `<span class="sl-inf-name">${escAttr(inf.name)}</span>` : ''}
         <span class="sl-inf-path">${inf.path || ''}</span>
+        ${inf.anchor_count ? `<span class="sl-anchor" title="JIT 소스앵커 ${inf.anchor_count}개 — 변경 시 실소스 회귀 가능">⚓${inf.anchor_count}</span>` : ''}
       </div>`;
   }
 
@@ -392,9 +393,10 @@
       <div class="sl-uis-card" onclick="SlViewer.openSpec('${escAttr(ui.file)}')">
         <div class="sl-uis-preview">${preview}</div>
         <div class="sl-uis-info">
-          <div class="sl-uis-id">${ui.id}</div>
+          <div class="sl-uis-id">${ui.id}${ui.anchor_count ? ` <span class="sl-anchor" title="JIT 소스앵커 ${ui.anchor_count}개">⚓${ui.anchor_count}</span>` : ''}</div>
           <div class="sl-uis-name">${ui.name || '-'}</div>
           <div class="sl-uis-route">${ui.route || ''}</div>
+          ${(ui.domain || (ui.apis && ui.apis.length)) ? `<div class="sl-uis-apis">${escAttr(ui.domain || '')}${ui.apis && ui.apis.length ? ` · 연결 API ${ui.apis.length}` : ''}</div>` : ''}
         </div>
       </div>`;
   }
