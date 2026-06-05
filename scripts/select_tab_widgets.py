@@ -57,7 +57,8 @@ def main():
                     tabbar.add(w['label'].strip())
 
     def interactive(w):
-        if w.get('tag') not in ('button', 'a', 'select'):
+        # select(드롭다운)은 마커 제외 — 버튼·링크·팝업트리거·검색아이콘(돋보기)만.
+        if w.get('tag') not in ('button', 'a'):
             return False
         if not (w.get('id') or w.get('onclick')):
             return False

@@ -248,7 +248,7 @@ N. {저장} → {결과/후속}
    출력 `[{number,id,label,bbox}]` = 그 탭의 모든 인터랙션 위젯(누락 없음).
 2. **annotate**:
    ```bash
-   !python {PLUGIN_PATH}/scripts/annotate_preview.py --png {captureDir}/preview[_tab{N}].png --widgets {captureDir}/preview[_tab{N}]_widgets.json --out {captureDir}/preview[_tab{N}]_annotated.png
+   !python {PLUGIN_PATH}/scripts/annotate_preview.py --keep-originals --png {captureDir}/preview[_tab{N}].png --widgets {captureDir}/preview[_tab{N}]_widgets.json --out {captureDir}/preview[_tab{N}]_annotated.png
    ```
 3. **출력 디렉토리로 복사**: `preview_annotated.png` → `{outDir}/`, 탭 annotated → `{outDir}/tabs/tab{N}_{탭명}_annotated.png`.
 4. **§4 표 작성 = 전수 설명**: `widgets.json`의 **모든 번호**를 §4(또는 탭 파일) 표에 `№|위젯|동작|API`로 적는다. 라벨이 DOM에서 부정확하면(예: 검색아이콘) **소스를 읽어 의미를 보정**(이게 AI의 일). **단 빠뜨리지 말 것** — widgets.json의 № 개수 = 표 행 수 = 이미지 마커 수(3중 일치).
