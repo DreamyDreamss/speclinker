@@ -111,7 +111,7 @@
       <div class="card"><h3>BMAD-METHOD</h3><p>AIDD를 <b>story-driven + QA 게이트</b>로. FUNC=story, 전용 qa-agent가 독립 컨텍스트로 3-Layer(스펙·보안·회귀) 검증. → 자동 폭주 없는 개발 규율.</p></div>
       <div class="card"><h3>MCP (Atlassian·DB)</h3><p>Jira에서 SR 요구사항·첨부 수집, Confluence 게시, DB information_schema 권위 조회. → 실제 업무 흐름과 직결.</p></div>
       <div class="card"><h3>Docsify → SpecLens</h3><p>역추출 산출물을 무빌드 웹 뷰어로. 대시보드·INF/SCH/UIS·IA 트리·크로스링크 네비게이션. → 사람용 산출물 열람.</p></div>
-      <div class="card"><h3>tree-sitter · Playwright · Claude</h3><p>tree-sitter=제로-LLM 정적 소스 스캔, Playwright=화면 캡처(UIS), Claude(Sonnet/Opus)=의미 합성. → 사실은 무료로, 의미만 LLM.</p></div>
+      <div class="card"><h3>tree-sitter · Playwright · Claude</h3><p>tree-sitter=제로-LLM 정적 소스 스캔, Playwright=화면 DOM 골격 캡처(보조), Claude(Sonnet/Opus)=소스 판독·의미 합성(권위). → 사실은 무료로, 의미만 LLM.</p></div>
     </div>
     <p class="muted" style="margin-top:.7rem">보조: python-pptx/docx/openpyxl(첨부 추출) · pymysql/psycopg2(DB 권위) — 전부 <b>선택 의존성</b>(없으면 우아하게 폴백).</p>
     <div class="foot"><span>Speclinker</span><span>04 / 15</span></div>
@@ -136,7 +136,7 @@
     <div class="grid g2">
       <div class="card"><h3>INF (API 명세)</h3><p>엔드포인트·요청/응답·비즈니스 규칙·트랜잭션 순서·사이드이펙트 + <b>근거소스 file:line 앵커</b></p></div>
       <div class="card"><h3>SCH (DB 스키마)</h3><p>컬럼·타입·인덱스·FK·ERD·코드값·비즈주의 (테이블당 개별 파일)</p></div>
-      <div class="card"><h3>UIS (화면 설계)</h3><p>화면 캡처·위젯·API 연결 (Playwright goto 캡처)</p></div>
+      <div class="card"><h3>UIS (화면 설계 · SOP+JIT)</h3><p><b>가이드형 진입</b>(사용자가 메뉴로 실화면) + <b>에이전트 소스판독</b> → ①작업 시나리오 SOP ②<b>api_hints·소스앵커로 화면→INF JIT</b>. 캡처는 보조.</p></div>
       <div class="card"><h3>FUNC (추적 축)</h3><p>INF/SCH/UIS를 묶는 기능 단위 — RTM·AIDD의 단일 진실</p></div>
     </div>
     <p class="muted" style="margin-top:.8rem"><b>핵심:</b> 같은 산출물이 사람에겐 <b>읽는 문서</b>, AI에겐 <b>frontmatter·링크·소스앵커로 기계 탐색되는 인덱스</b>.</p>
