@@ -201,13 +201,25 @@ def process_screen(workspace, screen_id, inf_idx):
         print(f'[SKIP] {screen_id}: inf_required 없음')
         return
 
-    # spec.md 위치 탐색
-    spec_path = os.path.join(workspace, 'docs', '05_설계서', domain, 'UI', screen_id, 'spec.md')
-    if not os.path.exists(spec_path):
-        # domain이 없는 경우 glob
-        import glob
-        matches = glob.glob(os.path.join(workspace, 'docs', '05_설계서', '*', 'UI', screen_id, 'spec.md'))
-        spec_path = matches[0] if matches else None
+    # spec.md 위치 탐색 — 화면당 디렉토리 {domain}/UIS/{uisDir}/spec.md (frontmatter 화면ID/UIS-ID로 매칭)
+    import glob
+    spec_path = None
+    cands = (glob.glob(os.path.join(workspace, 'docs', '05_설계서', domain, 'UIS', '*', 'spec.md'))
+             + glob.glob(os.path.join(workspace, 'docs', '05_설계서', '*', 'UIS', '*', 'spec.md'))
+             + glob.glob(os.path.join(workspace, 'docs', '05_설계서', 'UIS', '*', 'spec.md'))
+             + glob.glob(os.path.join(workspace, 'docs', '05_설계서', '*', 'UI', screen_id, 'spec.md')))  # 구버전 호환
+    for c in cands:
+        try:
+            head = open(c, encoding='utf-8', errors='replace').read(800)
+        except Exception:
+            continue
+        if (re.search(r'^화면ID:\s*' + re.escape(screen_id) + r'\s*$', head, re.M)
+                or (uis_id and re.search(r'^UIS-ID:\s*' + re.escape(uis_id) + r'\s*$', head, re.M))
+                or (os.sep + screen_id + os.sep) in c):
+            spec_path = c
+            break
+    if not spec_path and cands:
+        spec_path = cands[0]
     if not spec_path or not os.path.exists(spec_path):
         print(f'[SKIP] {screen_id}: spec.md 없음')
         return

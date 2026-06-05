@@ -135,7 +135,7 @@
     ]},
     { name: '역분석 — RECON', color: 'var(--status-prog)', cmds: [
       ['/sl-recon', '소스코드 역분석 → 도메인 선택 → INF·SCH 명세 생성', 'project.env, 소스'],
-      ['/sl-recon-uis', '화면 캡처(goto/BFS) → UIS 설계서 생성', 'recon 완료 후'],
+      ['/sl-recon-uis', '메뉴진입 화면 캡처 → SOP급 UIS 생성(가이드형)', 'recon 후/독립'],
       ['/sl-recon-doc', 'INF 기반 추가 설계 문서 보강', 'INF 존재'],
       ['/sl-ia', 'IA(메뉴 계층) 문서 자동 생성 + UIS menu-path 보완', 'UIS 존재'],
     ]},
@@ -383,7 +383,7 @@
   }
 
   function renderUisCard(ui) {
-    const previewSrc = DOC_BASE + ui.file.replace('spec.md', 'preview.png');
+    const previewSrc = DOC_BASE + ui.file.replace(/spec\.md$/, ui.preview || 'preview.png');
     const preview = ui.has_preview
       ? `<img src="${previewSrc}" alt="preview" onerror="this.parentNode.innerHTML='🖥️'">`
       : '🖥️';
@@ -479,7 +479,24 @@
   };
 
   // ── Docsify 플러그인 등록 ──────────────────────────────────────
-  function SlPlugin(hook) {
+  function SlPlugin(hook, vm) {
+    // 이미지 경로 재작성: spec.md 안의 ![[x]](Obsidian) 및 상대 ![](x) 를
+    // 현재 문서 디렉토리 기준 경로로 변환 → 화면당 디렉토리/tabs 자산이 렌더된다.
+    hook.beforeEach(function (content) {
+      var file = (vm && vm.route && vm.route.file) || '';
+      var dir = file.replace(/[^/]*$/, '');   // 파일명 제거 → 문서 디렉토리(루트 기준)
+      if (!dir) return content;
+      // ![[file.png]] → ![](dir/file.png)
+      content = content.replace(/!\[\[([^\]]+)\]\]/g, function (_, p) {
+        return '![](' + dir + p.trim() + ')';
+      });
+      // 상대 ![](x) (http/절대 제외) → ![](dir/x)
+      content = content.replace(/!\[([^\]]*)\]\((?!https?:|\/|data:)([^)]+)\)/g, function (_, alt, src) {
+        return '![' + alt + '](' + dir + src.trim() + ')';
+      });
+      return content;
+    });
+
     hook.mounted(function () {
       if (!document.getElementById('sl-sidebar')) {
         document.body.insertAdjacentHTML('afterbegin',

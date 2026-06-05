@@ -112,16 +112,37 @@ def scan_infs(spec_root: str) -> list:
     return infs
 
 
+def _iter_uis_dirs(spec_root: str):
+    """UIS 화면 디렉토리 iterator. 두 구조 지원:
+    A) docs/05_설계서/{domain}/UIS/{screen}/spec.md  (도메인별 — 현행 권장)
+    B) docs/05_설계서/UIS/{screen}/spec.md           (top-level — 구버전 호환)
+    yields screen_dir_path (spec.md를 담은 디렉토리)"""
+    design_root = os.path.join(spec_root, 'docs', '05_설계서')
+    if not os.path.isdir(design_root):
+        return
+    # A) 도메인별
+    for domain in sorted(os.listdir(design_root)):
+        uis_sub = os.path.join(design_root, domain, 'UIS')
+        if os.path.isdir(uis_sub):
+            for entry in sorted(os.listdir(uis_sub)):
+                d = os.path.join(uis_sub, entry)
+                if os.path.isfile(os.path.join(d, 'spec.md')):
+                    yield d
+    # B) top-level (구버전)
+    uis_root = os.path.join(design_root, 'UIS')
+    if os.path.isdir(uis_root):
+        for entry in sorted(os.listdir(uis_root)):
+            d = os.path.join(uis_root, entry)
+            if os.path.isfile(os.path.join(d, 'spec.md')):
+                yield d
+
+
 def scan_uis(spec_root: str) -> list:
-    """docs/05_설계서/UIS/{screen}/spec.md 전수 스캔."""
+    """UIS spec.md 전수 스캔 (도메인별 {domain}/UIS/{screen}/ 우선, top-level 호환)."""
     uis = []
-    uis_root = os.path.join(spec_root, 'docs', '05_설계서', 'UIS')
-    if not os.path.isdir(uis_root):
-        return uis
-    for entry in sorted(os.listdir(uis_root)):
-        spec_path = os.path.join(uis_root, entry, 'spec.md')
-        if not os.path.isfile(spec_path):
-            continue
+    for screen_dir in _iter_uis_dirs(spec_root):
+        spec_path = os.path.join(screen_dir, 'spec.md')
+        entry = os.path.basename(screen_dir)
         try:
             with open(spec_path, encoding='utf-8', errors='replace') as f:
                 content = f.read()
@@ -129,14 +150,21 @@ def scan_uis(spec_root: str) -> list:
             continue
         fm = parse_frontmatter(content)
         fb = _get_fm_block(content)
+        # 미리보기: preview_annotated.png(마커) 우선, 없으면 preview.png
+        prev = None
+        for cand in ('preview_annotated.png', 'preview.png'):
+            if os.path.isfile(os.path.join(screen_dir, cand)):
+                prev = cand
+                break
         uis.append({
             'id': fm.get('UIS-ID', entry),
             'name': fm.get('화면명', ''),
             'route': fm.get('라우트', ''),
             'domain': fm.get('도메인', ''),
             'menu_path': _extract_list_field(fb, 'menu-path'),
-            'apis': _extract_list_field(fb, 'apis'),
-            'has_preview': os.path.isfile(os.path.join(uis_root, entry, 'preview.png')),
+            'apis': _extract_list_field(fb, 'apis') or _extract_list_field(fb, 'api_hints'),
+            'has_preview': prev is not None,
+            'preview': prev or 'preview.png',
             'file': os.path.relpath(spec_path, spec_root).replace('\\', '/'),
         })
     return uis

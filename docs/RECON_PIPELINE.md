@@ -32,17 +32,19 @@
   STEP 5-1   INF→SCH 링크 패치 (link_inf_sch_new.py)
   STEP 6     완료 체크포인트(phase=recon-analysis) → 다음: /sl-recon-uis
 
-/sl-recon-uis  (STEP 6-*)  ── 화면 탐색·UIS 설계서
-  (도메인 선택) ✋ 인수 없으면 전체/특정 도메인 사용자 확인 → _recon_uis_mode.json
-  STEP 6-0-GOTO  form URL 직접 goto 캡처 (기본 모드)
-  STEP 6-0       정적 Fallback (앱 미실행 시)
-  STEP 6-1       Chrome + 로그인 (브라우저 환경 준비)
-  STEP 6-2       BFS 전수 탐색 (E2E 스타일) — 6-2-1 초기화 / 6-2-2 BFS 캡처 루프
-  STEP 6-2-3     BFS 결과 → INF 매핑으로 도메인 결정 + ID 배정
-  STEP 6-2-4     ✋ 화면 목록 + 도메인 코드 검토 (필수 체크포인트)
-  STEP 6-3       UIS 스펙 생성 (ddd-ui-agent 배치)
-  STEP 6-3-B     UIS ↔ INF 링크 연결 (link_uis_inf.py)
-  STEP 6-4       _TOC.md 생성 → 다음: /sl-recon-doc
+/sl-recon-uis  (STEP U*)  ── SOP급 화면설계서 (가이드형 대화 세션, v3.9.0 재설계)
+  STEP U1   Chrome CDP + 로그인 (인터랙티브). 사용자가 메뉴로 화면 진입
+  STEP U2   가이드형 세션 루프 (화면 1개씩):
+            U2-1 현재화면 캡처 + 탭 검출(capture_screen_dom.js --list-tabs) + 도메인 판정(URL)
+            U2-2 사용자에게 구조 확인(멀티탭/편집상태) — 지시 대기
+            U2-3 (멀티탭) 사용자 확정 탭 순회 캡처(--tab-text/--suffix)
+            U2-4 소스 슬라이스(collect_screen_slice.py)
+            U2-5 ddd-ui-agent 디스패치 → SOP급 UIS + 마커 (화면당 디렉토리)
+            U2-6 다음 화면 반복
+  STEP U2'' 소스폴백 (앱 미구동 — DOM 없이 소스 슬라이스만)
+  STEP U3   UIS↔INF 경로조인 연결(link_uis_inf.py, 양방향·순서무관)
+  STEP U4   SpecLens 인덱스 갱신(gen_docsify) → 다음: /sl-recon-doc
+  (폐기: BFS 전수탐색·goto 일괄캡처·도메인 batch 선택)
 
 /sl-recon-doc  (STEP 9~11)  ── 색인·FUNC·SRS·RTM·IA
   STEP 9     Phase-C: 색인 + FUNC 생성 + FUNC_MAP
@@ -83,22 +85,24 @@
 
 ---
 
-## Phase 2: `/sl-recon-uis` (STEP 6-*)
+## Phase 2: `/sl-recon-uis` (STEP U*) — 가이드형 대화 세션 (v3.9.0)
 
-**진입 전제:** `_tmp/recon_checkpoint.json`(phase=recon-analysis), `_domain_plan.json`, `{도메인}/INF/`
+**진입 전제:** `PREVIEW_BASE_URL`(인터랙티브) 또는 소스폴백. INF는 있어도 없어도 됨(조인키=raw 경로).
+**모델:** UIS는 one-shot이 아니라, **사용자가 메뉴로 화면을 띄우고 구조(탭·편집상태)를 지시하면 그에 맞춰 캡처·문서화하는 대화 루프.** 소스=권위, 스크린샷=보조. 에이전트가 소스를 읽어 일반화(파서 아님).
 
 | STEP | 핵심 동작 | 스크립트 / 에이전트 | 주요 출력 |
 |------|----------|-------------------|----------|
-| (선택) | ✋ 도메인 선택 — 인수 없으면 전체/특정 도메인 사용자 확인 (form 화면 수 미리보기) | 인라인 + `build_uis_goto_plan.py` | `_tmp/_recon_uis_mode.json` (domain_filter) |
-| 6-0-GOTO | form URL 직접 goto 캡처 (기본) | `capture.js` | preview.png |
-| 6-0 | 정적 Fallback (앱 미실행) | 인라인 | `screen_inventory_static.json` 기반 |
-| 6-1 | Chrome + 로그인 | `runtime_capture.js --bootstrap` | `.preview-storage.json` |
-| 6-2 | BFS 전수 탐색 (E2E) | `detect_capture_strategy.js`, `ai_nav.js` | BFS 화면 목록 |
-| 6-2-3 | BFS→INF 매핑·도메인 결정·ID 배정 | `screen_inventory.py` | 화면↔도메인 매핑 |
-| 6-2-4 | ✋ 화면목록 + 도메인코드 검토 | 없음 | 확정 |
-| 6-3 | UIS 스펙 생성 | `ddd-ui-agent` (sonnet, 3개씩) | `{도메인}/UI/{화면}/spec.md` |
-| 6-3-B | UIS↔INF 링크 | `link_uis_inf.py` | spec.md §5 INF 링크 |
-| 6-4 | _TOC.md 생성 | 인라인 | `{도메인}/UI/_TOC.md` |
+| U1 | Chrome CDP + 로그인. 사용자가 메뉴로 화면 진입 | 인라인 | CDP 세션 |
+| U2-1 | 현재화면 캡처 + 탭 검출 + 도메인 판정(URL) | `capture_screen_dom.js`(`--list-tabs`) | `_tmp/captures/{화면}/preview.png`+`dom_snapshot.json` |
+| U2-2 | ✋ 사용자에게 구조 확인(멀티탭/편집상태) — 지시 대기 | 대화 | 캡처 범위 확정 |
+| U2-3 | (멀티탭) 사용자 확정 탭 순회 캡처 | `capture_screen_dom.js --tab-text --suffix` | `preview_tab{N}.png`+`dom_snapshot_tab{N}.json` |
+| U2-4 | 소스 슬라이스(core/related + 엔드포인트) | `collect_screen_slice.py` | `source_slice.json` |
+| U2-5 | SOP급 UIS + 마커 생성 | `ddd-ui-agent` (sonnet, 화면당 1호출) | `{도메인}/UIS/UIS-{CODE}-{NNN}_{화면명}/spec.md` (+preview·tabs/) |
+| U2'' | 소스폴백(앱 미구동) | `collect_screen_slice.py` + `ddd-ui-agent` | 스크린샷 없는 UIS |
+| U3 | UIS↔INF 경로조인(양방향·순서무관) | `link_uis_inf.py` | §4·§6 INF 링크 + INF.screens 역기록 |
+| U4 | SpecLens 인덱스 갱신 | `gen_docsify.py` | spec_index.json |
+
+> 폐기: BFS 전수탐색(`ai_nav.js`), goto 일괄캡처(`build_uis_goto_plan.py`/`capture.js`), `detect_capture_strategy.js`, 도메인 batch 선택, 위젯 truncation.
 
 ---
 
@@ -128,7 +132,7 @@
 | `ddd-api-agent` | recon 4-3 | sonnet | INF(API 명세) 생성 |
 | `ddd-batch-agent` | recon 4-B | sonnet | BAT(배치 명세) 생성 |
 | `ddd-db-agent` | recon 5-B | sonnet | SCH enrichment — 코드값·비즈주의·컬럼설명만(사실은 build_sch_static) |
-| `ddd-ui-agent` | recon-uis 6-3 | sonnet | UIS(화면 설계서) 생성 |
+| `ddd-ui-agent` | recon-uis U2-5 | sonnet | SOP급 UIS(화면 설계서) 생성 (소스 권위, 마커·탭별 §4) |
 | `rd-agent` | recon-doc 9-2 | sonnet | FUNC 생성 |
 | `srs-agent` | recon-doc 9-3 | sonnet | SRS 생성 |
 | `rtm-agent` | recon-doc 9-4 | **opus** | FUNC_MAP + Constitutional 검증 |
@@ -148,7 +152,7 @@ docs/05_설계서/
     ├── SCH/SCH-{CODE}-NNN.md         (recon 5 — 테이블당 1파일)
     ├── DB_{도메인}.md                (recon 5 — 슬림 개요: 도메인 ERD + 테이블 목록)
     ├── BAT/BAT-*.md                  (recon 4-B)
-    └── UI/{화면}/spec.md + _TOC.md   (recon-uis 6-3/6-4)
+    └── UIS/UIS-{CODE}-{NNN}_{화면명}/spec.md (+preview·tabs/)   (recon-uis U2-5)
 docs/00_FUNC/FUNC_v1.0.md, FUNC_MAP.md (recon-doc 9)
 docs/03_기능명세서/SRS_v1.0.md          (recon-doc 9-3)
 docs/04_아키텍처설계서/SAD_v1.0.md       (recon 2-1)

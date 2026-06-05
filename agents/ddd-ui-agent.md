@@ -37,9 +37,21 @@ UIS-ID: UIS-{CODE}-{NNN}
 탭 스냅샷: {tabs}                    (멀티탭 화면) preview_tab{N}.png + dom_snapshot_tab{N}.json + 탭명 목록
 소스 슬라이스: {sliceFile}          source_slice.json (collect_screen_slice.py 산출)
 INF 디렉토리: {infDir}              docs/05_설계서/{domain}/INF/ (INF 있으면 매칭용)
-출력 경로: {outPath}                docs/05_설계서/{domain}/UIS/UIS-{CODE}-{NNN}_spec.md
+출력 디렉토리: {outDir}             docs/05_설계서/{domain}/UIS/UIS-{CODE}-{NNN}_{화면명}/
 프로젝트 루트: {ws}
 ```
+
+> **출력 디렉토리 규약 (화면당 1 디렉토리):**
+> ```
+> docs/05_설계서/{domain}/UIS/UIS-{CODE}-{NNN}_{화면명}/
+>   spec.md                         ← 한 화면 = 한 문서(탭은 §4 섹션)
+>   preview.png  preview_annotated.png   ← 대표/개요
+>   tabs/  tab1_{탭명}_annotated.png ...  ← 탭 자산(있으면)
+> ```
+> 캡처 자산(`_tmp/captures/{screenId}/`의 png)을 이 디렉토리로 복사하고, 탭 png는 `tabs/`에 둔다.
+> 이미지는 **표준 마크다운** `![](preview_annotated.png)` / `![](tabs/tab2_가격정보_annotated.png)`로 참조한다(SpecLens가 문서 디렉토리 기준으로 렌더). `![[...]]` 금지.
+
+> **탭=섹션 vs 별도 UIS 판정 규칙:** 탭이 **독립 라우트 또는 독립 저장 엔드포인트**를 가지면 별도 화면 → 별도 UIS. 그렇지 않고 **한 라우트·한 저장(예: saveXxxInterface가 전 탭 데이터 집계)·공유 컨텍스트**면 **한 화면, 탭은 §4 섹션**. (소스의 저장 엔드포인트가 전 탭 파라미터를 모으는지로 판정.)
 
 > **가이드형 세션:** sl-recon-uis가 사용자와 대화하며 화면을 문서화 상태로 만들고(등록/상품선택 등) 탭을 순회 캡처한 뒤, 그 결과(탭 스냅샷 N개)를 이 에이전트에 넘긴다. 에이전트는 **사용자가 확정한 탭/상태 범위**를 그대로 따른다(임의로 다른 탭 캡처 시도 금지).
 
@@ -130,8 +142,9 @@ revision_history:
 
 ## §0 화면 미리보기
 
-![[preview.png]]
+![개요](preview_annotated.png)
 
+> 원 안 번호 = §4 № 와 1:1. (멀티탭이면 §4.{N}에서 `![{탭명}](tabs/tab{N}_{탭명}_annotated.png)` 참조)
 > (소스폴백 모드면 이 섹션 생략 — 스크린샷 없음)
 
 ## §1 화면 목적 〈사람·SOP〉
@@ -207,9 +220,10 @@ N. {저장} → {결과/후속}
    ```bash
    !python {PLUGIN_PATH}/scripts/annotate_preview.py --png {captureDir}/preview[_tab{N}].png --widgets {captureDir}/preview[_tab{N}]_widgets.json --out {captureDir}/preview[_tab{N}]_annotated.png
    ```
-4. §0(및 §4.{N})에서 `![[preview[_tab{N}]_annotated.png]]`를 참조. 마커 번호 = §4 № = 캡처 원 번호(3중 일치).
+4. **자산을 출력 디렉토리로 복사**: `preview.png`·`preview_annotated.png` → `{outDir}/`, 탭 annotated → `{outDir}/tabs/tab{N}_{탭명}_annotated.png`.
+5. §0에서 `![](preview_annotated.png)`, §4.{N}에서 `![](tabs/tab{N}_{탭명}_annotated.png)` 참조(표준 마크다운). 마커 번호 = §4 № = 캡처 원 번호(3중 일치).
 
-> 실패해도 spec 생성 중단 금지(§0는 비주석 preview로 폴백). 소스폴백 모드(스크린샷 없음)는 이 Phase 생략.
+> 실패해도 spec 생성 중단 금지(§0는 비마커 preview로 폴백). 소스폴백 모드(스크린샷 없음)는 이 Phase 생략.
 
 ## Phase 4: api_hints 출력 + INF 필요 목록
 

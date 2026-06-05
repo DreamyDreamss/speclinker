@@ -101,7 +101,7 @@
 | `agents/sad-agent.md` | 아키텍처 설계서 | Opus | 패턴 매칭 + Self-Critique |
 | `agents/ddd-api-agent.md` | API 명세 (INF-XXX) | Sonnet | DSPy-style 구조화 출력 |
 | `agents/ddd-db-agent.md` | DB 스키마 (SCH-XXX) **enrichment** — 코드값·비즈주의·컬럼설명만 (사실은 build_sch_static가 생성) | Sonnet | LLM-TODO 마커 보강 |
-| `agents/ddd-ui-agent.md` | 화면 설계 (UIS-F-XXX) | Sonnet | 소스 증거 원칙 (preview는 capture.js가 처리) |
+| `agents/ddd-ui-agent.md` | SOP급 화면설계 (UIS) | Sonnet | 소스 권위(슬라이스 Read) + DOM 스냅샷 골격, §2 작업 시나리오·탭별 §4·마커 (v3.9 가이드형) |
 | `agents/ddd-batch-agent.md` | 배치 명세 (BAT-XXX) | Sonnet | 배치 확정 판별 + MCP DB 스케줄 조회 |
 | `agents/rtm-agent.md` | FUNC_MAP 체인 + 품질 게이트 | Opus | Constitutional AI |
 
@@ -113,6 +113,7 @@
 | QA 게이트 | `agents/qa-agent.md` | Sonnet | dev와 분리된 독립 컨텍스트 3-Layer 검증 |
 | 테스트 | `agents/test-agent.md` | Sonnet | 반복 실행 태스크 |
 
+> **v3.9.0** (UIS 생성 근본 재설계): 화면설계서를 라이브 캡처(BFS/goto)에서 만드는 4한계(권한·메뉴컨텍스트 위젯 누락, 세션의존·truncation, UIS↔INF 미연결, 프레임워크 idiom 무한케이스)를 한 뿌리로 진단. **`/sl-recon-uis`를 가이드형 대화 세션으로 전면 재작성**(BFS 전수탐색·goto 일괄캡처 폐기): ⓐ 사용자가 메뉴로 화면 진입(메뉴컨텍스트·권한 살아있어 auth:button까지 완전 렌더) ⓑ DOM=중립 뼈대/소스=의미, **에이전트가 소스를 읽어 일반화**(파서 아님—스택중립) ⓒ raw경로 조인키로 INF 매핑(순서무관·양방향). **신규** `capture_screen_dom.js`(메뉴진입 현재화면 캡처, 위젯 최다 프레임 선택, 위젯상한 제거, --list-tabs/--tab-text 가이드형 탭 순회) + `collect_screen_slice.py`(screenId stem 매칭으로 core/related 슬라이스 + 엔드포인트 추출, 스택중립). **ddd-ui-agent 재정의**: SOP급 출력(§1 목적·§2 작업 시나리오·§3 블록·§4 위젯·액션[탭별 §4.{N}]·§5 권한·§6 데이터·anchors), 마커=§4 문서화 위젯 자동출력. **출력 규약**: `{domain}/UIS/UIS-{CODE}-{NNN}_{화면명}/`(화면당 디렉토리, 탭=섹션—한 라우트·한 저장이면 별도 UIS 아님). **SpecLens**: gen_docsify 도메인별 UIS 스캔 + 뷰어 이미지 경로 재작성 훅(`![[]]`/상대 `![]()` → 문서 디렉토리 기준)으로 화면당 디렉토리 자산 렌더. link_uis_inf 새 경로 대응. 실측 검증: pr201Form(상품등록) goto 187위젯(권한버튼 누락) vs 메뉴진입 216위젯(전부 렌더) + 8탭 순회 캡처(위젯 222→56 차등). 설계문서 `docs/superpowers/specs/2026-06-05-uis-interactive-source-authority-design.md`.
 > **v3.3.0** (B3): `/sl-status` 추적 통합 — sl-rtm(커버리지·갭·게시) + sl-sprint(진행·추천·sprint-status 생성) 흡수·삭제. 플래그 --coverage/--next/--publish, 무플래그=통합 대시보드. sl-drift·rtm-agent 보존. skills 12. **명령어 통합(B) 완료: 19→12.**
 > **v3.2.0** (B1): `/sl-change` DELTA 단일 통합 — sl-plan/sl-analyze/sl-quick 흡수·삭제(analyze는 sl-change 전주기와 중복, quick은 `--quick` 분기, plan 경량리포트는 --quick 1단계). **REQ-C/RD_v 폐기 → SR 단일 추적축**(RTM이 SR→INF/SCH/UIS 직접). skills 13. RECON·AIDD 무영향.
 > **v3.1.0** (B2): `/sl-aidd`를 BMAD story 루프로 재구성 — sl-dev/sl-check/sl-review 스킬 흡수·삭제, `agents/qa-agent.md`(독립 컨텍스트 3-Layer 게이트) 신설, `scripts/build_story.py`(FUNC→STORY 마크다운) 신설, FUNC별 story 파일(docs/00_FUNC/stories/) + 상태머신(Draft→Approved→InProgress→Review→Done) + 사람 승인 3지점. dev/test 에이전트는 재사용(루프가 서브 호출). func_context_bundle mode·ensure_ascii 잔존버그 제거. 추적 축 FUNC-ID 불변.
