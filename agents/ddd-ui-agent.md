@@ -215,20 +215,27 @@ N. {저장} → {결과/후속}
 
 > ⚠️ **탭 마커 핵심 규칙 (공통 chrome 제외):** 각 탭 스냅샷(`dom_snapshot_tab{N}.json`)에는 항상 보이는 **공통 헤더/툴바(조회·저장·등록·삭제 등)가 포함**된다. 탭 §4.{N}과 그 마커(`preview_tab{N}`)는 **그 탭에만 있는 고유 위젯만** 담는다. 판정: **여러 탭 스냅샷에 동일 id로 반복 등장하는 위젯 = 공통** → 탭 마커에서 제외하고 개요(`preview_annotated`)에만 1회 표시. 한 탭에만 등장 = 그 탭 고유 → 해당 탭 §4.{N}·마커에. (실측 pr201: 공통 40 id 제외 시 가격탭=가격행추가/삭제, 단품탭=단품그룹/자동생성, 인증탭=안전인증조회 등 고유 버튼만 남음.)
 
+> **책임 분리(휴리스틱 금지):** 에이전트는 *무엇을 마킹할지*(§4에 적은 실재 위젯 id)만 정한다. *어디에 찍을지*(bbox)는 `build_markers.py`가 dom_snapshot에서 결정론으로 해소한다. **bbox를 손으로 베끼거나 추정 금지** — 정렬 깨짐·존재하지 않는 위젯 마킹의 원인이었다.
+
 화면(또는 탭)별로:
-1. §4에서 문서화한 위젯의 `bbox`를 dom_snapshot(`dom_snapshot[_tab{N}].json`)에서 id/name으로 찾아 매핑. **탭이면 공통 위젯(전 탭 반복) 제외 후 그 탭 고유 위젯만.**
-2. `{captureDir}/preview[_tab{N}]_widgets.json` 작성:
+1. **마커 입력 작성** — §4(또는 §4.{N})에 문서화한 위젯의 `{number, label, id}`만 적는다(bbox 없이). **탭이면 공통 위젯(전 탭 반복 id) 제외 후 그 탭 고유 위젯만.** 의미있는 버튼·이벤트·핵심입력만(216개 전량/한 띠 몰림 금지 — 폼 전체에 흩어진 실재 위젯).
    ```json
-   [ {"number": 1, "label": "조회", "bbox": [x1,y1,x2,y2]},
-     {"number": 2, "label": "초기화", "bbox": [x1,y1,x2,y2]} ]
+   // {captureDir}/preview[_tab{N}]_markers_in.json
+   [ {"number":1, "label":"조회", "id":"searchProductGrid"},
+     {"number":2, "label":"단품자동생성", "id":"btnPrdRegUntGrpAuto"},
+     {"number":3, "label":"MD코드", "name":"schMdId"} ]
    ```
-   (블록 중심으로 가려면 `preview_block_map.json` + `bbox_pct` 사용 — annotate_preview.py가 둘 다 지원)
-3. annotate 실행:
+2. **bbox 해소**(결정론):
+   ```bash
+   !python {PLUGIN_PATH}/scripts/build_markers.py --snapshot {captureDir}/dom_snapshot[_tab{N}].json --markers {captureDir}/preview[_tab{N}]_markers_in.json --out {captureDir}/preview[_tab{N}]_widgets.json
+   ```
+   > 스냅샷에 없는 id는 WARN+skip → §4에 실재하지 않는 위젯을 적었다는 신호(소스/스냅샷 재확인).
+3. **annotate**:
    ```bash
    !python {PLUGIN_PATH}/scripts/annotate_preview.py --png {captureDir}/preview[_tab{N}].png --widgets {captureDir}/preview[_tab{N}]_widgets.json --out {captureDir}/preview[_tab{N}]_annotated.png
    ```
-4. **자산을 출력 디렉토리로 복사**: `preview.png`·`preview_annotated.png` → `{outDir}/`, 탭 annotated → `{outDir}/tabs/tab{N}_{탭명}_annotated.png`.
-5. §0에서 `![](preview_annotated.png)`, §4.{N}에서 `![](tabs/tab{N}_{탭명}_annotated.png)` 참조(표준 마크다운). 마커 번호 = §4 № = 캡처 원 번호(3중 일치).
+4. **출력 디렉토리로 복사**: `preview.png`·`preview_annotated.png` → `{outDir}/`, 탭 annotated → `{outDir}/tabs/tab{N}_{탭명}_annotated.png`.
+5. §0에서 `![](preview_annotated.png)`, §4.{N}에서 `![](tabs/tab{N}_{탭명}_annotated.png)` 참조. 마커 번호 = §4 № = 캡처 원 번호(3중 일치).
 
 > 실패해도 spec 생성 중단 금지(§0는 비마커 preview로 폴백). 소스폴백 모드(스크린샷 없음)는 이 Phase 생략.
 
