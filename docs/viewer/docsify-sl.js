@@ -402,7 +402,7 @@
           <div class="sl-uis-id">${ui.id}${ui.anchor_count ? ` <span class="sl-anchor" title="JIT 소스앵커 ${ui.anchor_count}개">⚓${ui.anchor_count}</span>` : ''}</div>
           <div class="sl-uis-name">${ui.name || '-'}</div>
           <div class="sl-uis-route">${ui.route || ''}</div>
-          ${(ui.domain || (ui.apis && ui.apis.length)) ? `<div class="sl-uis-apis">${escAttr(ui.domain || '')}${ui.apis && ui.apis.length ? ` · 연결 API ${ui.apis.length}` : ''}</div>` : ''}
+          ${(ui.domain || (ui.inf_ids && ui.inf_ids.length)) ? `<div class="sl-uis-apis">${escAttr(ui.domain || '')}${ui.inf_ids && ui.inf_ids.length ? ` · 연결 API ${ui.inf_ids.length}` : ''}</div>` : ''}
         </div>
       </div>`;
   }
@@ -534,6 +534,30 @@
     document.querySelector('.content')?.classList.remove('has-relpanel');
   }
 
+  // ── UIS 미리보기 라이트박스 ────────────────────────────────────
+  function openLightbox(src) {
+    document.getElementById('sl-lightbox')?.remove();
+    const lb = document.createElement('div');
+    lb.id = 'sl-lightbox';
+    lb.innerHTML = `<img src="${escAttr(src)}" alt="확대"><div class="sl-lb-close" role="button" tabindex="0">✕ 닫기 (ESC)</div>`;
+    lb.onclick = () => lb.remove();
+    document.body.appendChild(lb);
+    const onEsc = (ev) => { if (ev.key === 'Escape') { lb.remove(); document.removeEventListener('keydown', onEsc); } };
+    document.addEventListener('keydown', onEsc);
+  }
+
+  function enhanceImages() {
+    const e = resolveCurrentEntity();
+    if (!e || e.type !== 'uis') return;
+    document.querySelectorAll('.markdown-section img').forEach(img => {
+      if (img.dataset.slLb) return;
+      img.dataset.slLb = '1';
+      img.classList.add('sl-zoomable');
+      img.title = '클릭하면 확대';
+      img.addEventListener('click', () => openLightbox(img.src));
+    });
+  }
+
   // ── 공개 API ──────────────────────────────────────────────────
   window.SlViewer = {
     showGuide() {
@@ -605,6 +629,7 @@
           injectRelationPanel();
           injectQuickNav();
           addCrosslinks();
+          enhanceImages();
         }, 150);
       }
     });

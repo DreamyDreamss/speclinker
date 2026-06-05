@@ -89,8 +89,8 @@ blockquote { border-left: 3px solid var(--border); color: var(--text-muted); pad
 .sl-uis-grid { padding: 16px 24px; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
 .sl-uis-card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; cursor: pointer; transition: border-color 0.15s; }
 .sl-uis-card:hover { border-color: var(--accent); }
-.sl-uis-preview { background: var(--bg-tertiary); height: 80px; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 24px; overflow: hidden; }
-.sl-uis-preview img { width: 100%; height: 80px; object-fit: cover; }
+.sl-uis-preview { background: var(--bg-tertiary); height: 140px; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 24px; overflow: hidden; }
+.sl-uis-preview img { width: 100%; height: 140px; object-fit: cover; object-position: top; }
 .sl-uis-info { padding: 10px 12px; }
 .sl-uis-id { color: var(--text-muted); font-size: 11px; }
 .sl-uis-name { color: var(--text-primary); font-size: 13px; font-weight: 600; margin: 2px 0; }
@@ -132,6 +132,13 @@ blockquote { border-left: 3px solid var(--border); color: var(--text-muted); pad
 .sl-rel-func { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
 .content.has-relpanel { margin-right: 240px !important; }
 .has-relpanel #sl-quick-nav { display: none; }
+
+/* UIS 미리보기 확대(라이트박스) */
+.markdown-section img.sl-zoomable { cursor: zoom-in; border: 1px solid var(--border); border-radius: 8px; max-width: 100%; transition: border-color .15s; }
+.markdown-section img.sl-zoomable:hover { border-color: var(--accent); }
+#sl-lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.85); z-index: 200; display: flex; align-items: center; justify-content: center; cursor: zoom-out; flex-direction: column; }
+#sl-lightbox img { max-width: 94vw; max-height: 88vh; object-fit: contain; border-radius: 8px; box-shadow: 0 8px 40px rgba(0,0,0,.6); }
+#sl-lightbox .sl-lb-close { color: #fff; margin-top: 14px; font-size: 13px; border: 1px solid rgba(255,255,255,.4); border-radius: 6px; padding: 6px 14px; cursor: pointer; }
 
 /* ── 사용자 가이드 ─────────────────────────────────────── */
 .sl-guide { padding: 28px 32px 60px; max-width: 1100px; }
