@@ -107,6 +107,32 @@ blockquote { border-left: 3px solid var(--border); color: var(--text-muted); pad
 /* 크로스링크 */
 .sl-xlink { color: var(--accent) !important; text-decoration: none !important; border-bottom: 1px dashed var(--accent); cursor: pointer; }
 
+/* 브레드크럼 */
+#sl-breadcrumb { padding: 10px 0; font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+#sl-breadcrumb .sl-bc-link { color: var(--text-muted); cursor: pointer; }
+#sl-breadcrumb .sl-bc-link:hover { color: var(--accent); }
+#sl-breadcrumb .sl-bc-sep { opacity: .5; }
+#sl-breadcrumb .sl-bc-type { color: var(--text-muted); }
+#sl-breadcrumb .sl-bc-cur { color: var(--accent); font-weight: 600; }
+#sl-breadcrumb .sl-bc-back { margin-left: auto; border: 1px solid var(--border); border-radius: 4px; padding: 1px 8px; cursor: pointer; }
+#sl-breadcrumb .sl-bc-back:hover { border-color: var(--accent); color: var(--accent); }
+
+/* 연결관계 패널 (우측) */
+#sl-rel-panel { position: fixed; right: 0; top: 0; width: 240px; height: 100vh; overflow-y: auto;
+  background: var(--bg-secondary); border-left: 1px solid var(--border); padding: 16px 14px; z-index: 60; box-sizing: border-box; }
+#sl-rel-panel .sl-rel-title { color: var(--accent); font-weight: 700; font-size: 13px; margin-bottom: 12px; }
+#sl-rel-panel .sl-rel-label { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-muted); margin: 10px 0 5px; }
+#sl-rel-panel .sl-rel-row { font-size: 11px; padding: 5px 8px; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 5px; margin-bottom: 4px; cursor: pointer; }
+#sl-rel-panel .sl-rel-row:hover { border-color: var(--accent); }
+#sl-rel-panel .sl-rel-m { background: var(--accent-dim); color: var(--accent); border-radius: 3px; padding: 0 5px; font-size: 9px; font-weight: 700; margin-right: 5px; }
+.sl-rel-chip { display: inline-block; font-size: 11px; padding: 3px 8px; border-radius: 5px; margin: 0 4px 4px 0; cursor: pointer; border: 1px solid; }
+.sl-rel-sch { color: var(--status-done); border-color: var(--status-done); background: rgba(63,185,80,.10); }
+.sl-rel-inf { color: var(--status-prog); border-color: var(--status-prog); background: rgba(88,166,255,.10); }
+.sl-rel-uis { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
+.sl-rel-func { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
+.content.has-relpanel { margin-right: 240px !important; }
+.has-relpanel #sl-quick-nav { display: none; }
+
 /* ── 사용자 가이드 ─────────────────────────────────────── */
 .sl-guide { padding: 28px 32px 60px; max-width: 1100px; }
 

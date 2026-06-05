@@ -166,6 +166,8 @@
     const main = document.getElementById('sl-main');
     if (!main) return;
     removeQuickNav();
+    removeRelationPanel();
+    document.getElementById('sl-breadcrumb')?.remove();
     ACTIVE_DOMAIN = null;
     renderSidebar();
 
@@ -240,6 +242,8 @@
     const main = document.getElementById('sl-main');
     if (!main || !INDEX) return;
     removeQuickNav();
+    removeRelationPanel();
+    document.getElementById('sl-breadcrumb')?.remove();
     ACTIVE_DOMAIN = null;
     renderSidebar();
 
@@ -314,6 +318,8 @@
     const main = document.getElementById('sl-main');
     if (!main || !INDEX) return;
     removeQuickNav();
+    removeRelationPanel();
+    document.getElementById('sl-breadcrumb')?.remove();
     renderSidebar();
 
     const d = INDEX.domains[domain] || {};
@@ -445,6 +451,89 @@
     });
   }
 
+  // ── 라우트 → 엔티티 해소 ──────────────────────────────────────
+  function resolveCurrentEntity() {
+    if (!INDEX) return null;
+    const hash = decodeURIComponent(window.location.hash || '');
+    const m = hash.match(/(INF-[A-Z]+-\d+|UIS-[A-Z]+-\d+(?:-T\d+)?|SCH-[A-Z]+-\d+|BAT-[A-Z]+-\d+)/);
+    if (!m) return null;
+    const id = m[1];
+    const pools = [['inf', INDEX.infs], ['uis', INDEX.uis], ['sch', INDEX.schs]];
+    for (const [type, pool] of pools) {
+      const hit = (pool || []).find(x => x.id === id || id.startsWith(x.id));
+      if (hit) return { type, id: hit.id, domain: hit.domain, name: hit.name, entity: hit };
+    }
+    return null;
+  }
+
+  // ── 브레드크럼 ────────────────────────────────────────────────
+  function injectBreadcrumb() {
+    document.getElementById('sl-breadcrumb')?.remove();
+    const e = resolveCurrentEntity();
+    if (!e) return;
+    const bc = document.createElement('div');
+    bc.id = 'sl-breadcrumb';
+    bc.innerHTML =
+      `<span class="sl-bc-link" role="button" tabindex="0" onclick="SlViewer.showDashboard()">🏠 대시보드</span>` +
+      `<span class="sl-bc-sep">›</span>` +
+      `<span class="sl-bc-link" role="button" tabindex="0" onclick="SlViewer.selectDomain('${escAttr(e.domain || '')}')">${escAttr(e.domain || '-')}</span>` +
+      `<span class="sl-bc-sep">›</span><span class="sl-bc-type">${e.type.toUpperCase()}</span>` +
+      `<span class="sl-bc-sep">›</span><span class="sl-bc-cur">${escAttr(e.id)}</span>` +
+      `<span class="sl-bc-back" role="button" tabindex="0" onclick="SlViewer.selectDomain('${escAttr(e.domain || '')}')">← 도메인</span>`;
+    const section = document.querySelector('.markdown-section');
+    if (section) section.insertAdjacentElement('beforebegin', bc);
+  }
+
+  // ── 연결관계 패널 (INF/UIS/SCH 공통) ──────────────────────────
+  function chip(id, label, kind) {
+    return `<span class="sl-rel-chip sl-rel-${kind}" role="button" tabindex="0"
+             onclick="SlViewer.goToId('${escAttr(id)}')">${escAttr(label || id)}</span>`;
+  }
+
+  function relSection(title, html) {
+    if (!html) return '';
+    return `<div class="sl-rel-label">${title}</div><div class="sl-rel-body">${html}</div>`;
+  }
+
+  function injectRelationPanel() {
+    removeRelationPanel();
+    const e = resolveCurrentEntity();
+    if (!e || !INDEX) return;
+    const en = e.entity;
+    let sections = '';
+    if (e.type === 'uis') {
+      const infIds = en.inf_ids || [];
+      const apis = infIds.map(id => {
+        const inf = (INDEX.infs || []).find(i => i.id === id) || { id };
+        const badge = inf.method ? `<span class="sl-rel-m">${escAttr(inf.method)}</span>` : '';
+        return `<div class="sl-rel-row" role="button" tabindex="0" onclick="SlViewer.goToId('${escAttr(id)}')">${badge}${escAttr(id)} ${escAttr(inf.name || '')}</div>`;
+      }).join('');
+      const schIds = [...new Set(infIds.flatMap(id => ((INDEX.infs || []).find(i => i.id === id) || {}).sch_ids || []))];
+      sections += relSection('호출 API (' + infIds.length + ')', apis);
+      sections += relSection('관련 테이블 (' + schIds.length + ')', schIds.map(s => chip(s, ((INDEX.schs || []).find(x => x.id === s) || {}).table || s, 'sch')).join(''));
+    } else if (e.type === 'inf') {
+      const schIds = en.sch_ids || [];
+      const usedBy = (INDEX.uis || []).filter(u => (u.inf_ids || []).includes(en.id));
+      sections += relSection('관련 테이블 (' + schIds.length + ')', schIds.map(s => chip(s, ((INDEX.schs || []).find(x => x.id === s) || {}).table || s, 'sch')).join(''));
+      sections += relSection('사용 화면 (' + usedBy.length + ')', usedBy.map(u => chip(u.id, u.id, 'uis')).join(''));
+    } else if (e.type === 'sch') {
+      const infIds = en.inf || [];
+      sections += relSection('참조 API (' + infIds.length + ')', infIds.map(i => chip(i, i, 'inf')).join(''));
+    }
+    if (en.func) sections += relSection('linked FUNC', chip(en.func, en.func, 'func'));
+    if (!sections) return;
+    const panel = document.createElement('div');
+    panel.id = 'sl-rel-panel';
+    panel.innerHTML = `<div class="sl-rel-title">🔗 연결관계</div>${sections}`;
+    document.body.appendChild(panel);
+    document.querySelector('.content')?.classList.add('has-relpanel');
+  }
+
+  function removeRelationPanel() {
+    document.getElementById('sl-rel-panel')?.remove();
+    document.querySelector('.content')?.classList.remove('has-relpanel');
+  }
+
   // ── 공개 API ──────────────────────────────────────────────────
   window.SlViewer = {
     showGuide() {
@@ -512,6 +601,8 @@
       const hash = window.location.hash || '';
       if (hash.includes('/INF-') || hash.includes('/spec') || hash.includes('/UIS-') || hash.includes('/SCH-') || hash.includes('/BAT-') || hash.includes('/FUNC-')) {
         setTimeout(function () {
+          injectBreadcrumb();
+          injectRelationPanel();
           injectQuickNav();
           addCrosslinks();
         }, 150);
