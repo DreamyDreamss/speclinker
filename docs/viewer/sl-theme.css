@@ -270,3 +270,15 @@ blockquote { border-left: 3px solid var(--border); color: var(--text-muted); pad
   margin-top: 36px; padding-top: 16px; border-top: 1px solid var(--border);
   color: var(--text-muted); font-size: 12px; line-height: 1.7;
 }
+
+/* 스펙 연결 그래프 */
+.sl-graph-btn { float: right; font-size: 10px; font-weight: 400; color: var(--text-muted); border: 1px solid var(--border); border-radius: 4px; padding: 1px 7px; cursor: pointer; }
+.sl-graph-btn:hover { color: var(--accent); border-color: var(--accent); }
+#sl-graph { position: fixed; inset: 0; background: rgba(13,17,23,.97); z-index: 210; display: flex; flex-direction: column; }
+.sl-graph-bar { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--border); color: var(--text-primary); font-size: 13px; }
+.sl-graph-ctl button { background: var(--bg-secondary); border: 1px solid var(--border); color: var(--text-muted); border-radius: 4px; padding: 2px 8px; cursor: pointer; margin: 0 1px; }
+.sl-graph-ctl button:hover { color: var(--accent); border-color: var(--accent); }
+.sl-graph-close { margin-left: 14px; cursor: pointer; color: var(--text-muted); }
+.sl-graph-close:hover { color: var(--accent); }
+.sl-graph-body { flex: 1; overflow: auto; padding: 20px; display: flex; justify-content: center; }
+.sl-graph-body .mermaid svg { max-width: 100%; }
