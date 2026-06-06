@@ -411,6 +411,40 @@ def scan_funcs(spec_root: str) -> list:
     return funcs
 
 
+def scan_srs(spec_root: str) -> list:
+    """SRS_v1.0.md 색인표 파싱 → srs[] (id/name/uis/inf/func/domain/file). 없으면 [] (graceful)."""
+    fp = os.path.join(spec_root, 'docs', '03_기능명세서', 'SRS_v1.0.md')
+    if not os.path.exists(fp):
+        return []
+    with open(fp, encoding='utf-8', errors='replace') as f:
+        lines = f.read().splitlines()
+    srs_re = re.compile(r'SRS-F-\d+')
+    uis_re = re.compile(r'UIS-[A-Za-z]+-\d+(?:-T\d+)?')
+    inf_re = re.compile(r'INF-[A-Za-z]+-\d+')
+    func_re = re.compile(r'FUNC-[A-Za-z]+-\d+')
+    out = []
+    for line in lines:
+        sids = srs_re.findall(line)
+        if not sids:
+            continue
+        funcs = func_re.findall(line)
+        domain = funcs[0].split('-')[1] if funcs and len(funcs[0].split('-')) >= 3 else ''
+        name = ''
+        for c in (x.strip() for x in line.split('|')):
+            if c and '---' not in c and not (srs_re.search(c) or uis_re.search(c)
+                                             or inf_re.search(c) or func_re.search(c)):
+                name = c
+                break
+        out.append({
+            'id': sids[0], 'name': name, 'domain': domain,
+            'file': 'docs/03_기능명세서/SRS_v1.0.md',
+            'uis': sorted(set(uis_re.findall(line))),
+            'inf': sorted(set(inf_re.findall(line))),
+            'func': funcs[0] if funcs else '',
+        })
+    return out
+
+
 def compute_gaps(infs: list, uis: list) -> dict:
     """연결 끊긴 산출물 집계(품질 가시화)."""
     return {
@@ -459,6 +493,11 @@ def generate_index(spec_root: str, output_path: str) -> dict:
             domains[d]['overview'] = ov.replace('\\', '/')
 
     funcs = scan_funcs(spec_root)
+    srs = scan_srs(spec_root)
+    for s in srs:
+        d = s.get('domain')
+        if d and d in domains:
+            domains[d]['srs_count'] = domains[d].get('srs_count', 0) + 1
 
     index = {
         'generated_at': datetime.now().isoformat(timespec='seconds'),
@@ -468,6 +507,7 @@ def generate_index(spec_root: str, output_path: str) -> dict:
         'uis': uis,
         'schs': schs,
         'funcs': funcs,
+        'srs': srs,
         'gaps': gaps,
         'ia_tree': build_ia_tree(uis),
     }
