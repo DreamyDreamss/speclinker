@@ -1,20 +1,33 @@
-/* Speclinker Gold Dark Theme */
+/* SpecLens v4 — 정제 다크 토큰 (Linear/Mintlify 톤) */
 :root {
-  --bg-primary: #0d1117;
-  --bg-secondary: #161b22;
-  --bg-tertiary: #21262d;
-  --border: #30363d;
-  --accent: #d4a574;
-  --accent-dim: rgba(212,165,116,0.12);
-  --text-primary: #c9d1d9;
-  --text-muted: #8b949e;
+  --bg-primary: #0b0d11;       /* 앱 배경 */
+  --bg-secondary: #13161c;     /* 카드/표면 */
+  --bg-tertiary: #0e1116;      /* nav/패널 표면 */
+  --border: #1f2630;
+  --border-soft: #1c222b;
+  --accent: #e6c79c;           /* 차분한 골드 */
+  --accent-dim: rgba(230,199,156,0.10);
+  --text-primary: #d7dde5;
+  --text-muted: #717b88;
+  --text-faint: #5b6470;
+  /* 타입색 */
+  --c-inf: #7aa2ff;
+  --c-sch: #52c489;
+  --c-uis: #e6c79c;
+  --c-srs: #c79bf0;
+  --c-func: #c79bf0;
+  /* 메서드 */
   --method-get: #1f6feb;
-  --method-post: #238636;
+  --method-post: #1b7a3e;
   --method-put: #9e6a03;
   --method-delete: #da3633;
-  --status-done: #3fb950;
-  --status-review: #f0883e;
-  --status-prog: #58a6ff;
+  /* 상태(완료/검토/진행) → 시맨틱 매핑 */
+  --status-done: #52c489;
+  --status-review: #e0883e;
+  --status-prog: #7aa2ff;
+  --radius: 10px;
+  --radius-lg: 14px;
+  --shadow-card: 0 4px 20px rgba(0,0,0,0.35);
 }
 
 /* Docsify 기본 오버라이드 */
@@ -69,20 +82,30 @@ blockquote { border-left: 3px solid var(--border); color: var(--text-muted); pad
 body.sl-custom-view #sl-main { display: block; }
 body.sl-custom-view .content { display: none !important; }
 
-/* 대시보드 */
-.sl-dashboard { padding: 24px; }
-.sl-summary-cards { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
-.sl-summary-card { flex: 1; min-width: 100px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 16px; text-align: center; }
-.sl-card-num { font-size: 28px; font-weight: 700; }
-.sl-card-label { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
-.sl-domain-table { width: 100%; border-collapse: collapse; background: var(--bg-secondary); border-radius: 8px; overflow: hidden; }
-.sl-progress-bar { background: var(--border); border-radius: 3px; height: 6px; overflow: hidden; min-width: 80px; }
-.sl-progress-fill { height: 100%; border-radius: 3px; }
-.sl-domain-table th[role="button"] { cursor: pointer; user-select: none; }
-.sl-domain-table th[role="button"]:hover { color: var(--accent); }
-.sl-gap-bar { display: flex; gap: 10px; margin: 0 0 18px; flex-wrap: wrap; }
-.sl-gap-item { font-size: 11px; color: var(--text-muted); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; }
-.sl-gap-item.warn { color: var(--status-review); border-color: var(--status-review); }
+/* 대시보드 v4 */
+.sl-dashboard { padding: 24px 28px; max-width: 1100px; }
+.sl-dash-head { margin-bottom: 20px; }
+.sl-dash-title { font-size: 20px; font-weight: 800; letter-spacing: -0.4px; }
+.sl-dash-sub { color: var(--text-muted); font-size: 12.5px; margin-top: 3px; }
+.sl-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 22px; }
+.sl-stat { background: linear-gradient(160deg, #14181f, #0f1217); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 15px 16px; }
+.sl-stat-label { color: var(--text-muted); font-size: 11px; letter-spacing: .3px; margin-bottom: 6px; }
+.sl-stat-num { font-size: 26px; font-weight: 800; }
+.sl-section-h2 { font-size: 13px; font-weight: 700; color: #aeb6c0; margin: 4px 0 10px; }
+.sl-dom-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 14px; }
+.sl-dom-card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; display: flex; gap: 14px; align-items: center; cursor: pointer; transition: border-color .15s, transform .1s; }
+.sl-dom-card:hover { border-color: var(--accent); transform: translateY(-1px); }
+.sl-ring { width: 54px; height: 54px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.sl-ring-hole { width: 40px; height: 40px; border-radius: 50%; background: var(--bg-secondary); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
+.sl-dom-meta { flex: 1; min-width: 0; }
+.sl-dom-name { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+.sl-dom-counts { color: var(--text-muted); font-size: 11.5px; }
+.sl-dom-counts .sl-dot { color: var(--text-faint); margin: 0 5px; }
+.sl-dom-pct { color: var(--text-muted); font-size: 11px; margin-top: 5px; }
+.sl-dom-warn { color: var(--status-review); margin-left: 8px; }
+.sl-gap-bar { display: flex; gap: 10px; margin: 0 0 20px; flex-wrap: wrap; }
+.sl-gap-item { font-size: 11.5px; color: var(--text-muted); border: 1px solid var(--border); border-radius: 8px; padding: 6px 11px; }
+.sl-gap-item.warn { color: var(--status-review); border-color: #5a3d22; background: rgba(224,136,62,.08); }
 
 /* 도메인 탭 */
 .sl-domain-header { padding: 20px 24px 0; border-bottom: 1px solid var(--border); }

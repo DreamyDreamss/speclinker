@@ -256,21 +256,16 @@
     renderSidebar();
 
     const t = INDEX.totals;
-    const cards = [
-      { num: t.inf, label: 'INF', color: 'var(--status-prog)' },
-      { num: t.uis, label: 'UIS', color: 'var(--accent)' },
-      { num: t.sch, label: 'SCH', color: 'var(--status-done)' },
-      { num: t.bat, label: 'BAT', color: 'var(--status-review)' },
-    ].map(c => `
-      <div class="sl-summary-card">
-        <div class="sl-card-num" style="color:${c.color}">${c.num}</div>
-        <div class="sl-card-label">${c.label}</div>
-      </div>`).join('');
+    const srsN = (INDEX.srs || []).length;
+    const stat = (label, num, color) =>
+      `<div class="sl-stat"><div class="sl-stat-label">${label}</div><div class="sl-stat-num" style="color:${color}">${(num || 0).toLocaleString()}</div></div>`;
+    const stats = stat('INTERFACE', t.inf, 'var(--c-inf)') + stat('SCHEMA', t.sch, 'var(--c-sch)') +
+                  stat('화면 UIS', t.uis, 'var(--c-uis)') + stat('기능 SRS', srsN, 'var(--c-srs)');
 
     let staleNote = '';
     const gen = Date.parse((INDEX.generated_at || '').replace(' ', 'T'));
     if (gen && (Date.now() - gen) > 7 * 864e5) {
-      staleNote = `<span style="color:var(--status-review)"> · ⚠ 인덱스가 오래되었습니다 — gen_docsify.py 재실행 권장</span>`;
+      staleNote = `<span style="color:var(--status-review)"> · ⚠ 인덱스가 오래됨 — gen_docsify.py 재실행 권장</span>`;
     }
 
     const gapHtml = INDEX.gaps ? `
@@ -279,69 +274,40 @@
         <span class="sl-gap-item ${INDEX.gaps.inf_no_sch ? 'warn' : ''}">API-테이블 미연결 ${INDEX.gaps.inf_no_sch}</span>
       </div>` : '';
 
-    let domEntries = Object.entries(INDEX.domains);
-    if (DASH_SORT.key) {
-      const k = DASH_SORT.key;
-      domEntries.sort((a, b) => {
-        const va = (k === 'name') ? a[0] : (a[1][k] || 0);
-        const vb = (k === 'name') ? b[0] : (b[1][k] || 0);
-        return (va < vb ? -1 : va > vb ? 1 : 0) * DASH_SORT.dir;
-      });
-    }
+    // 완성도 내림차순 정렬(낮은 도메인이 먼저 눈에 띄도록은 옵션 — 우선 완성도 높은 순)
+    const pctOf = d => { const i = d.inf || 0, tb = d.tbd_total || 0; return i > 0 ? Math.round((i - Math.min(tb, i)) / i * 100) : 0; };
+    const domEntries = Object.entries(INDEX.domains).sort((a, b) => pctOf(b[1]) - pctOf(a[1]));
 
-    const rows = domEntries.map(([name, d]) => {
-      const infTotal = d.inf || 0;
-      const tbd = d.tbd_total || 0;
-      const specPct = infTotal > 0 ? Math.round(((infTotal - Math.min(tbd, infTotal)) / infTotal) * 100) : 0;
-      const spTotal = d.sprint_total || 0;
-      const spPct = spTotal > 0 ? Math.round(((d.sprint_done || 0) / spTotal) * 100) : 0;
-      const spColor = spPct >= 80 ? 'var(--status-done)' : spPct >= 40 ? 'var(--accent)' : 'var(--status-review)';
+    const ringCards = domEntries.map(([name, d]) => {
+      const pct = pctOf(d);
+      const col = pct >= 70 ? 'var(--c-sch)' : pct >= 40 ? 'var(--accent)' : 'var(--status-review)';
+      const counts = [['⬡', d.inf || 0, 'var(--c-inf)'], ['▭', d.uis || 0, 'var(--c-uis)'],
+                      ['⛁', d.sch || 0, 'var(--c-sch)'], ['◆', d.srs_count || 0, 'var(--c-srs)']]
+        .map(([ic, n, c]) => `<span style="color:${c}">${ic} ${n}</span>`).join('<span class="sl-dot">·</span>');
+      const warn = (d.uis || 0) === 0 ? '<span class="sl-dom-warn">⚠ 화면 0</span>' : '';
       return `
-        <tr onclick="SlViewer.selectDomain('${escAttr(name)}')" style="cursor:pointer">
-          <td style="color:var(--accent);font-weight:600">${name}</td>
-          <td style="text-align:center;color:var(--status-prog)">${d.inf || 0}</td>
-          <td style="text-align:center;color:var(--accent)">${d.uis || 0}</td>
-          <td style="text-align:center;color:var(--status-done)">${d.sch || 0}</td>
-          <td style="text-align:center;color:var(--status-review)">${d.bat || 0}</td>
-          <td>
-            <div style="display:flex;align-items:center;gap:6px">
-              <div class="sl-progress-bar" style="flex:1">
-                <div class="sl-progress-fill" style="width:${specPct}%;background:var(--status-prog)"></div>
-              </div>
-              <span style="font-size:11px;color:var(--text-muted);min-width:32px">${specPct}%</span>
-            </div>
-          </td>
-          <td>
-            <div style="display:flex;align-items:center;gap:6px">
-              <div class="sl-progress-bar" style="flex:1">
-                <div class="sl-progress-fill" style="width:${spPct}%;background:${spColor}"></div>
-              </div>
-              <span style="font-size:11px;color:var(--text-muted);min-width:32px">${spPct}%</span>
-            </div>
-          </td>
-        </tr>`;
+        <div class="sl-dom-card" role="button" tabindex="0" onclick="SlViewer.selectDomain('${escAttr(name)}')">
+          <div class="sl-ring" style="background:conic-gradient(${col} 0 ${pct}%, var(--border) ${pct}% 100%)">
+            <div class="sl-ring-hole">${pct}%</div>
+          </div>
+          <div class="sl-dom-meta">
+            <div class="sl-dom-name">${name}</div>
+            <div class="sl-dom-counts">${counts}</div>
+            <div class="sl-dom-pct">스펙 완성도 <span style="color:${col}">${pct}%</span>${warn}</div>
+          </div>
+        </div>`;
     }).join('');
 
     main.innerHTML = `
       <div class="sl-dashboard">
-        <h2 style="color:var(--accent);margin-top:0">📊 SpecLens Dashboard</h2>
-        <div class="sl-summary-cards">${cards}</div>
-        ${gapHtml}
-        <table class="sl-domain-table">
-          <thead><tr>
-            <th style="text-align:left" role="button" tabindex="0" onclick="SlViewer.sortDash('name')">도메인</th>
-            <th role="button" tabindex="0" onclick="SlViewer.sortDash('inf')">INF</th>
-            <th role="button" tabindex="0" onclick="SlViewer.sortDash('uis')">UIS</th>
-            <th role="button" tabindex="0" onclick="SlViewer.sortDash('sch')">SCH</th>
-            <th role="button" tabindex="0" onclick="SlViewer.sortDash('bat')">BAT</th>
-            <th>스펙완성도</th><th>개발완료율</th>
-          </tr></thead>
-          <tbody>${rows || '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:20px">도메인 없음 — gen_docsify.py를 실행하세요</td></tr>'}</tbody>
-        </table>
-        <div style="margin-top:12px;font-size:11px;color:var(--text-muted)">
-          생성: ${INDEX.generated_at}${staleNote} &nbsp;—&nbsp;
-          <code>python scripts/gen_docsify.py .</code> 로 갱신
+        <div class="sl-dash-head">
+          <div class="sl-dash-title">RECON 산출물 개요</div>
+          <div class="sl-dash-sub">생성 ${INDEX.generated_at}${staleNote}</div>
         </div>
+        <div class="sl-stats">${stats}</div>
+        ${gapHtml}
+        <div class="sl-section-h2">도메인</div>
+        <div class="sl-dom-grid">${ringCards || '<div style="color:var(--text-muted)">도메인 없음 — gen_docsify.py 실행</div>'}</div>
       </div>`;
   }
 
