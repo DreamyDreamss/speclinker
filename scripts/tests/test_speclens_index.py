@@ -85,6 +85,30 @@ def test_compute_gaps():
     assert gaps['uis_no_inf'] == 1
 
 
+def test_scan_funcs_from_funcmap():
+    tmp = tempfile.mkdtemp()
+    fdir = os.path.join(tmp, 'docs', '00_FUNC')
+    os.makedirs(fdir)
+    with open(os.path.join(fdir, 'FUNC_MAP.md'), 'w', encoding='utf-8') as f:
+        f.write("| UIS-ID | 화면명 | FUNC-ID | 호출 INF | 연관 SCH |\n|---|---|---|---|---|\n")
+        f.write("| UIS-PRD-001 | 상품등록 | FUNC-product-001 | INF-PRD-205, INF-PRD-206 | SCH-PRD-009 |\n")
+    funcs = G.scan_funcs(tmp)
+    assert len(funcs) == 1, funcs
+    fn = funcs[0]
+    assert fn['id'] == 'FUNC-product-001'
+    assert fn['domain'] == 'product'
+    assert 'UIS-PRD-001' in fn['uis']
+    assert set(fn['inf']) == {'INF-PRD-205', 'INF-PRD-206'}
+    assert fn['sch'] == ['SCH-PRD-009']
+    assert fn['name'] == '상품등록'
+
+
+def test_scan_funcs_absent_graceful():
+    tmp = tempfile.mkdtemp()
+    os.makedirs(os.path.join(tmp, 'docs'))
+    assert G.scan_funcs(tmp) == []
+
+
 if __name__ == '__main__':
     for name, fn in sorted(globals().items()):
         if name.startswith('test_') and callable(fn):
