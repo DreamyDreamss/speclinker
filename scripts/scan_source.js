@@ -136,8 +136,14 @@ function extractMethodBody(content, annotIndex) {
 
 // jwork + Spring 범용 JSON 응답 시그널 — 메서드 바디 안에서 이 중 하나라도 있으면 api
 // ※ @ResponseBody는 바디 외부(선언부)에 있으므로 별도 탐지
-const API_BODY_SIGNALS = /GridResultUtil|AjaxMessageMapRenderer|ResponseEntity/;
+const API_BODY_SIGNALS = /GridResultUtil|AjaxMessageMapRenderer|ResponseEntity|MAPPING_JACKSON_JSON_VIEW|JSON_VIEW|jsonView|MappingJackson|new\s+ModelAndView\s*\(\s*[A-Za-z0-9_.]*[Jj]son/;
 const METHOD_RESPONSE_BODY = /@ResponseBody/;
+
+// @RequestMapping(... method=RequestMethod.POST ...) → verb 추출 (없으면 null). 복수 시 첫째.
+function methodVerbFromAnnotation(text) {
+  const m = /method\s*=\s*\{?\s*RequestMethod\.([A-Z]+)/.exec(text || '');
+  return m ? m[1] : null;
+}
 
 // ── Tree-sitter Java AST 헬퍼 ─────────────────────────────────────────────────
 
@@ -252,7 +258,8 @@ function parseJavaAST(content, filePath) {
           if (!verbMatch) continue;
 
           const verbMap = { Get:'GET', Post:'POST', Put:'PUT', Delete:'DELETE', Patch:'PATCH', Request:'ANY' };
-          const verb = verbMap[verbMatch[1]];
+          let verb = verbMap[verbMatch[1]];
+          if (verb === 'ANY') verb = methodVerbFromAnnotation(mod.text) || 'ANY';  // H-3: method= 속성 우선
           const subPaths = tsAnnotPaths(mod);
           if (subPaths.length === 0) subPaths.push('');
 
@@ -297,10 +304,11 @@ function parseJavaAST(content, filePath) {
     const hasA = (arr) => annotations.some(a => arr.some(x => a.toLowerCase().startsWith(x.toLowerCase())));
 
     let type = 'other';
-    if      (hasA(JAVA_DAO_ANNOTS)  || /dao|mapper|repository/i.test(className)) type = 'dao';
+    if      (isJavaScheduled(content))                                         type = 'batch';
+    else if (hasA(JAVA_DAO_ANNOTS)  || /dao|mapper|repository/i.test(className)) type = 'dao';
     else if (hasA(JAVA_SVC_ANNOTS)  || /service/i.test(className))                type = 'service';
     else if (hasA(JAVA_CTRL_ANNOTS))                                               type = 'controller';
-    else if (JAVA_BATCH_NAMES.test(bn) || JAVA_BATCH_DIRS.test(fp))               type = 'batch';
+    else if (isJavaBatch(bn, fp, annotations))                                     type = 'batch';
 
     return { pkg, className, annotations: [...new Set(annotations)], routes, imports, injected, type };
   } catch (_) {
@@ -314,8 +322,21 @@ const JAVA_CTRL_ANNOTS = [
 ];
 const JAVA_SVC_ANNOTS  = ['@Service', '@Component', '@EventListener'];
 const JAVA_DAO_ANNOTS  = ['@Repository', '@Mapper', '@Dao'];
-const JAVA_BATCH_NAMES = /batch|job|scheduler|task|worker|consumer|processor|jobbean|step/i;
-const JAVA_BATCH_DIRS  = /batch|job|jobs|scheduler|schedule/i;
+// M-3: 약한 이름키워드(task/step/worker)는 Mapper/Model/Service 오탐 유발 → 제거.
+//       강한 배치 신호만 이름으로 인정. 디렉토리/스케줄러 어노테이션은 별도 가중.
+const JAVA_BATCH_NAMES = /batch|jobbean|quartz/i;
+const JAVA_BATCH_DIRS  = /(^|\/)(batch|jobs?|scheduler|schedule|batchmonitoring)(\/|$)/i;
+// 배치 판정: 강한 이름 OR 배치 디렉토리(파일명 제외) OR @Scheduled/Job 어노테이션
+function isJavaScheduled(content) {
+  // @Scheduled는 명백한 Job 신호 → dao/service보다 우선. 보통 메서드 레벨이라 본문 전체 스캔.
+  return /@Scheduled\b/.test(content || '');
+}
+function isJavaBatch(bn, fp, annotations) {
+  // 데이터/퍼시스턴스 아티팩트는 배치 디렉토리 안이라도 Job이 아님 → 제외
+  if (/(mapper|model|service|controller|dto|vo|entity|repository|dao)$/i.test(bn)) return false;
+  const dir = fp.replace(/\/[^/]*$/, '');           // 파일명 제거 → 디렉토리만
+  return JAVA_BATCH_NAMES.test(bn) || JAVA_BATCH_DIRS.test(dir);
+}
 
 // 컨트롤러 후보 빠른 판별 — @Controller / @RestController 있으면 AST 파싱 가치 있음
 const CTRL_QUICK_RE = /@(?:Rest)?Controller\b/;
@@ -366,11 +387,12 @@ function parseJavaRegex(content, filePath) {
   const methodContent = classPos > 0 ? content.slice(classPos) : content;
   const methodPat = /@(Get|Post|Put|Delete|Patch|Request)Mapping\s*\(\s*(?:value\s*=\s*)?["']([^"']+)["']/g;
   while ((m = methodPat.exec(methodContent)) !== null) {
-    const verb     = m[1] === 'Request' ? 'ANY' : m[1].toUpperCase();
     const subPath  = m[2];
     const fullPath = (baseMapping + '/' + subPath).replace(/\/+/g, '/');
     // find method name after annotation (methodContent 기준 인덱스 사용)
     const afterAnnot = methodContent.slice(m.index, m.index + 300);
+    let verb       = m[1] === 'Request' ? 'ANY' : m[1].toUpperCase();
+    if (verb === 'ANY') verb = methodVerbFromAnnotation(afterAnnot) || 'ANY';  // H-3: method= 속성 우선
     const handlerM  = afterAnnot.match(/(?:public|private|protected)?\s+\w+\s+(\w+)\s*\(/);
 
     let kind = 'api';
@@ -411,13 +433,15 @@ function parseJavaRegex(content, filePath) {
   const hasA = (arr) => annotations.some(a => arr.some(x => a.toLowerCase().startsWith(x.toLowerCase())));
 
   let type = 'other';
-  if (hasA(JAVA_DAO_ANNOTS) || /dao|mapper|repository/i.test(className))
+  if (isJavaScheduled(content))
+    type = 'batch';
+  else if (hasA(JAVA_DAO_ANNOTS) || /dao|mapper|repository/i.test(className))
     type = 'dao';
   else if (hasA(JAVA_SVC_ANNOTS) || /service/i.test(className))
     type = 'service';
   else if (hasA(JAVA_CTRL_ANNOTS))
     type = 'controller';
-  else if (JAVA_BATCH_NAMES.test(bn) || JAVA_BATCH_DIRS.test(fp))
+  else if (isJavaBatch(bn, fp, annotations))
     type = 'batch';
 
   return { pkg, className, annotations: [...new Set(annotations)], routes, imports, injected, type };
