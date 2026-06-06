@@ -35,14 +35,25 @@ body { background: var(--bg-primary); color: var(--text-primary); font-family: -
 .sidebar, .sidebar-toggle { display: none !important; }
 .content { margin-left: 220px !important; background: var(--bg-primary); }
 a { color: var(--accent); }
-h2 { border-bottom: 1px solid var(--border); padding-bottom: 8px; }
-table { border-collapse: collapse; width: 100%; }
-th { background: var(--bg-secondary); color: var(--text-muted); font-size: 12px; padding: 6px 10px; border: 1px solid var(--border); }
-td { padding: 6px 10px; border: 1px solid var(--border); font-size: 13px; }
-tr:hover td { background: var(--bg-tertiary); }
-code { background: var(--bg-secondary); color: #79c0ff; padding: 2px 5px; border-radius: 3px; font-size: 12px; }
-pre { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px; padding: 16px; overflow-x: auto; }
-blockquote { border-left: 3px solid var(--border); color: var(--text-muted); padding-left: 12px; margin: 0 0 12px; }
+
+/* 문서 본문 — docsify의 가운데정렬/좁은 폭 제거 → 좌측정렬 풀폭(잘림 방지) */
+.markdown-section { max-width: none !important; margin: 0 !important; padding: 24px 34px 60px !important; color: var(--text-primary); }
+.markdown-section h1 { font-size: 22px; font-weight: 800; letter-spacing: -.4px; }
+.markdown-section h2 { border-bottom: 1px solid var(--border); padding-bottom: 8px; margin-top: 28px; }
+.markdown-section h3 { margin-top: 20px; }
+.markdown-section p, .markdown-section li { color: var(--text-primary); line-height: 1.7; }
+
+/* 표 — 흰바탕/저대비 근절: 어두운 표면 + 밝은 글씨 + 대비되는 zebra (docsify 테마보다 우선) */
+.markdown-section table { border-collapse: collapse; width: 100%; margin: 14px 0; display: table; font-size: 12.5px; }
+.markdown-section thead { background: transparent; }
+.markdown-section th { background: var(--bg-tertiary) !important; color: var(--accent) !important; font-weight: 700; font-size: 12px; text-align: left; padding: 9px 12px; border: 1px solid var(--border) !important; }
+.markdown-section td { background: var(--bg-primary) !important; color: var(--text-primary) !important; padding: 8px 12px; border: 1px solid var(--border) !important; }
+.markdown-section tr:nth-child(2n) td { background: var(--bg-secondary) !important; }
+.markdown-section tr:hover td { background: #1b2230 !important; }
+.markdown-section code { background: var(--bg-secondary); color: #9bc7ff; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+.markdown-section pre { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 16px; overflow-x: auto; }
+.markdown-section pre code { background: transparent; color: var(--text-primary); }
+.markdown-section blockquote { border-left: 3px solid var(--accent); background: var(--accent-dim); color: var(--text-primary); padding: 10px 14px; margin: 0 0 14px; border-radius: 0 8px 8px 0; }
 
 /* 커스텀 사이드바 */
 #sl-sidebar {
@@ -69,11 +80,19 @@ blockquote { border-left: 3px solid var(--border); color: var(--text-muted); pad
 #sl-sidebar .sl-toggle { display: flex; gap: 4px; padding: 8px 16px; border-bottom: 1px solid var(--border); }
 #sl-sidebar .sl-toggle button { flex: 1; padding: 4px 8px; font-size: 11px; border: 1px solid var(--border); border-radius: 4px; background: transparent; color: var(--text-muted); cursor: pointer; }
 #sl-sidebar .sl-toggle button.active { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
-.sl-domain-item { display: flex; flex-direction: column; gap: 2px; padding: 7px 14px; margin: 1px 8px; border-radius: 8px; cursor: pointer; color: var(--text-muted); }
-.sl-domain-item:hover { color: var(--text-primary); background: var(--bg-secondary); }
-.sl-domain-item.active { color: var(--accent); background: var(--accent-dim); }
-.sl-di-name { font-size: 12.5px; font-weight: 600; }
-.sl-di-counts { font-size: 10.5px; opacity: .9; }
+/* 좌측 계층 트리 */
+.sl-tree-empty { padding: 8px 16px; color: var(--text-muted); font-size: 12px; }
+.sl-tnode { display: flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; border-radius: 7px; margin: 0 6px; }
+.sl-tnode:hover { background: var(--bg-secondary); }
+.sl-tcaret { color: var(--text-faint); font-size: 10px; width: 10px; flex-shrink: 0; }
+.sl-tdom { padding: 6px 10px; font-size: 12.5px; font-weight: 700; color: var(--text-primary); }
+.sl-tdom-name { flex: 1; }
+.sl-ttype { padding: 4px 10px 4px 22px; font-size: 11.5px; }
+.sl-tcount { margin-left: auto; color: var(--text-faint); font-size: 10px; }
+.sl-titem { padding: 3px 10px 3px 36px; font-size: 11.5px; color: var(--text-muted); cursor: pointer; border-radius: 7px; margin: 0 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sl-titem:hover { background: var(--bg-secondary); color: var(--text-primary); }
+.sl-titem.active { background: var(--accent-dim); color: var(--accent); font-weight: 600; box-shadow: inset 2px 0 0 var(--accent); }
+.sl-titem-id { font-family: monospace; font-size: 10.5px; }
 .sl-ia-group { padding: 6px 16px; font-weight: 600; color: var(--text-primary); cursor: pointer; }
 .sl-ia-group:hover { background: var(--bg-tertiary); }
 .sl-ia-screen { font-size: 12px; cursor: pointer; color: var(--text-muted); }
@@ -184,7 +203,7 @@ body.sl-custom-view .content { display: none !important; }
 .sl-rel-uis { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
 .sl-rel-func { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
 .sl-rel-srs { color: #a371f7; border-color: #a371f7; background: rgba(163,113,247,.10); }
-.content.has-relpanel { margin-right: 240px !important; }
+.content.has-relpanel { margin-right: 264px !important; }
 .has-relpanel #sl-quick-nav { display: none; }
 
 /* UIS 미리보기 확대(라이트박스) */

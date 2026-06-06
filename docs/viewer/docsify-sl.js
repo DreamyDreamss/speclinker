@@ -21,6 +21,7 @@
   let ACTIVE_TAB = 'inf';
   let SIDEBAR_MODE = 'domain'; // 'domain' | 'ia'
   let DASH_SORT = { key: null, dir: -1 }; // 대시보드 도메인 테이블 정렬
+  let TREE = {};  // 트리 펼침 상태: { 'product': true, 'product/inf': true, ... }
 
   // ── 인덱스 로드 ────────────────────────────────────────────
   async function loadIndex() {
@@ -87,17 +88,45 @@
       <div id="sl-sidebar-list">${listHtml}</div>`;
   }
 
+  // 도메인 → 타입 그룹 → 항목 계층 트리 (접기/펼치기 + 현재 문서 포커스)
+  const TREE_TYPES = [
+    { key: 'inf', icon: '⬡', label: 'INF', color: 'var(--c-inf)', pool: () => INDEX.infs },
+    { key: 'uis', icon: '▭', label: 'UIS', color: 'var(--c-uis)', pool: () => INDEX.uis },
+    { key: 'sch', icon: '⛁', label: 'SCH', color: 'var(--c-sch)', pool: () => INDEX.schs },
+    { key: 'srs', icon: '◆', label: 'SRS', color: 'var(--c-srs)', pool: () => INDEX.srs },
+  ];
+
   function renderDomainList() {
-    if (!INDEX) return '<div style="padding:8px 16px;color:var(--text-muted);font-size:12px">로딩 중...</div>';
-    const entries = Object.entries(INDEX.domains);
-    if (entries.length === 0) return '<div style="padding:8px 16px;color:var(--text-muted);font-size:12px">도메인 없음</div>';
-    return entries.map(([name, info]) =>
-      `<div class="sl-domain-item ${ACTIVE_DOMAIN === name ? 'active' : ''}" role="button" tabindex="0"
-            onclick="SlViewer.selectDomain('${escAttr(name)}')">
-        <span class="sl-di-name">${name}</span>
-        <span class="sl-di-counts"><span style="color:var(--c-inf)">⬡${info.inf || 0}</span> <span style="color:var(--c-uis)">▭${info.uis || 0}</span> <span style="color:var(--c-sch)">⛁${info.sch || 0}</span></span>
-      </div>`
-    ).join('');
+    if (!INDEX) return '<div class="sl-tree-empty">로딩 중...</div>';
+    const cur = resolveCurrentEntity();   // 현재 보고 있는 스펙(있으면 포커스)
+    const curId = cur && cur.id;
+    const domains = Object.keys(INDEX.domains);
+    if (!domains.length) return '<div class="sl-tree-empty">도메인 없음</div>';
+    // 현재 문서의 도메인/타입은 자동 펼침
+    if (cur) { TREE[cur.domain] = true; TREE[cur.domain + '/' + cur.type] = true; }
+    let html = '';
+    for (const dom of domains) {
+      const dOpen = !!TREE[dom];
+      html += `<div class="sl-tnode sl-tdom ${dOpen ? 'open' : ''}" role="button" tabindex="0" onclick="SlViewer.toggleTree('${escAttr(dom)}')">
+        <span class="sl-tcaret">${dOpen ? '▾' : '▸'}</span><span class="sl-tdom-name">${dom}</span></div>`;
+      if (!dOpen) continue;
+      for (const t of TREE_TYPES) {
+        const items = (t.pool() || []).filter(x => x.domain === dom);
+        if (!items.length) continue;
+        const tkey = dom + '/' + t.key;
+        const tOpen = !!TREE[tkey];
+        html += `<div class="sl-tnode sl-ttype ${tOpen ? 'open' : ''}" role="button" tabindex="0" onclick="SlViewer.toggleTree('${escAttr(tkey)}')">
+          <span class="sl-tcaret">${tOpen ? '▾' : '▸'}</span><span style="color:${t.color}">${t.icon} ${t.label}</span><span class="sl-tcount">${items.length}</span></div>`;
+        if (!tOpen) continue;
+        for (const it of items) {
+          const active = it.id === curId ? ' active' : '';
+          const label = it.name || it.table || it.id;
+          html += `<div class="sl-titem${active}" role="button" tabindex="0" title="${escAttr(it.id + (it.name ? ' ' + it.name : ''))}" onclick="SlViewer.openSpec('${escAttr(it.file)}')">
+            <span class="sl-titem-id" style="color:${t.color}">${it.id}</span> ${escAttr(label)}</div>`;
+        }
+      }
+    }
+    return html;
   }
 
   function renderIaTree() {
@@ -778,6 +807,10 @@
       SIDEBAR_MODE = mode;
       renderSidebar();
     },
+    toggleTree(key) {
+      TREE[key] = !TREE[key];
+      renderSidebar();
+    },
     toggleSidebar() {
       document.body.classList.toggle('sl-sidebar-hidden');
     },
@@ -869,6 +902,11 @@
         injectQuickNav();
         addCrosslinks();
         enhanceImages();
+        // 좌측 트리: 현재 문서 포커스(자동 펼침·하이라이트) + 보이게 스크롤
+        if (SIDEBAR_MODE === 'domain' && resolveCurrentEntity()) {
+          renderSidebar();
+          document.querySelector('#sl-sidebar .sl-titem.active')?.scrollIntoView({ block: 'center' });
+        }
       }, 150);
     });
   }
