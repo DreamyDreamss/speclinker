@@ -57,7 +57,7 @@ else:
 "
 ```
 
-> 인덱스 항목 구조: `{ id, domain, screen, screenName, specPath, uisId, route, inf:[...], srs:[...], dbTables:[...], rules:[...], reqF }`  
+> 인덱스 항목 구조: `{ id, domain, screen, screenName, specPath, uisId, route, inf:[...], srs:[...], dbTables:[...], rules:[...] }`  
 > 본 에이전트는 이 인덱스만 보고 FUNC_v1.0.md를 작성한다. 추가 보강이 필요한 항목만 해당 spec.md를 선별적으로 Read.
 
 ### R-2. FUNC_v1.0.md 작성

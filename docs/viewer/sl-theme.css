@@ -283,3 +283,9 @@ blockquote { border-left: 3px solid var(--border); color: var(--text-muted); pad
 .sl-graph-close:hover { color: var(--accent); }
 .sl-graph-body { flex: 1; overflow: auto; padding: 20px; display: flex; justify-content: center; }
 .sl-graph-body .mermaid svg { max-width: 100%; }
+
+/* frontmatter 접이식 메타 블록 */
+.markdown-section details.sl-fm { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px; padding: 6px 12px; margin: 0 0 16px; }
+.markdown-section details.sl-fm > summary { cursor: pointer; color: var(--text-muted); font-size: 12px; list-style: none; }
+.markdown-section details.sl-fm > summary:hover { color: var(--accent); }
+.markdown-section details.sl-fm pre { background: transparent; border: none; margin: 8px 0 0; padding: 0; font-size: 11.5px; color: var(--text-muted); }
