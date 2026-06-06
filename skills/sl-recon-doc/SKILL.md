@@ -168,10 +168,10 @@ Agent 도구 호출:
     | UIS-ID | 화면명 | Route | SRS-F | FUNC-ID | 호출 INF 목록 | 연관 SCH |
 
     데이터 소스 우선순위:
-    1. INF 파일의 `used_by_screens` 필드 → 화면↔INF 연결 (사실 기반, 최우선)
+    1. funcs_index `infs[].used_by_screens`(INF frontmatter `screens:` 기반) → 화면↔INF 연결 (사실 기반, 최우선)
     2. UIS spec.md의 `api_hints` → INF가 없는 URL 보완
     3. SRS_v1.0.md의 SRS-F↔UIS-ID 매핑 → SRS 컬럼
-    4. INF↔SCH 연결은 INF 파일의 `related_sch` 또는 테이블명 기반 추론
+    4. INF↔SCH 연결은 funcs_index `infs[].sch_ids`(SCH frontmatter `inf:` 역인덱스, 사실 기반). 보조로 INF frontmatter `tables:`
 
     출력: `docs/00_FUNC/FUNC_MAP.md`
 
