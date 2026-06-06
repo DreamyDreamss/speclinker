@@ -46,7 +46,37 @@ function test_requestmapping_method_attr() {
   assert.strictEqual(r.method, 'POST', '@RequestMapping method=POST가 파싱돼야 함 (ANY 아님)');
 }
 
+// M-3: 배치 디렉토리 안의 Mapper는 dao(배치 아님), @Scheduled 클래스는 batch
+function scanFile(relPath, src) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sl-scan-'));
+  const full = path.join(dir, relPath.replace(/\//g, path.sep));
+  fs.mkdirSync(path.dirname(full), { recursive: true });
+  fs.writeFileSync(full, src);
+  const out = path.join(dir, 'out.json');
+  cp.execFileSync('node', [SCAN, '--workspace=' + dir, '--out=' + out], { stdio: 'pipe' });
+  const idx = JSON.parse(fs.readFileSync(out, 'utf-8'));
+  const f = (idx.files || []).find(x => x.relPath && x.relPath.endsWith(path.basename(relPath)));
+  fs.rmSync(dir, { recursive: true, force: true });
+  return f;
+}
+
+function test_mapper_in_batch_dir_not_batch() {
+  const f = scanFile('src/main/java/app/batch/CmmBatchLogMapper.java',
+    '@Mapper\npublic interface CmmBatchLogMapper { int insert(); }');
+  assert.ok(f, 'file 스캔됨');
+  assert.notStrictEqual(f.type, 'batch', '배치 디렉토리 안이라도 Mapper는 batch가 아니어야 함(M-3)');
+}
+
+function test_scheduled_class_is_batch() {
+  const f = scanFile('src/main/java/app/svc/PriceSyncRunner.java',
+    '@Component\npublic class PriceSyncRunner {\n  @Scheduled(cron="0 0 * * * *")\n  public void run() {}\n}');
+  assert.ok(f, 'file 스캔됨');
+  assert.strictEqual(f.type, 'batch', '@Scheduled 클래스는 batch여야 함(M-3)');
+}
+
 if (require.main === module) {
   test_jackson_json_view_is_api(); console.log('PASS test_jackson_json_view_is_api');
   test_requestmapping_method_attr(); console.log('PASS test_requestmapping_method_attr');
+  test_mapper_in_batch_dir_not_batch(); console.log('PASS test_mapper_in_batch_dir_not_batch');
+  test_scheduled_class_is_batch(); console.log('PASS test_scheduled_class_is_batch');
 }
