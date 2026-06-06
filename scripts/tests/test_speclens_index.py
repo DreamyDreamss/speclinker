@@ -57,6 +57,18 @@ def test_build_inf_sch_index():
     assert infs[2]['sch_ids'] == [], infs[2]
 
 
+def test_build_inf_sch_index_forward_table_match():
+    """SCH.inf 역참조가 비어도 INF.tables→SCH.table 정방향으로 연결돼야 한다(가짜 미연결 방지)."""
+    infs = [{'id': 'INF-PRD-010', 'tables': ['PRD_PRD_CTR_ARC_M', 'PRD_DLR_M']}]
+    schs = [
+        {'id': 'SCH-PRD-050', 'table': 'PRD_PRD_CTR_ARC_M', 'inf': []},   # inf 역참조 비어있음
+        {'id': 'SCH-PRD-051', 'table': 'prd_dlr_m', 'inf': []},           # 소문자도 매칭
+        {'id': 'SCH-PRD-052', 'table': 'OTHER_T', 'inf': []},
+    ]
+    G.build_inf_sch_index(infs, schs)
+    assert infs[0]['sch_ids'] == ['SCH-PRD-050', 'SCH-PRD-051'], infs[0]['sch_ids']
+
+
 def test_load_func_links_from_funcmap():
     tmp = tempfile.mkdtemp()
     func_dir = os.path.join(tmp, 'docs', '00_FUNC')
