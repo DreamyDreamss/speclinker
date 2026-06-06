@@ -64,8 +64,10 @@ blockquote { border-left: 3px solid var(--border); color: var(--text-muted); pad
 .sl-ia-screen { font-size: 12px; cursor: pointer; color: var(--text-muted); }
 .sl-ia-screen:hover { color: var(--text-primary); }
 
-/* 메인 콘텐츠 */
-#sl-main { margin-left: 220px; min-height: 100vh; }
+/* 메인 콘텐츠 — 커스텀뷰(#sl-main)와 문서뷰(.content)는 상호배타 */
+#sl-main { margin-left: 220px; min-height: 100vh; display: none; }
+body.sl-custom-view #sl-main { display: block; }
+body.sl-custom-view .content { display: none !important; }
 
 /* 대시보드 */
 .sl-dashboard { padding: 24px; }

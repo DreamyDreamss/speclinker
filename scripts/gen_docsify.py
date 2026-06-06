@@ -120,6 +120,7 @@ def scan_infs(spec_root: str) -> list:
                 'domain_code': fm.get('domain-code', ''),
                 'tbd_count': count_tbd(content),
                 'anchor_count': anchor_count,
+                'tables': _extract_list_field(_get_fm_block(content), 'tables'),
                 'file': os.path.relpath(fpath, spec_root).replace('\\', '/'),
             })
     return infs
@@ -338,15 +339,26 @@ def resolve_uis_inf(uis: list, infs: list) -> None:
 
 
 def build_inf_sch_index(infs: list, schs: list) -> None:
-    """schs[].inf[] 역인덱스 → infs[i]['sch_ids']. in-place 보강."""
+    """INF↔SCH 연결 → infs[i]['sch_ids']. in-place 보강.
+    두 방향 합집합: ① SCH frontmatter inf[] 역참조 ② INF frontmatter tables[] → SCH.table 정방향 매칭
+    (SCH.inf 목록이 희소해 ②가 없으면 연결이 멀쩡해도 대거 '미연결'로 잡힘)."""
     rev = {}
     for s in schs:
         for iid in (s.get('inf') or []):
-            rev.setdefault(iid, [])
-            if s['id'] not in rev[iid]:
-                rev[iid].append(s['id'])
+            rev.setdefault(iid, []).append(s['id'])
+    # 테이블명(대문자) → SCH-ID 목록
+    by_table = {}
+    for s in schs:
+        t = (s.get('table') or '').strip().upper()
+        if t:
+            by_table.setdefault(t, []).append(s['id'])
     for inf in infs:
-        inf['sch_ids'] = rev.get(inf['id'], [])
+        ids = list(rev.get(inf['id'], []))
+        for t in (inf.get('tables') or []):
+            for sid in by_table.get(str(t).strip().upper(), []):
+                if sid not in ids:
+                    ids.append(sid)
+        inf['sch_ids'] = ids
 
 
 def load_func_links(spec_root: str, infs: list, uis: list, schs: list) -> None:
