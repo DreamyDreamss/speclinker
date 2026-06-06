@@ -145,7 +145,7 @@ def main():
         domain, code = d['name'], d['code']
         sch_dir = os.path.join(root, 'docs/05_설계서', domain, 'SCH')
         seq = next_seq(sch_dir, code)
-        rows, dom_has_code = [], False
+        rows, dom_has_code, dom_needs_type = [], False, False
         for table in d.get('missing', []):
             draft = os.path.join(root, '_tmp/sch_draft', domain, table + '.json')
             facts = sch_facts.collect_table_facts(
@@ -154,6 +154,8 @@ def main():
             rows.append((sid, table, infs))
             all_rows.append((domain, sid, table, infs))
             dom_has_code = dom_has_code or has_code
+            # 타입 미상(컬럼 type=None)이면 enrichment에서 DB MCP(ora_describe_table)로 채워야 함
+            dom_needs_type = dom_needs_type or any(c.get('type') is None for c in facts.get('columns', []))
             seq += 1
         # 기존 SCH도 도메인 색인에 포함
         if os.path.isdir(sch_dir):
@@ -164,9 +166,11 @@ def main():
                     t = re.search(r'^table:\s*(\S+)', c, re.M)
                     rows.append((m.group(1), t.group(1) if t else '?', []))
         emit_domain_index(root, domain, code, rows)
-        if dom_has_code:
-            enrich.append({'name': domain, 'code': code, 'missing': d.get('missing', [])})
-        print(f'{domain}: SCH {len(d.get("missing", []))}건 스켈레톤 생성 (enrich={dom_has_code})')
+        dom_enrich = dom_has_code or dom_needs_type
+        if dom_enrich:
+            enrich.append({'name': domain, 'code': code, 'missing': d.get('missing', []),
+                           'needs_type': dom_needs_type})
+        print(f'{domain}: SCH {len(d.get("missing", []))}건 스켈레톤 생성 (enrich={dom_enrich}, 타입미상={dom_needs_type})')
     emit_global_index(root, all_rows)
     json.dump(enrich, open(os.path.join(root, '_tmp/sch_enrich_todo.json'), 'w', encoding='utf-8'),
               ensure_ascii=False, indent=2)

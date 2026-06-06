@@ -1,6 +1,6 @@
 ---
 name: ddd-db-agent
-description: SCH 스키마 생성 에이전트. 기본은 enrichment 모드(build_sch_static 스켈레톤의 LLM-TODO 마커=코드값·비즈주의·컬럼설명만 채움, 사실은 읽기전용). 스켈레톤 없을 때만 sch_draft+INF+ORM from-scratch 생성으로 폴백.
+description: SCH 스키마 생성 에이전트. 기본은 enrichment 모드(build_sch_static 스켈레톤의 LLM-TODO 마커 보강 — 코드값·비즈주의·컬럼설명 + **DB MCP 연결 시 미상 타입/NULL/PK를 ora_describe_table로 사실 채움(JIT/AIDD용)**). 이미 채워진 사실은 읽기전용. 스켈레톤 없을 때만 from-scratch 폴백.
 model: claude-sonnet-4-6
 ---
 
@@ -36,6 +36,13 @@ INF 생성 단계에서 `resolve_call_chain.py`가 미리 만들어 둔 **sch_dr
 
 - **채울 것**: `### 코드값`(코드성 컬럼 `_CD/_TP/_STS/_YN/_FL/_GB/_DIV` 값·의미 표), `### 비즈니스 주의사항`,
   컬럼표 '설명' 칸의 `<!-- LLM-TODO -->`.
+- **타입/NULL/PK 정밀화 (DB MCP 연결 시 — JIT/AIDD 필수)**: 컬럼표의 '타입·NULL·기본값' 칸이
+  `<!-- LLM-TODO -->`(=build_sch_static가 못 채운 미상)이거나 DDL 상단에 `⚠️ ...추론` 면책이 붙어있으면 →
+  내장 Oracle MCP **`ora_describe_table(table_name)`**(또는 `db-{별칭}` describe 도구)로 조회해
+  `data_type`→타입, `nullable`→NULL, `data_default`→기본값, `is_pk`→PK를 **사실로 채우고 DDL도 실제 정의로 교체**한다.
+  채운 뒤 상단 `⚠️ ...추론` 면책 줄을 **`> ✔ 컬럼 타입/제약 = DB MCP(ora_describe_table) 검증값`** 으로 바꾼다.
+  (`ora_get_indexes`/`ora_get_foreign_keys`로 인덱스·FK도 검증값으로 보강 가능.)
+  → 이는 SCH가 **AIDD JIT 메타데이터**(정확한 컬럼·타입 기반 코드생성)로 기능하기 위한 핵심. MCP 미연결 시에만 추론값 유지.
 - **코드값은 *사실로 역인용*(요약의 요약 금지)** — 값·의미를 ① 공통코드 테이블(JT_CODE/CMM_CODE 등) 조회,
   ② 소스 if/switch 분기, ③ 참조 INF 응답 예시에서 **사실로** 가져오고 **출처(`테이블` 또는 `file:line`)를 각 행에 표기**한다.
   근거를 못 찾은 값은 임의 의미부여 금지 — **`[미확인]`** 으로 명시한다. (예: `| 03 | 환불완료 | JT_CODE.REFUND_STS | |`)
@@ -44,8 +51,9 @@ INF 생성 단계에서 `resolve_call_chain.py`가 미리 만들어 둔 **sch_dr
   ② `group`이 없으면 **probe-match**: `WHERE CODE IN ({values})` 조회 → 일치 그룹 추론(모호하면 `[후보 N]`).
   ③ JT_CODE에 없으면 소스 enum/상수 → 그래도 없으면 `[미확인]`.
   복원된 코드 의미는 SCH `### 코드값`뿐 아니라 해당 컬럼이 쓰인 **쿼리의 의도**(예: `WHERE PRD_APP_STS_CD='20'` → `상품승인대기`)로도 요약한다.
-- **절대 수정 금지 (읽기 전용)**: frontmatter(sch-id/table/domain/domain-code/inf), DDL·컬럼 타입·NULL·기본값,
-  `### 인덱스`, `### 관계(FK)`, `### mini-ERD`, 상단 크로스링크 블록.
+- **읽기 전용(수정 금지)**: frontmatter(sch-id/table/domain/domain-code/inf), 상단 크로스링크 블록,
+  그리고 **이미 사실로 채워진**(추론·LLM-TODO가 아닌) DDL·타입·NULL·기본값·`### 인덱스`·`### 관계(FK)`·`### mini-ERD`.
+  단 **`<!-- LLM-TODO -->` 미상 칸과 `⚠️ ...추론` 표시분은** 위 "타입/NULL/PK 정밀화"에 따라 DB MCP describe로 **채운다**(덮어쓰기 아님 — 미채움 보강).
 - **근거**: 해당 SCH의 `inf:` frontmatter가 가리키는 INF 파일 `## 비즈니스 규칙/트랜잭션 순서/사이드이펙트`
   + sch_draft evidence(서비스 구현체 if/switch). 근거 없으면 마커 줄을 삭제(섹션 비움).
 - 도메인 내 `docs/05_설계서/{도메인}/SCH/SCH-*.md` 전부를 순회하며 채운다.
