@@ -389,7 +389,7 @@
 
     main.innerHTML = `
       <div class="sl-domain-header">
-        <h3 style="color:var(--accent);margin:0 0 12px">${domain}</h3>
+        <h3 style="color:var(--accent);margin:0 0 12px">${domain}${d.overview ? ` <span class="sl-ov-link" role="button" tabindex="0" onclick="SlViewer.openSpec('${escAttr(d.overview)}')">📖 도메인 개요</span>` : ''}</h3>
         <div class="sl-tabs">${tabs}</div>
       </div>
       ${body}`;
@@ -473,7 +473,7 @@
   function addCrosslinks() {
     const section = document.querySelector('.markdown-section');
     if (!section) return;
-    const pattern = /\b(INF-[A-Z]+-\d+|UIS-F-\d+|SCH-[A-Z]+-\d+|FUNC-[a-z]+-\d+)\b/g;
+    const pattern = /\b(INF-[A-Z]+-\d+|UIS-[A-Z]+-\d+(?:-T\d+)?|SCH-[A-Z]+-\d+|FUNC-[A-Za-z]+-\d+)\b/g;
     section.querySelectorAll('p, li, td').forEach(el => {
       if (el.querySelector('a, code, .sl-xlink')) return;
       const orig = el.innerHTML;
@@ -488,10 +488,10 @@
   function resolveCurrentEntity() {
     if (!INDEX) return null;
     const hash = decodeURIComponent(window.location.hash || '');
-    const m = hash.match(/(INF-[A-Z]+-\d+|UIS-[A-Z]+-\d+(?:-T\d+)?|SCH-[A-Z]+-\d+|BAT-[A-Z]+-\d+)/);
+    const m = hash.match(/(INF-[A-Z]+-\d+|UIS-[A-Z]+-\d+(?:-T\d+)?|SCH-[A-Z]+-\d+|BAT-[A-Z]+-\d+|FUNC-[A-Za-z]+-\d+)/);
     if (!m) return null;
     const id = m[1];
-    const pools = [['inf', INDEX.infs], ['uis', INDEX.uis], ['sch', INDEX.schs]];
+    const pools = [['inf', INDEX.infs], ['uis', INDEX.uis], ['sch', INDEX.schs], ['func', INDEX.funcs]];
     for (const [type, pool] of pools) {
       const hit = (pool || []).find(x => x.id === id || id.startsWith(x.id));
       if (hit) return { type, id: hit.id, domain: hit.domain, name: hit.name, entity: hit };
@@ -557,7 +557,7 @@
     if (!sections) return;
     const panel = document.createElement('div');
     panel.id = 'sl-rel-panel';
-    panel.innerHTML = `<div class="sl-rel-title">🔗 연결관계</div>${sections}`;
+    panel.innerHTML = `<div class="sl-rel-title">🔗 연결관계 <span class="sl-graph-btn" role="button" tabindex="0" onclick="SlViewer.openGraph('${escAttr(e.id)}')">🕸 그래프</span></div>${sections}`;
     document.body.appendChild(panel);
     document.querySelector('.content')?.classList.add('has-relpanel');
   }
@@ -566,6 +566,113 @@
     document.getElementById('sl-rel-panel')?.remove();
     document.querySelector('.content')?.classList.remove('has-relpanel');
   }
+
+  // ── 스펙 연결 그래프 (시작점 N-hop, mermaid) ──────────────────
+  function _safeNode(id) { return 'n_' + String(id).replace(/[^A-Za-z0-9]/g, '_'); }
+
+  function _neighbors(id) {
+    if (!INDEX) return [];
+    const out = [];
+    const push = (x, t) => { if (x) out.push({ id: x, type: t }); };
+    const uis = (INDEX.uis || []).find(u => u.id === id);
+    if (uis) { (uis.inf_ids || []).forEach(i => push(i, 'inf')); if (uis.func) push(uis.func, 'func'); }
+    const inf = (INDEX.infs || []).find(i => i.id === id);
+    if (inf) {
+      (inf.sch_ids || []).forEach(s => push(s, 'sch'));
+      (INDEX.uis || []).filter(u => (u.inf_ids || []).includes(id)).forEach(u => push(u.id, 'uis'));
+      if (inf.func) push(inf.func, 'func');
+    }
+    const sch = (INDEX.schs || []).find(s => s.id === id);
+    if (sch) { (sch.inf || []).forEach(i => push(i, 'inf')); if (sch.func) push(sch.func, 'func'); }
+    const fn = (INDEX.funcs || []).find(f => f.id === id);
+    if (fn) { (fn.uis || []).forEach(u => push(u, 'uis')); (fn.inf || []).forEach(i => push(i, 'inf')); (fn.sch || []).forEach(s => push(s, 'sch')); }
+    return out;
+  }
+
+  function _typeOf(id) {
+    if (/^UIS-/.test(id)) return 'uis';
+    if (/^INF-/.test(id)) return 'inf';
+    if (/^SCH-/.test(id)) return 'sch';
+    if (/^FUNC-/i.test(id)) return 'func';
+    return 'x';
+  }
+
+  function _graphLabel(id) {
+    const pools = [INDEX.uis, INDEX.infs, INDEX.schs, INDEX.funcs];
+    for (const p of pools) {
+      const hit = (p || []).find(x => x.id === id);
+      if (hit) { const nm = hit.name || hit.table || ''; return nm ? id + '\\n' + nm : id; }
+    }
+    return id;
+  }
+
+  function buildSpecGraph(startId, depth) {
+    const seen = new Set([startId]);
+    const edges = [];
+    let frontier = [startId];
+    for (let d = 0; d < depth; d++) {
+      const next = [];
+      frontier.forEach(cur => {
+        _neighbors(cur).forEach(nb => {
+          edges.push([cur, nb.id]);
+          if (!seen.has(nb.id)) { seen.add(nb.id); next.push(nb.id); }
+        });
+      });
+      frontier = next;
+    }
+    const lines = ['graph LR'];
+    seen.forEach(id => {
+      lines.push(`  ${_safeNode(id)}["${_graphLabel(id)}"]:::${_typeOf(id)}`);
+      lines.push(`  click ${_safeNode(id)} call slGraphClick("${id}")`);
+    });
+    const eseen = new Set();
+    edges.forEach(([a, b]) => {
+      const k = a + '>' + b, rk = b + '>' + a;
+      if (eseen.has(k) || eseen.has(rk)) return;
+      eseen.add(k);
+      lines.push(`  ${_safeNode(a)} --- ${_safeNode(b)}`);
+    });
+    lines.push('classDef uis fill:#2b2410,stroke:#d4a574,color:#d4a574;');
+    lines.push('classDef inf fill:#10243b,stroke:#58a6ff,color:#58a6ff;');
+    lines.push('classDef sch fill:#0f2a16,stroke:#3fb950,color:#3fb950;');
+    lines.push('classDef func fill:#2b2410,stroke:#d4a574,color:#d4a574;');
+    return { def: lines.join('\n'), count: seen.size };
+  }
+
+  let GRAPH_START = null, GRAPH_DEPTH = 2;
+  async function openGraph(startId) {
+    GRAPH_START = startId;
+    document.getElementById('sl-graph')?.remove();
+    const { def, count } = buildSpecGraph(startId, GRAPH_DEPTH);
+    const ov = document.createElement('div');
+    ov.id = 'sl-graph';
+    ov.innerHTML =
+      `<div class="sl-graph-bar">
+         <span>🕸 ${escAttr(startId)} — ${count} 노드 (깊이 ${GRAPH_DEPTH})</span>
+         <span class="sl-graph-ctl">깊이
+           <button onclick="SlViewer.graphDepth(1)">1</button>
+           <button onclick="SlViewer.graphDepth(2)">2</button>
+           <button onclick="SlViewer.graphDepth(3)">3</button>
+           <span class="sl-graph-close" role="button" tabindex="0" onclick="document.getElementById('sl-graph').remove()">✕ 닫기 (ESC)</span>
+         </span>
+       </div>
+       <div class="sl-graph-body">${count > 60 ? '<p style="color:var(--status-review)">노드가 많습니다 — 깊이를 줄이세요.</p>' : ''}<div class="mermaid" id="sl-graph-mermaid"></div></div>`;
+    document.body.appendChild(ov);
+    const onEsc = (ev) => { if (ev.key === 'Escape') { ov.remove(); document.removeEventListener('keydown', onEsc); } };
+    document.addEventListener('keydown', onEsc);
+    try {
+      window.mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', theme: 'dark' });
+      const { svg } = await window.mermaid.render('sl-graph-svg', def);
+      document.getElementById('sl-graph-mermaid').innerHTML = svg;
+    } catch (e) {
+      document.getElementById('sl-graph-mermaid').innerHTML = '<pre style="color:var(--text-muted)">' + escAttr(def) + '</pre>';
+    }
+  }
+
+  window.slGraphClick = function (id) {
+    document.getElementById('sl-graph')?.remove();
+    window.SlViewer.goToId(id);
+  };
 
   // ── UIS 미리보기 라이트박스 ────────────────────────────────────
   function openLightbox(src) {
@@ -617,6 +724,8 @@
     toggleSidebar() {
       document.body.classList.toggle('sl-sidebar-hidden');
     },
+    openGraph(id) { openGraph(id); },
+    graphDepth(d) { GRAPH_DEPTH = d; if (GRAPH_START) openGraph(GRAPH_START); },
     openSpec(filePath) {
       window.location.hash = '#/' + filePath;
     },
@@ -649,7 +758,9 @@
       const sch = INDEX.schs && INDEX.schs.find(s => s.id === id);
       if (sch) { this.openSpec(sch.file); return; }
       const ui = INDEX.uis && INDEX.uis.find(u => u.id === id);
-      if (ui) this.openSpec(ui.file);
+      if (ui) { this.openSpec(ui.file); return; }
+      const fn = INDEX.funcs && INDEX.funcs.find(f => f.id === id);
+      if (fn) this.openSpec(fn.file);
     },
   };
 

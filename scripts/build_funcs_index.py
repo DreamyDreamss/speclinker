@@ -227,6 +227,35 @@ def collect_inf_index(domains_list):
     return inf_index
 
 
+def collect_sch_index(domains_list):
+    """모든 도메인 SCH/SCH-*.md 스캔 → (inf_to_sch, sch_meta).
+    inf_to_sch: {INF-ID: [SCH-ID...]}, sch_meta: {SCH-ID: {table, inf, schPath, domain}}."""
+    inf_to_sch, sch_meta = {}, {}
+    scan_domains = domains_list if domains_list else (
+        [d for d in os.listdir(DOCS) if os.path.isdir(os.path.join(DOCS, d))]
+        if os.path.isdir(DOCS) else []
+    )
+    for domain in scan_domains:
+        sch_dir = os.path.join(DOCS, domain, 'SCH')
+        if not os.path.isdir(sch_dir):
+            continue
+        for fname in sorted(os.listdir(sch_dir)):
+            if not (fname.startswith('SCH-') and fname.endswith('.md')):
+                continue
+            fm_text, _ = split_frontmatter(read_raw(os.path.join(sch_dir, fname)))
+            fm = parse_simple_fm(fm_text)
+            sch_id = fm.get('sch-id') or fname[:-3]
+            raw_inf = (fm.get('inf') or '').strip().strip('[]')
+            inf_ids = [x.strip() for x in raw_inf.split(',') if x.strip()]
+            sch_meta[sch_id] = {'table': fm.get('table', ''), 'inf': inf_ids,
+                                'schPath': f'docs/05_설계서/{domain}/SCH/{fname}', 'domain': domain}
+            for iid in inf_ids:
+                inf_to_sch.setdefault(iid, [])
+                if sch_id not in inf_to_sch[iid]:
+                    inf_to_sch[iid].append(sch_id)
+    return inf_to_sch, sch_meta
+
+
 def main():
     if not os.path.exists(PLAN_PATH):
         print(f'[ERROR] _domain_plan.json 없음: {PLAN_PATH}', file=sys.stderr)
@@ -237,6 +266,10 @@ def main():
 
     # INF 전체 인덱스 (used_by_screens 포함)
     inf_index = collect_inf_index(domains)
+    # SCH 역인덱스 → INF별 sch_ids 부착 (FUNC_MAP 연관SCH 사실기반)
+    inf_to_sch, sch_meta = collect_sch_index(domains)
+    for iid, meta in inf_index.items():
+        meta['sch_ids'] = inf_to_sch.get(iid, [])
 
     funcs = []
     screens_map = {}          # UIS-ID → screen 메타
@@ -296,6 +329,7 @@ def main():
                         'summary':         '(INF 미생성)',
                         'infPath':         f'docs/05_설계서/{domain}/INF/{iid}.md',
                         'used_by_screens': [],
+                        'sch_ids':         [],
                     })
 
             # SRS 추출
@@ -349,7 +383,8 @@ def main():
         'generatedAt': datetime.now().isoformat(timespec='seconds'),
         'domains':     domains,
         'screens':     screens_map,        # UIS-ID → screen 메타 (api_hints 포함)
-        'infs':        inf_index,          # INF-ID → INF 메타 (used_by_screens 포함)
+        'infs':        inf_index,          # INF-ID → INF 메타 (used_by_screens, sch_ids 포함)
+        'schs':        sch_meta,            # SCH-ID → {table, inf, schPath, domain}
         'funcs':       funcs,
         'summary': {
             'totalFuncs':   len(funcs),

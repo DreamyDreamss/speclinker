@@ -1,4 +1,5 @@
-﻿# STATUS: 완료
+﻿# STATUS: DEPRECATED (v3.12) — si-graph.json은 소비처가 없어 recon-doc 파이프라인에서 제거됨.
+#   스펙→소스 추적은 INF frontmatter anchors: + SpecLens spec_index가 대체. 직접 호출 시 동작은 유지.
 """
 build_si_graph.py — INF/UIS/SCH 스펙 파일 → si-graph.json 생성
 

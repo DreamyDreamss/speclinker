@@ -26,6 +26,8 @@ def _build_project(uis_dirname):
     _write(os.path.join(design, 'product', uis_dirname, 'UIS-PRD-001_상품등록', 'spec.md'),
            "---\n화면명: 상품등록\n라우트: /app/product/pr201Form\ndomain: product\n"
            "UIS-ID: UIS-PRD-001\napi_hints:\n  - POST [INF-PRD-001](../../INF/INF-PRD-001.md)\n---\n\n# 상품등록\n")
+    _write(os.path.join(design, 'product', 'SCH', 'SCH-PRD-009.md'),
+           "---\nsch-id: SCH-PRD-009\ntable: PRODUCT\ndomain: product\ninf: [INF-PRD-001]\n---\n\n# SCH-PRD-009: PRODUCT\n")
     return tmp
 
 
@@ -45,6 +47,21 @@ def test_scans_current_uis_directory():
         func = idx['funcs'][0]
         assert func['uisId'] == 'UIS-PRD-001', func
         assert any(i['id'] == 'INF-PRD-001' for i in func.get('inf', [])), func.get('inf')
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_funcs_index_includes_sch_links():
+    tmp = _build_project('UIS')
+    try:
+        idx = _run(tmp)
+        inf = idx['infs'].get('INF-PRD-001', {})
+        assert inf.get('sch_ids') == ['SCH-PRD-009'], inf
+        assert 'SCH-PRD-009' in idx.get('schs', {}), idx.get('schs')
+        assert idx['schs']['SCH-PRD-009']['table'] == 'PRODUCT'
+        func = idx['funcs'][0]
+        inf_entry = next((i for i in func['inf'] if i['id'] == 'INF-PRD-001'), None)
+        assert inf_entry and inf_entry.get('sch_ids') == ['SCH-PRD-009'], inf_entry
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

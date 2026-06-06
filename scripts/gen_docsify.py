@@ -373,6 +373,44 @@ def load_func_links(spec_root: str, infs: list, uis: list, schs: list) -> None:
                 item['func'] = mapping[item['id']]
 
 
+def scan_funcs(spec_root: str) -> list:
+    """FUNC_MAP.md 파싱 → funcs[] 목록. 각 표 행에서 FUNC/UIS/INF/SCH ID를
+    정규식으로 수집(컬럼 순서 비의존). 파일 없으면 [] (graceful)."""
+    fp = os.path.join(spec_root, 'docs', '00_FUNC', 'FUNC_MAP.md')
+    if not os.path.exists(fp):
+        return []
+    with open(fp, encoding='utf-8', errors='replace') as f:
+        lines = f.read().splitlines()
+    func_re = re.compile(r'FUNC-[A-Za-z]+-\d+')
+    uis_re = re.compile(r'UIS-[A-Za-z]+-\d+(?:-T\d+)?')
+    inf_re = re.compile(r'INF-[A-Za-z]+-\d+')
+    sch_re = re.compile(r'SCH-[A-Za-z]+-\d+')
+    funcs = []
+    for line in lines:
+        fids = func_re.findall(line)
+        if not fids:
+            continue
+        fid = fids[0]
+        parts = fid.split('-')
+        domain = parts[1] if len(parts) >= 3 else ''
+        name = ''
+        for c in (x.strip() for x in line.split('|')):
+            if c and '---' not in c and not (func_re.search(c) or uis_re.search(c)
+                                             or inf_re.search(c) or sch_re.search(c)):
+                name = c
+                break
+        funcs.append({
+            'id': fid,
+            'name': name,
+            'domain': domain,
+            'file': 'docs/00_FUNC/FUNC_MAP.md',
+            'uis': sorted(set(uis_re.findall(line))),
+            'inf': sorted(set(inf_re.findall(line))),
+            'sch': sorted(set(sch_re.findall(line))),
+        })
+    return funcs
+
+
 def compute_gaps(infs: list, uis: list) -> dict:
     """연결 끊긴 산출물 집계(품질 가시화)."""
     return {
@@ -414,6 +452,13 @@ def generate_index(spec_root: str, output_path: str) -> dict:
         if d in domains:
             domains[d]['sprint_done'] = s['done']
             domains[d]['sprint_total'] = s['total']
+    # 도메인별 OVERVIEW 경로 (있으면)
+    for d in domains:
+        ov = os.path.join('docs', '05_설계서', d, f'OVERVIEW_{d}.md')
+        if os.path.isfile(os.path.join(spec_root, ov)):
+            domains[d]['overview'] = ov.replace('\\', '/')
+
+    funcs = scan_funcs(spec_root)
 
     index = {
         'generated_at': datetime.now().isoformat(timespec='seconds'),
@@ -422,6 +467,7 @@ def generate_index(spec_root: str, output_path: str) -> dict:
         'infs': infs,
         'uis': uis,
         'schs': schs,
+        'funcs': funcs,
         'gaps': gaps,
         'ia_tree': build_ia_tree(uis),
     }

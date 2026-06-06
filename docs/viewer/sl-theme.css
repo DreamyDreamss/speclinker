@@ -84,6 +84,8 @@ blockquote { border-left: 3px solid var(--border); color: var(--text-muted); pad
 
 /* 도메인 탭 */
 .sl-domain-header { padding: 20px 24px 0; border-bottom: 1px solid var(--border); }
+.sl-ov-link { font-size: 11px; font-weight: 400; color: var(--text-muted); border: 1px solid var(--border); border-radius: 4px; padding: 1px 8px; margin-left: 8px; cursor: pointer; }
+.sl-ov-link:hover { color: var(--accent); border-color: var(--accent); }
 .sl-tabs { display: flex; }
 .sl-tab { padding: 8px 20px; border-bottom: 2px solid transparent; cursor: pointer; color: var(--text-muted); font-size: 13px; }
 .sl-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
@@ -268,3 +270,15 @@ blockquote { border-left: 3px solid var(--border); color: var(--text-muted); pad
   margin-top: 36px; padding-top: 16px; border-top: 1px solid var(--border);
   color: var(--text-muted); font-size: 12px; line-height: 1.7;
 }
+
+/* 스펙 연결 그래프 */
+.sl-graph-btn { float: right; font-size: 10px; font-weight: 400; color: var(--text-muted); border: 1px solid var(--border); border-radius: 4px; padding: 1px 7px; cursor: pointer; }
+.sl-graph-btn:hover { color: var(--accent); border-color: var(--accent); }
+#sl-graph { position: fixed; inset: 0; background: rgba(13,17,23,.97); z-index: 210; display: flex; flex-direction: column; }
+.sl-graph-bar { display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--border); color: var(--text-primary); font-size: 13px; }
+.sl-graph-ctl button { background: var(--bg-secondary); border: 1px solid var(--border); color: var(--text-muted); border-radius: 4px; padding: 2px 8px; cursor: pointer; margin: 0 1px; }
+.sl-graph-ctl button:hover { color: var(--accent); border-color: var(--accent); }
+.sl-graph-close { margin-left: 14px; cursor: pointer; color: var(--text-muted); }
+.sl-graph-close:hover { color: var(--accent); }
+.sl-graph-body { flex: 1; overflow: auto; padding: 20px; display: flex; justify-content: center; }
+.sl-graph-body .mermaid svg { max-width: 100%; }
