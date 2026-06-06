@@ -108,21 +108,30 @@ body.sl-custom-view .content { display: none !important; }
 .sl-gap-item.warn { color: var(--status-review); border-color: #5a3d22; background: rgba(224,136,62,.08); }
 
 /* 도메인 탭 */
-.sl-domain-header { padding: 20px 24px 0; border-bottom: 1px solid var(--border); }
-.sl-ov-link { font-size: 11px; font-weight: 400; color: var(--text-muted); border: 1px solid var(--border); border-radius: 4px; padding: 1px 8px; margin-left: 8px; cursor: pointer; }
+.sl-domain-header { padding: 22px 26px 0; }
+.sl-dom-h3 { font-size: 19px; font-weight: 800; letter-spacing: -0.3px; margin: 0 0 14px; }
+.sl-ov-link { font-size: 11px; font-weight: 400; color: var(--text-muted); border: 1px solid var(--border); border-radius: 6px; padding: 2px 9px; margin-left: 10px; cursor: pointer; }
 .sl-ov-link:hover { color: var(--accent); border-color: var(--accent); }
-.sl-tabs { display: flex; }
-.sl-tab { padding: 8px 20px; border-bottom: 2px solid transparent; cursor: pointer; color: var(--text-muted); font-size: 13px; }
-.sl-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.sl-tabs { display: flex; gap: 20px; border-bottom: 1px solid var(--border-soft); }
+.sl-tab { padding: 9px 0; border-bottom: 2px solid transparent; cursor: pointer; color: var(--text-muted); font-size: 13px; }
+.sl-tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+.sl-tab:hover { color: var(--text-primary); }
 
-/* INF 목록 */
-.sl-inf-list { padding: 16px 24px; }
-.sl-inf-card { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 6px; cursor: pointer; background: var(--bg-secondary); transition: border-color 0.15s; }
-.sl-inf-card:hover { border-color: var(--accent); }
-.sl-method-badge { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; color: #fff; min-width: 52px; text-align: center; }
-.sl-inf-id { color: var(--text-muted); font-size: 11px; min-width: 110px; }
-.sl-inf-name { color: var(--text); font-size: 12px; font-weight: 500; flex: 1; min-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sl-inf-path { color: var(--text-muted); font-family: monospace; font-size: 12px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 목록 필터 바 */
+.sl-list-filter { display: flex; align-items: center; gap: 12px; padding: 14px 26px 6px; }
+.sl-filter-input { flex: 1; max-width: 480px; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 7px 11px; color: var(--text-primary); font-size: 12px; }
+.sl-filter-input:focus { outline: none; border-color: var(--accent); }
+.sl-list-count { color: var(--text-faint); font-size: 11.5px; }
+
+/* INF/SCH/SRS 목록 */
+.sl-inf-list { padding: 8px 26px 24px; }
+.sl-inf-card { display: flex; align-items: center; gap: 11px; padding: 10px 13px; border: 1px solid var(--border); border-radius: 9px; margin-bottom: 6px; cursor: pointer; background: var(--bg-secondary); transition: border-color 0.15s, transform 0.1s; }
+.sl-inf-card:hover { border-color: var(--accent); transform: translateY(-1px); }
+.sl-method-badge { padding: 2px 8px; border-radius: 5px; font-size: 10px; font-weight: 700; color: #fff; min-width: 46px; text-align: center; }
+.sl-inf-id { color: var(--c-inf); font-size: 11.5px; min-width: 110px; font-family: monospace; }
+.sl-inf-name { color: var(--text-primary); font-size: 12.5px; font-weight: 500; flex: 1; min-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sl-inf-path { color: var(--text-muted); font-family: monospace; font-size: 11.5px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sl-badge-tbl { color: var(--c-sch); font-size: 11px; white-space: nowrap; padding-left: 4px; }
 .sl-anchor { color: var(--accent); font-size: 11px; margin-left: auto; padding-left: 8px; white-space: nowrap; }
 .sl-uis-apis { color: var(--text-muted); font-size: 11px; margin-top: 2px; }
 

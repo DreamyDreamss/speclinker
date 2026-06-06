@@ -369,18 +369,25 @@
 
     main.innerHTML = `
       <div class="sl-domain-header">
-        <h3 style="color:var(--accent);margin:0 0 12px">${domain}${d.overview ? ` <span class="sl-ov-link" role="button" tabindex="0" onclick="SlViewer.openSpec('${escAttr(d.overview)}')">📖 도메인 개요</span>` : ''}</h3>
+        <h3 class="sl-dom-h3">${domain}${d.overview ? ` <span class="sl-ov-link" role="button" tabindex="0" onclick="SlViewer.openSpec('${escAttr(d.overview)}')">📖 도메인 개요</span>` : ''}</h3>
         <div class="sl-tabs">${tabs}</div>
       </div>
+      <div class="sl-list-filter">
+        <input class="sl-filter-input" type="text" placeholder="🔎 이 목록에서 필터 (ID·이름·경로)" oninput="SlViewer.filterList(this.value)" autocomplete="off">
+        <span class="sl-list-count" id="sl-list-count"></span>
+      </div>
       ${body}`;
+    SlViewer.filterList('');
   }
+
+  function _cardSearch(parts) { return escAttr(parts.filter(Boolean).join(' ').toLowerCase()); }
 
   function renderSrsCard(sr) {
     const meta = [sr.uis && sr.uis.length ? '화면 ' + sr.uis.length : '', sr.inf && sr.inf.length ? 'API ' + sr.inf.length : '']
       .filter(Boolean).join(' · ');
     return `
-      <div class="sl-inf-card" role="button" tabindex="0" onclick="SlViewer.openSpec('${escAttr(sr.file)}')">
-        <span class="sl-method-badge" style="background:#a371f7">SRS</span>
+      <div class="sl-inf-card" role="button" tabindex="0" data-search="${_cardSearch([sr.id, sr.name])}" onclick="SlViewer.openSpec('${escAttr(sr.file)}')">
+        <span class="sl-method-badge" style="background:var(--c-srs)">SRS</span>
         <span class="sl-inf-id">${sr.id}</span>
         ${sr.name ? `<span class="sl-inf-name">${escAttr(sr.name)}</span>` : ''}
         <span class="sl-inf-path">${escAttr(meta)}</span>
@@ -390,10 +397,11 @@
   function renderSchCard(sch) {
     const infs = (sch.inf || []).join(', ');
     return `
-      <div class="sl-inf-card" role="button" tabindex="0" onclick="SlViewer.openSpec('${escAttr(sch.file)}')">
-        <span class="sl-method-badge" style="background:var(--status-done)">SCH</span>
+      <div class="sl-inf-card" role="button" tabindex="0" data-search="${_cardSearch([sch.id, sch.table, infs])}" onclick="SlViewer.openSpec('${escAttr(sch.file)}')">
+        <span class="sl-method-badge" style="background:var(--c-sch)">SCH</span>
         <span class="sl-inf-id">${sch.id}</span>
-        <span class="sl-inf-path">${escAttr(sch.table || '')}${infs ? ' · ' + escAttr(infs) : ''}</span>
+        <span class="sl-inf-name">${escAttr(sch.table || '')}</span>
+        <span class="sl-inf-path">${infs ? escAttr(infs) : ''}</span>
       </div>`;
   }
 
@@ -405,13 +413,15 @@
       DELETE: 'var(--method-delete)'
     };
     const bg = colors[inf.method] || '#555';
+    const schN = (inf.sch_ids || []).length;
     return `
-      <div class="sl-inf-card" role="button" tabindex="0" onclick="SlViewer.openSpec('${escAttr(inf.file)}')">
+      <div class="sl-inf-card" role="button" tabindex="0" data-search="${_cardSearch([inf.id, inf.name, inf.path, inf.method])}" onclick="SlViewer.openSpec('${escAttr(inf.file)}')">
         <span class="sl-method-badge" style="background:${bg}">${inf.method || '?'}</span>
         <span class="sl-inf-id">${inf.id}</span>
         ${inf.name ? `<span class="sl-inf-name">${escAttr(inf.name)}</span>` : ''}
         <span class="sl-inf-path">${inf.path || ''}</span>
-        ${inf.anchor_count ? `<span class="sl-anchor" title="JIT 소스앵커 ${inf.anchor_count}개 — 변경 시 실소스 회귀 가능">⚓${inf.anchor_count}</span>` : ''}
+        ${schN ? `<span class="sl-badge-tbl" title="연결 테이블 ${schN}">⛁${schN}</span>` : ''}
+        ${inf.anchor_count ? `<span class="sl-anchor" title="JIT 소스앵커 ${inf.anchor_count}개">⚓${inf.anchor_count}</span>` : ''}
       </div>`;
   }
 
@@ -421,7 +431,7 @@
       ? `<img src="${previewSrc}" alt="preview" onerror="this.parentNode.innerHTML='🖥️'">`
       : '🖥️';
     return `
-      <div class="sl-uis-card" role="button" tabindex="0" onclick="SlViewer.openSpec('${escAttr(ui.file)}')">
+      <div class="sl-uis-card" role="button" tabindex="0" data-search="${_cardSearch([ui.id, ui.name, ui.route])}" onclick="SlViewer.openSpec('${escAttr(ui.file)}')">
         <div class="sl-uis-preview">${preview}</div>
         <div class="sl-uis-info">
           <div class="sl-uis-id">${ui.id}${ui.anchor_count ? ` <span class="sl-anchor" title="JIT 소스앵커 ${ui.anchor_count}개">⚓${ui.anchor_count}</span>` : ''}</div>
@@ -737,6 +747,18 @@
       if (DASH_SORT.key === key) DASH_SORT.dir *= -1;
       else { DASH_SORT.key = key; DASH_SORT.dir = -1; }
       renderDashboard();
+    },
+    filterList(q) {
+      q = (q || '').trim().toLowerCase();
+      const cards = document.querySelectorAll('#sl-main .sl-inf-card, #sl-main .sl-uis-card');
+      let shown = 0;
+      cards.forEach(c => {
+        const hit = !q || (c.getAttribute('data-search') || '').includes(q);
+        c.style.display = hit ? '' : 'none';
+        if (hit) shown++;
+      });
+      const cnt = document.getElementById('sl-list-count');
+      if (cnt) cnt.textContent = q ? `${shown} / ${cards.length}` : `${cards.length}개`;
     },
     selectDomain(domain) {
       renderDomainView(domain, 'inf');
