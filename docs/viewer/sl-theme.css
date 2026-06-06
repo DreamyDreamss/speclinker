@@ -147,6 +147,7 @@ blockquote { border-left: 3px solid var(--border); color: var(--text-muted); pad
 .sl-rel-inf { color: var(--status-prog); border-color: var(--status-prog); background: rgba(88,166,255,.10); }
 .sl-rel-uis { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
 .sl-rel-func { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
+.sl-rel-srs { color: #a371f7; border-color: #a371f7; background: rgba(163,113,247,.10); }
 .content.has-relpanel { margin-right: 240px !important; }
 .has-relpanel #sl-quick-nav { display: none; }
 
