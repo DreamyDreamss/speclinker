@@ -385,12 +385,15 @@ def scan_funcs(spec_root: str) -> list:
     uis_re = re.compile(r'UIS-[A-Za-z]+-\d+(?:-T\d+)?')
     inf_re = re.compile(r'INF-[A-Za-z]+-\d+')
     sch_re = re.compile(r'SCH-[A-Za-z]+-\d+')
-    funcs = []
+    funcs, seen = [], set()
     for line in lines:
         fids = func_re.findall(line)
         if not fids:
             continue
         fid = fids[0]
+        if fid in seen:   # 색인 표 행이 먼저 → 이후 갭/요약 표의 중복 FUNC 행 무시
+            continue
+        seen.add(fid)
         parts = fid.split('-')
         domain = parts[1] if len(parts) >= 3 else ''
         name = ''

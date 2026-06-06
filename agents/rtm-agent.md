@@ -38,6 +38,9 @@ model: claude-opus-4-7
 > **목적:** screen-map.json + SRS + INF + DB 정보를 읽어  
 > 화면 → SRS-F → INF → DB 테이블 직결 매핑표를 작성한다.  
 > FUNC-ID 기준 매핑.
+>
+> **FUNC-ID 규약 (MUST)**: `FUNC-{도메인}-{NNN}` 의 {도메인}은 **funcs_index `domain` 값(디렉토리명, 소문자 예: `product`)**.
+> **domain-code(PRD)·대문자 금지** — rd-agent/srs-agent와 동일해야 SRS↔FUNC↔FUNC_MAP 링크가 연결된다. FUNC_v1.0.md의 기존 FUNC-ID를 그대로 재사용한다.
 
 ### R-1. 통합 인덱스 로드 (1차 입력)
 
