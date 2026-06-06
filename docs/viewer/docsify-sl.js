@@ -389,7 +389,7 @@
 
     main.innerHTML = `
       <div class="sl-domain-header">
-        <h3 style="color:var(--accent);margin:0 0 12px">${domain}</h3>
+        <h3 style="color:var(--accent);margin:0 0 12px">${domain}${d.overview ? ` <span class="sl-ov-link" role="button" tabindex="0" onclick="SlViewer.openSpec('${escAttr(d.overview)}')">📖 도메인 개요</span>` : ''}</h3>
         <div class="sl-tabs">${tabs}</div>
       </div>
       ${body}`;
