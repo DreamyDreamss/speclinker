@@ -830,7 +830,8 @@
     // 현재 문서 디렉토리 기준 경로로 변환 → 화면당 디렉토리/tabs 자산이 렌더된다.
     hook.beforeEach(function (content) {
       // frontmatter(--- ... ---) raw YAML 노출 방지 → 접이식 메타 블록(anchors 등 정보 보존)
-      content = content.replace(/^---\n([\s\S]*?)\n---\n?/, function (_, fm) {
+      // BOM(utf-8-sig)·CRLF 허용 (ddd-* 에이전트/PowerShell 산출 파일 대응)
+      content = content.replace(/^﻿?---\r?\n([\s\S]*?)\r?\n---[ \t]*\r?\n?/, function (_, fm) {
         var safe = String(fm).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         return '<details class="sl-fm"><summary>📋 메타데이터</summary><pre>' + safe + '</pre></details>\n\n';
       });

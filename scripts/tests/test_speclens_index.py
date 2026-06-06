@@ -103,6 +103,21 @@ def test_scan_funcs_from_funcmap():
     assert fn['name'] == '상품등록'
 
 
+def test_scan_funcs_dedup_gap_table():
+    """FUNC_MAP에 색인표 + 갭/요약표가 함께 있어도 FUNC-ID당 1건(색인표 우선)."""
+    tmp = tempfile.mkdtemp()
+    fdir = os.path.join(tmp, 'docs', '00_FUNC')
+    os.makedirs(fdir)
+    with open(os.path.join(fdir, 'FUNC_MAP.md'), 'w', encoding='utf-8') as f:
+        f.write("| UIS-ID | 화면명 | FUNC-ID | 호출 INF | 연관 SCH |\n|---|---|---|---|---|\n")
+        f.write("| UIS-PRD-001 | 상품등록 | FUNC-PRD-001 | INF-PRD-205 | SCH-PRD-009 |\n")
+        f.write("\n### 갭 목록\n| 갭 | 화면 | 비고 |\n|---|---|---|\n")
+        f.write("| GAP-001 | FUNC-PRD-001 (상품등록) | INF→SCH 미연결 |\n")
+    funcs = G.scan_funcs(tmp)
+    assert len(funcs) == 1, [f['id'] for f in funcs]
+    assert funcs[0]['name'] == '상품등록'   # 색인표 행 우선(갭표 아님)
+
+
 def test_scan_funcs_absent_graceful():
     tmp = tempfile.mkdtemp()
     os.makedirs(os.path.join(tmp, 'docs'))

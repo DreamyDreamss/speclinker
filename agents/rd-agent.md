@@ -76,11 +76,14 @@ generated: {오늘 날짜}
 > RECON 모드 — 소스 코드에서 도출된 구현 기능 목록.  
 > 요구사항 추상화 없음. **구현 사실 기록**.
 
+> **FUNC-ID 규약 (MUST)**: `FUNC-{도메인}-{NNN}` 의 {도메인}은 **funcs_index의 `domain` 값(디렉토리명, 소문자 예: `product`)**을 쓴다.
+> **domain-code(예: PRD)·대문자 사용 금지** — srs-agent/rtm-agent와 ID가 일치해야 SRS↔FUNC↔FUNC_MAP 링크가 연결된다.
+
 ## 기능 색인표
 
 | FUNC-ID | 기능명(화면) | 도메인 | INF 수 | DB 테이블 | SRS-F |
 |---------|------------|--------|--------|-----------|-------|
-| FUNC-ORDER-001 | Or701Form | ORDER | 3 | TB_ORD_MST | SRS-F-001 |
+| FUNC-product-001 | pr201Form 상품등록 | product | 3 | PRD_PRD_M | SRS-F-001 |
 
 ---
 
