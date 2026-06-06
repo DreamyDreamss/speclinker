@@ -308,10 +308,8 @@ anchors:
 
 ## 참조 테이블
 
-| 테이블 | SCH |
-|--------|-----|
-| TABLE_NAME_A | [TBD] |
-| TABLE_NAME_B | [TBD] |
+- `TABLE_NAME_A`
+- `TABLE_NAME_B`
 
 ## curl 예시
 
@@ -323,9 +321,10 @@ curl -X {METHOD} {path} \
 ```
 
 **`## 참조 테이블` 작성 규칙:**
-- Phase 1 Step 3~4에서 확인된 실제 테이블명만 기록한다. 추측·관례로 채우지 않는다.
-- `tables:` frontmatter와 `## 참조 테이블` 표는 동일한 테이블 목록을 가져야 한다.
-- SCH 컬럼은 `[TBD]`로 남긴다 — `link_inf_sch.py`가 SCH 생성 후 자동 교체한다.
+- Phase 1 Step 3~4에서 확인된 실제 테이블명만 **목록(`- TABLE`)**으로 기록한다. 추측·관례로 채우지 않는다.
+- `tables:` frontmatter와 `## 참조 테이블` 목록은 동일한 테이블 집합이어야 한다.
+- **SCH 링크 컬럼·`[TBD]` 금지** — SpecLens 뷰어가 본문의 테이블명을 SCH로 자동 크로스링크하고,
+  INF↔SCH 연결은 `tables:` frontmatter ↔ SCH `table:` 정방향 매칭으로 인덱싱된다(설명/링크 placeholder 불필요).
 - 테이블이 없는 엔드포인트(외부 API 프록시, 캐시 전용 등)는 섹션 자체를 생략한다.
 
 **`_tmp/{inf_id}_sch_required.json` 출력 (INF 파일 생성 직후):**
@@ -367,7 +366,7 @@ print('_tmp/INF-{NNN}_sch_required.json 저장')
 [ ] 응답 필드가 Controller → Service → DAO → 쿼리/스키마 체인에서 실제로 확인된 필드인가?
     → 추측·관례·프레임워크 기본값으로 채운 필드는 금지
 [ ] nullable 여부가 코드/쿼리에서 확인됐는가? (LEFT JOIN, Optional, CASE WHEN 등)
-[ ] Phase 1 Step 3~4에서 확인된 테이블명이 `tables:` frontmatter와 `## 참조 테이블` 표에 기록됐는가?
+[ ] Phase 1 Step 3~4에서 확인된 테이블명이 `tables:` frontmatter와 `## 참조 테이블` 목록(`- TABLE`)에 기록됐는가? (SCH 컬럼·[TBD] 금지)
     → 테이블이 있는 엔드포인트에서 두 곳 모두 비어있으면 재확인
 [ ] 테이블이 있는 INF마다 `_tmp/INF-{NNN}_sch_required.json`이 생성됐는가?
 [ ] 서비스에서 DAO 직접 호출 없이 다른 서비스로 위임하는 패턴이 있는가?
