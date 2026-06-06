@@ -120,7 +120,6 @@ DOM 스냅샷의 `onclick`이 비어 있으면(jQuery/JSX 바인딩) **id로 동
 라우트: {route}
 도메인: {domain}
 UIS-ID: UIS-{CODE}-{NNN}
-req-f: [TBD]
 screens_role: {주화면 | 팝업 | 출력}
 api_hints:                      # ← raw 경로(관측). link_uis_inf가 INF-ID로 매핑
   - "POST /product/prdreg/productList"

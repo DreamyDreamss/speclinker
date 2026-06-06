@@ -241,7 +241,6 @@ method: {GET|POST|PUT|DELETE}
 path: {/api/path}
 domain: {도메인}
 domain-code: {CODE}
-req-f: {FUNC-DOMAIN-NNN | [TBD]}
 srs-f: {SRS-F-NNN | [TBD]}
 screens: []
 tables:
@@ -254,6 +253,8 @@ anchors:
 ---
 
 # INF-{CODE}-{NNN}: {METHOD} {path} — {기능명}
+
+> **개요:** {이 API가 업무적으로 무엇을 하는지 1줄 — 비개발자도 이해 가능하게}
 
 > **근거 소스:** `{controller경로}:{라인번호 범위}`
 
@@ -357,7 +358,7 @@ print('_tmp/INF-{NNN}_sch_required.json 저장')
 [ ] 각 파일의 INF 번호가 파일별 배정 범위 안에서 순번으로 부여됐는가?
 [ ] 파일 간 INF 번호가 겹치지 않는가?
 [ ] 각 INF 파일에 요청 파라미터 표, 응답 예시, 오류 표, curl 예시가 있는가?
-[ ] req-f가 FUNC-ID 또는 [TBD]인가? (REQ-F 형식 금지)
+[ ] H1 아래 `> **개요:**` 1줄(업무 관점)이 있는가?
 [ ] 근거 소스에 파일경로:라인번호가 명시됐는가?
 [ ] 응답 페이로드(data, body, result 등)가 빈 {} 또는 미기술 상태인 INF가 있는가?
     → 있으면 Step 2~4를 재실행하여 실제 필드를 도출 후 재작성. 끝까지 추적해도 정적으로 알 수 없을 때만 "(동적 — 런타임 결정)" 허용

@@ -59,8 +59,7 @@ build_funcs_index.py — RECON 모드 Phase-C 진입 직전에 실행되는 통�
         ],
         "srs":         ["SRS-F-001"],
         "dbTables":    ["users", "sessions"],
-        "rules":       ["..."],
-        "reqF":        "[TBD]"
+        "rules":       ["..."]
       },
       ...
     ],
@@ -362,7 +361,6 @@ def main():
                 'srs':        srs_ids,
                 'dbTables':   db_tables,
                 'rules':      rules,
-                'reqF':       fm.get('req-f') or '[TBD]',
             }
             funcs.append(func_entry)
             domain_func_counts[domain] += 1

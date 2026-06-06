@@ -83,7 +83,6 @@ def collect_inf(domain):
         inf_id = fm.get('inf-id') or fname.replace('.md', '')
         method = fm.get('method', '?')
         path = fm.get('path', '?')
-        req_f = fm.get('req-f', '[TBD]')
         title = first_h1_after_frontmatter(fp) or f'{method} {path}'
         # H1에서 — 뒤의 기능명만 추출
         m = re.search(r'—\s*(.+?)\s*$', title)
@@ -93,7 +92,6 @@ def collect_inf(domain):
             'method': method,
             'path': path,
             'feature': feature_name,
-            'req_f': req_f,
             'rel_path': f'./{domain}/INF/{fname}',
         })
     return rows
@@ -154,11 +152,9 @@ def collect_uis(domain):
         if not uis_id:
             continue
         screen_name = fm.get('화면명') or fm.get('screen-name') or screen_dir
-        req_f = fm.get('req-f') or '[TBD]'
         rows.append({
             'id': uis_id,
             'name': screen_name,
-            'req_f': req_f,
             'rel_path': f'./{domain}/{ui_dirname}/{screen_dir}/spec.md',
         })
     return rows
@@ -185,12 +181,12 @@ def generate_api_design(project_name, domains, all_inf):
         '',
         '## INF 색인',
         '',
-        '| INF-ID | 엔드포인트·기능명 | FUNC-ID |',
-        '|--------|-----------------|------------------|',
+        '| INF-ID | 엔드포인트·기능명 |',
+        '|--------|-----------------|',
     ]
     for inf in all_inf:
         title = f'{inf["method"]} {inf["path"]} — {inf["feature"]}'
-        lines.append(f'| {inf["id"]} | [{title}]({inf["rel_path"]}) | {inf["req_f"]} |')
+        lines.append(f'| {inf["id"]} | [{title}]({inf["rel_path"]}) |')
 
     lines += ['', '## 도메인별 파일 목록', '', domain_files_table(domains), '']
     return '\n'.join(lines)
@@ -223,11 +219,11 @@ def generate_ui_spec(project_name, domains, all_uis):
         '',
         '## 화면 색인',
         '',
-        '| UIS-ID | 화면명 | FUNC-ID |',
-        '|--------|--------|------------------|',
+        '| UIS-ID | 화면명 |',
+        '|--------|--------|',
     ]
     for u in all_uis:
-        lines.append(f'| {u["id"]} | [{u["name"]}]({u["rel_path"]}) | {u["req_f"]} |')
+        lines.append(f'| {u["id"]} | [{u["name"]}]({u["rel_path"]}) |')
 
     lines += ['', '## 도메인별 파일 목록', '', domain_files_table(domains), '']
     return '\n'.join(lines)

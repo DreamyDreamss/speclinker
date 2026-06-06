@@ -470,16 +470,37 @@
   }
 
   // ── 크로스링크 ────────────────────────────────────────────────
+  // 테이블명 → SCH 매핑 (INF 본문의 테이블 코드를 SCH로 점프)
+  let _tableMap = null, _tableRe = null;
+  function _buildTableLinker() {
+    if (_tableMap) return;
+    _tableMap = {};
+    (INDEX && INDEX.schs || []).forEach(s => { if (s.table) _tableMap[s.table] = s.id; });
+    const names = Object.keys(_tableMap)
+      .filter(n => n.length >= 3)
+      .sort((a, b) => b.length - a.length)
+      .map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    _tableRe = names.length ? new RegExp('\\b(' + names.join('|') + ')\\b', 'g') : null;
+  }
+
   function addCrosslinks() {
     const section = document.querySelector('.markdown-section');
     if (!section) return;
+    _buildTableLinker();
     const pattern = /\b(INF-[A-Z]+-\d+|UIS-[A-Z]+-\d+(?:-T\d+)?|SCH-[A-Z]+-\d+|FUNC-[A-Za-z]+-\d+)\b/g;
     section.querySelectorAll('p, li, td').forEach(el => {
       if (el.querySelector('a, code, .sl-xlink')) return;
       const orig = el.innerHTML;
-      const replaced = orig.replace(pattern, m =>
+      let replaced = orig.replace(pattern, m =>
         `<span class="sl-xlink" onclick="SlViewer.goToId('${escAttr(m)}')" title="${escAttr(m)}로 이동">${m}</span>`
       );
+      // 테이블명 → SCH (ID 치환 후. 테이블명은 ID 스팬 내부에 나타나지 않아 안전)
+      if (_tableRe) {
+        replaced = replaced.replace(_tableRe, m => {
+          const sid = _tableMap[m];
+          return sid ? `<span class="sl-xlink sl-xlink-tbl" onclick="SlViewer.goToId('${escAttr(sid)}')" title="${escAttr(sid)} (${escAttr(m)})로 이동">${m}</span>` : m;
+        });
+      }
       if (replaced !== orig) el.innerHTML = replaced;
     });
   }
@@ -769,6 +790,11 @@
     // 이미지 경로 재작성: spec.md 안의 ![[x]](Obsidian) 및 상대 ![](x) 를
     // 현재 문서 디렉토리 기준 경로로 변환 → 화면당 디렉토리/tabs 자산이 렌더된다.
     hook.beforeEach(function (content) {
+      // frontmatter(--- ... ---) raw YAML 노출 방지 → 접이식 메타 블록(anchors 등 정보 보존)
+      content = content.replace(/^---\n([\s\S]*?)\n---\n?/, function (_, fm) {
+        var safe = String(fm).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        return '<details class="sl-fm"><summary>📋 메타데이터</summary><pre>' + safe + '</pre></details>\n\n';
+      });
       var file = (vm && vm.route && vm.route.file) || '';
       var dir = file.replace(/[^/]*$/, '');   // 파일명 제거 → 문서 디렉토리(루트 기준)
       if (!dir) return content;
