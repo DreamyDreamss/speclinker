@@ -87,7 +87,7 @@ generated: {오늘 날짜}
 ## FUNC-{도메인}-{NNN}: {화면ID}
 
 - **도메인**: {도메인}
-- **화면**: [{화면ID}](../05_설계서/{도메인}/UI/{화면ID}/spec.md)
+- **화면**: [{화면ID}](../05_설계서/{도메인}/UIS/{화면ID}/spec.md)
 - **URL**: {url}
 - **핵심 API**:
   - {method path [INF-XXX]}

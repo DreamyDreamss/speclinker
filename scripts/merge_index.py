@@ -135,9 +135,14 @@ def collect_sch(domain):
 
 
 def collect_uis(domain):
-    """도메인의 UI/ 디렉토리에서 spec.md 항목 수집"""
-    ui_dir = os.path.join(DOCS, domain, 'UI')
-    if not os.path.isdir(ui_dir):
+    """도메인의 화면 디렉토리에서 spec.md 항목 수집 (현행 'UIS' 우선, 구버전 'UI' 하위호환)"""
+    ui_dir, ui_dirname = None, None
+    for cand in ('UIS', 'UI'):
+        p = os.path.join(DOCS, domain, cand)
+        if os.path.isdir(p):
+            ui_dir, ui_dirname = p, cand
+            break
+    if not ui_dir:
         return []
     rows = []
     for screen_dir in sorted(os.listdir(ui_dir)):
@@ -154,7 +159,7 @@ def collect_uis(domain):
             'id': uis_id,
             'name': screen_name,
             'req_f': req_f,
-            'rel_path': f'./{domain}/UI/{screen_dir}/spec.md',
+            'rel_path': f'./{domain}/{ui_dirname}/{screen_dir}/spec.md',
         })
     return rows
 
@@ -167,7 +172,7 @@ def domain_files_table(domains):
         dn = d['name']
         api_p = f'./{dn}/API_{dn}.md'
         db_p = f'./{dn}/DB_{dn}.md'
-        ui_p = f'./{dn}/UI/_TOC.md'
+        ui_p = f'./{dn}/UIS/_TOC.md'
         out.append(f'| {dn} | [API_{dn}.md]({api_p}) | [DB_{dn}.md]({db_p}) | [_TOC.md]({ui_p}) |')
     return '\n'.join(out)
 

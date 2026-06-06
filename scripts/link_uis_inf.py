@@ -10,7 +10,7 @@ LLM 재호출 없이 스크립트로 처리 — 토큰 절약.
 입력:
   - _tmp/{화면ID}_inf_required.json  (ddd-ui-agent가 출력)
   - docs/05_설계서/{domain}/INF/INF-*.md (생성된 INF 파일들)
-  - docs/05_설계서/{domain}/UI/{화면ID}/spec.md (패치 대상)
+  - docs/05_설계서/{domain}/UIS/{화면ID}/spec.md (패치 대상)
 
 출력:
   - spec.md §5 내 URL → [INF-NNN](../../INF/INF-NNN.md) 교체
