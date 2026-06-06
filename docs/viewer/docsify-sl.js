@@ -29,7 +29,15 @@
       if (!res.ok) throw new Error('HTTP ' + res.status);
       INDEX = await res.json();
       renderSidebar();
-      renderDashboard();
+      // 직접 문서 URL(#/docs/...)로 진입한 경우엔 대시보드로 덮어쓰지 않고 그 문서를 보여준다.
+      const hash = window.location.hash || '';
+      const isDocRoute = /#\/.+\.md|#\/docs\//.test(hash) || resolveCurrentEntity();
+      if (isDocRoute) {
+        document.body.classList.remove('sl-custom-view');
+        setTimeout(function () { injectBreadcrumb(); injectRelationPanel(); addCrosslinks(); enhanceImages(); }, 100);
+      } else {
+        renderDashboard();
+      }
     } catch (e) {
       renderSidebar();  // 인덱스 없어도 사이드바(가이드 버튼)는 표시
       document.getElementById('sl-main').innerHTML =
@@ -86,8 +94,8 @@
     return entries.map(([name, info]) =>
       `<div class="sl-domain-item ${ACTIVE_DOMAIN === name ? 'active' : ''}" role="button" tabindex="0"
             onclick="SlViewer.selectDomain('${escAttr(name)}')">
-        <span style="flex:1">${name}</span>
-        <span style="font-size:11px;color:var(--text-muted)">${info.inf || 0}</span>
+        <span class="sl-di-name">${name}</span>
+        <span class="sl-di-counts"><span style="color:var(--c-inf)">⬡${info.inf || 0}</span> <span style="color:var(--c-uis)">▭${info.uis || 0}</span> <span style="color:var(--c-sch)">⛁${info.sch || 0}</span></span>
       </div>`
     ).join('');
   }
