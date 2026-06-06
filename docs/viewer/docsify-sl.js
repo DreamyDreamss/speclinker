@@ -473,7 +473,7 @@
   function addCrosslinks() {
     const section = document.querySelector('.markdown-section');
     if (!section) return;
-    const pattern = /\b(INF-[A-Z]+-\d+|UIS-F-\d+|SCH-[A-Z]+-\d+|FUNC-[a-z]+-\d+)\b/g;
+    const pattern = /\b(INF-[A-Z]+-\d+|UIS-[A-Z]+-\d+(?:-T\d+)?|SCH-[A-Z]+-\d+|FUNC-[A-Za-z]+-\d+)\b/g;
     section.querySelectorAll('p, li, td').forEach(el => {
       if (el.querySelector('a, code, .sl-xlink')) return;
       const orig = el.innerHTML;
@@ -488,10 +488,10 @@
   function resolveCurrentEntity() {
     if (!INDEX) return null;
     const hash = decodeURIComponent(window.location.hash || '');
-    const m = hash.match(/(INF-[A-Z]+-\d+|UIS-[A-Z]+-\d+(?:-T\d+)?|SCH-[A-Z]+-\d+|BAT-[A-Z]+-\d+)/);
+    const m = hash.match(/(INF-[A-Z]+-\d+|UIS-[A-Z]+-\d+(?:-T\d+)?|SCH-[A-Z]+-\d+|BAT-[A-Z]+-\d+|FUNC-[A-Za-z]+-\d+)/);
     if (!m) return null;
     const id = m[1];
-    const pools = [['inf', INDEX.infs], ['uis', INDEX.uis], ['sch', INDEX.schs]];
+    const pools = [['inf', INDEX.infs], ['uis', INDEX.uis], ['sch', INDEX.schs], ['func', INDEX.funcs]];
     for (const [type, pool] of pools) {
       const hit = (pool || []).find(x => x.id === id || id.startsWith(x.id));
       if (hit) return { type, id: hit.id, domain: hit.domain, name: hit.name, entity: hit };
@@ -649,7 +649,9 @@
       const sch = INDEX.schs && INDEX.schs.find(s => s.id === id);
       if (sch) { this.openSpec(sch.file); return; }
       const ui = INDEX.uis && INDEX.uis.find(u => u.id === id);
-      if (ui) this.openSpec(ui.file);
+      if (ui) { this.openSpec(ui.file); return; }
+      const fn = INDEX.funcs && INDEX.funcs.find(f => f.id === id);
+      if (fn) this.openSpec(fn.file);
     },
   };
 
