@@ -119,7 +119,7 @@
 | 9-2 | FUNC 생성 | `rd-agent` (sonnet) | `docs/00_FUNC/FUNC_v1.0.md` (+ domains/) |
 | 9-3 | SRS 생성 | `srs-agent` (sonnet) | `docs/03_기능명세서/SRS_v1.0.md` (+ domains/) |
 | 9-4 | FUNC_MAP 생성 | `rtm-agent` (**opus**) | `docs/00_FUNC/FUNC_MAP.md`, `linked-func-cache.json` |
-| 10 | IA 맵 생성 | `/sl-ia` (별도 커맨드) | `docs/06_IA/IA_MAP.md` |
+| 10 | IA 맵 생성 | `/sl-ia` (별도 커맨드) | `docs/00_IA/IA_MAP.md` |
 | 11 | si-graph 갱신 확인 | 인라인 | checkpoint(phase=recon-complete) |
 
 ---

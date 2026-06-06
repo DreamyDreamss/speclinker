@@ -19,15 +19,16 @@ UIS `spec.md`의 `menu-path:` 필드를 일괄 보완한다.
 
 ```bash
 !python -c "
-import os, sys
+import sys, glob
 try: sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 except: pass
-uis_root = 'docs/05_설계서/UIS'
-if not os.path.isdir(uis_root):
-    print('[FAIL] docs/05_설계서/UIS/ 없음 → /sl-recon-uis 먼저 실행')
+# 현행 도메인중첩 {도메인}/UIS/{화면}/spec.md + 구버전 top-level UIS/ + 레거시 UI/ 폴백
+specs = (glob.glob('docs/05_설계서/*/UIS/*/spec.md') + glob.glob('docs/05_설계서/UIS/*/spec.md')
+         + glob.glob('docs/05_설계서/*/UI/*/spec.md'))
+if not specs:
+    print('[FAIL] UIS spec.md 없음 (docs/05_설계서/{도메인}/UIS/ 또는 docs/05_설계서/UIS/) → /sl-recon-uis 먼저 실행')
     sys.exit(1)
-count = sum(1 for e in os.listdir(uis_root) if os.path.isfile(os.path.join(uis_root, e, 'spec.md')))
-print(f'[OK] UIS spec.md {count}개 발견')
+print(f'[OK] UIS spec.md {len(set(specs))}개 발견')
 "
 ```
 
@@ -54,7 +55,7 @@ print(f'[OK] UIS spec.md {count}개 발견')
 
 ## STEP 2 — UIS spec.md menu-path 업데이트
 
-`docs/05_설계서/UIS/` 하위 모든 `spec.md`를 순서대로 처리:
+화면 `spec.md` 전체(`docs/05_설계서/{도메인}/UIS/*/spec.md` + top-level `docs/05_설계서/UIS/*/spec.md`)를 순서대로 처리:
 
 1. `라우트:` frontmatter 값 읽기
 2. STEP 1 dict에서 해당 경로의 menu-path 조회
@@ -69,7 +70,7 @@ print(f'[OK] UIS spec.md {count}개 발견')
 
 ```bash
 !python -c "
-import os, sys, re
+import os, sys, re, glob
 try: sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 except: pass
 
@@ -99,15 +100,17 @@ def simple_parse(block, key):
             if k.strip() == key: return v.strip()
     return ''
 
-uis_root = 'docs/05_설계서/UIS'
-if not os.path.isdir(uis_root):
-    print('[FAIL] docs/05_설계서/UIS/ 없음')
+# 현행 도메인중첩 + 구버전 top-level + 레거시 UI 폴백
+specs = sorted(set(glob.glob('docs/05_설계서/*/UIS/*/spec.md')
+                   + glob.glob('docs/05_설계서/UIS/*/spec.md')
+                   + glob.glob('docs/05_설계서/*/UI/*/spec.md')))
+if not specs:
+    print('[FAIL] UIS spec.md 없음')
     sys.exit(1)
 
 rows = []
-for entry in sorted(os.listdir(uis_root)):
-    spec = os.path.join(uis_root, entry, 'spec.md')
-    if not os.path.isfile(spec): continue
+for spec in specs:
+    entry = os.path.basename(os.path.dirname(spec))
     with open(spec, encoding='utf-8', errors='replace') as f:
         c = f.read()
     fb = get_fm(c)
@@ -115,7 +118,7 @@ for entry in sorted(os.listdir(uis_root)):
     name = simple_parse(fb, '화면명') or '-'
     route = simple_parse(fb, '라우트') or '-'
     mp = extract_list(fb, 'menu-path')
-    apis = extract_list(fb, 'apis')
+    apis = extract_list(fb, 'apis') or extract_list(fb, 'api_hints')
     menu_str = ' > '.join(mp) if mp and mp[0] != '[TBD]' else '[미분류]'
     api_str = ', '.join(apis[:3]) + ('...' if len(apis) > 3 else '') if apis else '-'
     rows.append(f'| {menu_str} | {uis_id} | {name} | {api_str} | {route} |')

@@ -212,7 +212,7 @@ else:
 ## STEP 10 — IA 맵 생성 (별도 커맨드)
 
 화면 계층(IA) 맵은 현행 **`/sl-ia`** 커맨드가 담당한다 — UIS `menu-path` + 화면↔INF 연결로
-`docs/06_IA/IA_MAP.md`를 생성하고 UIS `menu-path`를 일괄 보완한다.
+`docs/00_IA/IA_MAP.md`를 생성하고 UIS `menu-path`를 일괄 보완한다.
 (SpecLens 뷰어의 [IA 트리]도 `gen_docsify.py`가 UIS `menu-path`로 만든 `spec_index.json`의 `ia_tree`를 그대로 보여준다.)
 
 ```bash
@@ -252,7 +252,7 @@ else:
 - docs/03_기능명세서/domains/SRS_{도메인}.md × N개
 
 [IA 맵]
-- /sl-ia 로 docs/06_IA/IA_MAP.md 생성 (선택) — SpecLens 뷰어 [IA 트리]에서도 확인 가능
+- /sl-ia 로 docs/00_IA/IA_MAP.md 생성 (선택) — SpecLens 뷰어 [IA 트리]에서도 확인 가능
 
 다음 단계: /sl-ia (IA 맵, 선택) → /sl-viewer (SpecLens 확인) → /sl-aidd (코드 구현·수정 필요 시) 또는 납품
 ```
