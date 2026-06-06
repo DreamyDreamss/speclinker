@@ -117,7 +117,7 @@
 | 9-1 | 전체 색인 3종 | `merge_index.py` | `API_Design.md`, `DB_Schema.md`, `UI_Spec_v1.0.md` |
 | 9-5 | 도메인 SOP 개요(사람 레이어) | `build_domain_overview.py` | `{도메인}/OVERVIEW_{도메인}.md` (기계인덱스와 분리) |
 | 9-2 | FUNC 생성 | `rd-agent` (sonnet) | `docs/00_FUNC/FUNC_v1.0.md` (+ domains/) |
-| 9-3 | SRS 생성 | `srs-agent` (sonnet) | `docs/03_기능명세서/SRS_v1.0.md` (+ domains/) |
+| 9-3 | SRS 생성(합성형 — 업무서사+규칙종합) | `srs-agent` (sonnet) | `docs/03_기능명세서/SRS_v1.0.md` (+ domains/) |
 | 9-4 | FUNC_MAP 생성 | `rtm-agent` (**opus**) | `docs/00_FUNC/FUNC_MAP.md`, `linked-func-cache.json` |
 | 10 | IA 맵 생성 | `/sl-ia` (별도 커맨드) | `docs/00_IA/IA_MAP.md` |
 | 11 | 완료 안내 | 인라인 | checkpoint(phase=recon-complete) |
