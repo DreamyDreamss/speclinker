@@ -174,6 +174,7 @@
     removeQuickNav();
     removeRelationPanel();
     document.getElementById('sl-breadcrumb')?.remove();
+    document.body.classList.add('sl-custom-view');
     ACTIVE_DOMAIN = null;
     renderSidebar();
 
@@ -250,6 +251,7 @@
     removeQuickNav();
     removeRelationPanel();
     document.getElementById('sl-breadcrumb')?.remove();
+    document.body.classList.add('sl-custom-view');
     ACTIVE_DOMAIN = null;
     renderSidebar();
 
@@ -352,6 +354,7 @@
     removeQuickNav();
     removeRelationPanel();
     document.getElementById('sl-breadcrumb')?.remove();
+    document.body.classList.add('sl-custom-view');
     renderSidebar();
 
     const d = INDEX.domains[domain] || {};
@@ -835,16 +838,11 @@
         var safe = String(fm).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         return '<details class="sl-fm"><summary>📋 메타데이터</summary><pre>' + safe + '</pre></details>\n\n';
       });
-      var file = (vm && vm.route && vm.route.file) || '';
-      var dir = file.replace(/[^/]*$/, '');   // 파일명 제거 → 문서 디렉토리(루트 기준)
-      if (!dir) return content;
-      // ![[file.png]] → ![](dir/file.png)
+      // Obsidian 임베드 ![[file.png]] → 표준 상대 ![](file.png). 경로는 prepend하지 않는다.
+      // docsify가 상대 이미지 경로를 현재 문서 디렉토리 기준으로 해석하므로,
+      // 여기서 디렉토리를 붙이면 docsify가 한 번 더 붙여 경로가 중복(.../dir/.../dir/x)된다.
       content = content.replace(/!\[\[([^\]]+)\]\]/g, function (_, p) {
-        return '![](' + dir + p.trim() + ')';
-      });
-      // 상대 ![](x) (http/절대 제외) → ![](dir/x)
-      content = content.replace(/!\[([^\]]*)\]\((?!https?:|\/|data:)([^)]+)\)/g, function (_, alt, src) {
-        return '![' + alt + '](' + dir + src.trim() + ')';
+        return '![](' + p.trim() + ')';
       });
       return content;
     });
@@ -866,16 +864,16 @@
     });
 
     hook.doneEach(function () {
-      const hash = window.location.hash || '';
-      if (hash.includes('/INF-') || hash.includes('/spec') || hash.includes('/UIS-') || hash.includes('/SCH-') || hash.includes('/BAT-') || hash.includes('/FUNC-')) {
-        setTimeout(function () {
-          injectBreadcrumb();
-          injectRelationPanel();
-          injectQuickNav();
-          addCrosslinks();
-          enhanceImages();
-        }, 150);
-      }
+      // 문서(.content)가 렌더됨 → 커스텀뷰(목록) 해제하여 문서가 화면을 차지하게 한다
+      document.body.classList.remove('sl-custom-view');
+      // 모든 마크다운 문서에 크로스링크·강조 적용 (FUNC_MAP/SRS/FUNC_v1.0 등 색인문서 포함)
+      setTimeout(function () {
+        injectBreadcrumb();
+        injectRelationPanel();
+        injectQuickNav();
+        addCrosslinks();
+        enhanceImages();
+      }, 150);
     });
   }
 
