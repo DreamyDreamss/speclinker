@@ -355,10 +355,14 @@
     renderSidebar();
 
     const d = INDEX.domains[domain] || {};
-    const tabKeys = ['inf', 'uis', 'sch'].concat((d.bat || 0) > 0 ? ['bat'] : []);
+    const tabKeys = ['inf', 'uis', 'sch']
+      .concat((d.bat || 0) > 0 ? ['bat'] : [])
+      .concat((d.srs_count || 0) > 0 ? ['srs'] : []);
+    const tabCount = (t) => t === 'srs' ? (d.srs_count || 0) : (d[t] || 0);
+    const tabLabel = (t) => t === 'srs' ? '기능명세' : t.toUpperCase();
     const tabs = tabKeys.map(t =>
       `<div class="sl-tab ${ACTIVE_TAB === t ? 'active' : ''}" role="button" tabindex="0"
-            onclick="SlViewer.selectTab('${t}')">${t.toUpperCase()} ${d[t] || 0}</div>`
+            onclick="SlViewer.selectTab('${t}')">${tabLabel(t)} ${tabCount(t)}</div>`
     ).join('');
 
     let body = '';
@@ -383,6 +387,13 @@
           ? schs.map(renderSchCard).join('')
           : '<div style="padding:16px;color:var(--text-muted)">SCH 파일 없음</div>'
       }</div>`;
+    } else if (ACTIVE_TAB === 'srs') {
+      const srs = (INDEX.srs || []).filter(s => s.domain === domain);
+      body = `<div class="sl-inf-list">${
+        srs.length > 0
+          ? srs.map(renderSrsCard).join('')
+          : '<div style="padding:16px;color:var(--text-muted)">SRS 없음</div>'
+      }</div>`;
     } else {
       body = `<div style="padding:24px;color:var(--text-muted)">BAT 산출물 없음</div>`;
     }
@@ -393,6 +404,18 @@
         <div class="sl-tabs">${tabs}</div>
       </div>
       ${body}`;
+  }
+
+  function renderSrsCard(sr) {
+    const meta = [sr.uis && sr.uis.length ? '화면 ' + sr.uis.length : '', sr.inf && sr.inf.length ? 'API ' + sr.inf.length : '']
+      .filter(Boolean).join(' · ');
+    return `
+      <div class="sl-inf-card" role="button" tabindex="0" onclick="SlViewer.openSpec('${escAttr(sr.file)}')">
+        <span class="sl-method-badge" style="background:#a371f7">SRS</span>
+        <span class="sl-inf-id">${sr.id}</span>
+        ${sr.name ? `<span class="sl-inf-name">${escAttr(sr.name)}</span>` : ''}
+        <span class="sl-inf-path">${escAttr(meta)}</span>
+      </div>`;
   }
 
   function renderSchCard(sch) {
@@ -487,7 +510,7 @@
     const section = document.querySelector('.markdown-section');
     if (!section) return;
     _buildTableLinker();
-    const pattern = /\b(INF-[A-Z]+-\d+|UIS-[A-Z]+-\d+(?:-T\d+)?|SCH-[A-Z]+-\d+|FUNC-[A-Za-z]+-\d+)\b/g;
+    const pattern = /\b(INF-[A-Z]+-\d+|UIS-[A-Z]+-\d+(?:-T\d+)?|SCH-[A-Z]+-\d+|FUNC-[A-Za-z]+-\d+|SRS-F-\d+)\b/g;
     section.querySelectorAll('p, li, td').forEach(el => {
       if (el.querySelector('a, code, .sl-xlink')) return;
       const orig = el.innerHTML;
@@ -509,10 +532,10 @@
   function resolveCurrentEntity() {
     if (!INDEX) return null;
     const hash = decodeURIComponent(window.location.hash || '');
-    const m = hash.match(/(INF-[A-Z]+-\d+|UIS-[A-Z]+-\d+(?:-T\d+)?|SCH-[A-Z]+-\d+|BAT-[A-Z]+-\d+|FUNC-[A-Za-z]+-\d+)/);
+    const m = hash.match(/(INF-[A-Z]+-\d+|UIS-[A-Z]+-\d+(?:-T\d+)?|SCH-[A-Z]+-\d+|BAT-[A-Z]+-\d+|FUNC-[A-Za-z]+-\d+|SRS-F-\d+)/);
     if (!m) return null;
     const id = m[1];
-    const pools = [['inf', INDEX.infs], ['uis', INDEX.uis], ['sch', INDEX.schs], ['func', INDEX.funcs]];
+    const pools = [['inf', INDEX.infs], ['uis', INDEX.uis], ['sch', INDEX.schs], ['func', INDEX.funcs], ['srs', INDEX.srs]];
     for (const [type, pool] of pools) {
       const hit = (pool || []).find(x => x.id === id || id.startsWith(x.id));
       if (hit) return { type, id: hit.id, domain: hit.domain, name: hit.name, entity: hit };
@@ -573,6 +596,14 @@
     } else if (e.type === 'sch') {
       const infIds = en.inf || [];
       sections += relSection('참조 API (' + infIds.length + ')', infIds.map(i => chip(i, i, 'inf')).join(''));
+    } else if (e.type === 'srs') {
+      sections += relSection('화면 (' + (en.uis || []).length + ')', (en.uis || []).map(u => chip(u, u, 'uis')).join(''));
+      sections += relSection('호출 API (' + (en.inf || []).length + ')', (en.inf || []).map(i => chip(i, i, 'inf')).join(''));
+    }
+    // UIS 상세: 이 화면을 다루는 기능명세(SRS)
+    if (e.type === 'uis') {
+      const relSrs = (INDEX.srs || []).filter(s => (s.uis || []).includes(en.id));
+      if (relSrs.length) sections += relSection('기능명세 (' + relSrs.length + ')', relSrs.map(s => chip(s.id, s.id, 'srs')).join(''));
     }
     if (en.func) sections += relSection('linked FUNC', chip(en.func, en.func, 'func'));
     if (!sections) return;
@@ -607,6 +638,10 @@
     if (sch) { (sch.inf || []).forEach(i => push(i, 'inf')); if (sch.func) push(sch.func, 'func'); }
     const fn = (INDEX.funcs || []).find(f => f.id === id);
     if (fn) { (fn.uis || []).forEach(u => push(u, 'uis')); (fn.inf || []).forEach(i => push(i, 'inf')); (fn.sch || []).forEach(s => push(s, 'sch')); }
+    const sr = (INDEX.srs || []).find(s => s.id === id);
+    if (sr) { (sr.uis || []).forEach(u => push(u, 'uis')); (sr.inf || []).forEach(i => push(i, 'inf')); if (sr.func) push(sr.func, 'func'); }
+    // 역방향: 이 화면을 use-case로 다루는 SRS
+    if (uis) (INDEX.srs || []).filter(s => (s.uis || []).includes(id)).forEach(s => push(s.id, 'srs'));
     return out;
   }
 
@@ -615,11 +650,12 @@
     if (/^INF-/.test(id)) return 'inf';
     if (/^SCH-/.test(id)) return 'sch';
     if (/^FUNC-/i.test(id)) return 'func';
+    if (/^SRS-/.test(id)) return 'srs';
     return 'x';
   }
 
   function _graphLabel(id) {
-    const pools = [INDEX.uis, INDEX.infs, INDEX.schs, INDEX.funcs];
+    const pools = [INDEX.uis, INDEX.infs, INDEX.schs, INDEX.funcs, INDEX.srs];
     for (const p of pools) {
       const hit = (p || []).find(x => x.id === id);
       if (hit) { const nm = hit.name || hit.table || ''; return nm ? id + '\\n' + nm : id; }
@@ -657,6 +693,7 @@
     lines.push('classDef inf fill:#10243b,stroke:#58a6ff,color:#58a6ff;');
     lines.push('classDef sch fill:#0f2a16,stroke:#3fb950,color:#3fb950;');
     lines.push('classDef func fill:#2b2410,stroke:#d4a574,color:#d4a574;');
+    lines.push('classDef srs fill:#1b1030,stroke:#a371f7,color:#a371f7;');
     return { def: lines.join('\n'), count: seen.size };
   }
 
@@ -781,7 +818,9 @@
       const ui = INDEX.uis && INDEX.uis.find(u => u.id === id);
       if (ui) { this.openSpec(ui.file); return; }
       const fn = INDEX.funcs && INDEX.funcs.find(f => f.id === id);
-      if (fn) this.openSpec(fn.file);
+      if (fn) { this.openSpec(fn.file); return; }
+      const sr = INDEX.srs && INDEX.srs.find(s => s.id === id);
+      if (sr) this.openSpec(sr.file);
     },
   };
 

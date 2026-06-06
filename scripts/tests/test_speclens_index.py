@@ -109,6 +109,29 @@ def test_scan_funcs_absent_graceful():
     assert G.scan_funcs(tmp) == []
 
 
+def test_scan_srs_from_index_table():
+    tmp = tempfile.mkdtemp()
+    sdir = os.path.join(tmp, 'docs', '03_기능명세서')
+    os.makedirs(sdir)
+    with open(os.path.join(sdir, 'SRS_v1.0.md'), 'w', encoding='utf-8') as f:
+        f.write("| SRS-F-XXX | 화면명 | UIS-ID | 호출 INF | FUNC-ID |\n|---|---|---|---|---|\n")
+        f.write("| SRS-F-001 | 상품등록 | UIS-PRD-001 | INF-PRD-205, INF-PRD-206 | FUNC-product-001 |\n")
+    srs = G.scan_srs(tmp)
+    assert len(srs) == 1, srs
+    assert srs[0]['id'] == 'SRS-F-001'
+    assert srs[0]['name'] == '상품등록'
+    assert 'UIS-PRD-001' in srs[0]['uis']
+    assert set(srs[0]['inf']) == {'INF-PRD-205', 'INF-PRD-206'}
+    assert srs[0]['func'] == 'FUNC-product-001'
+    assert srs[0]['domain'] == 'product'
+
+
+def test_scan_srs_absent_graceful():
+    tmp = tempfile.mkdtemp()
+    os.makedirs(os.path.join(tmp, 'docs'))
+    assert G.scan_srs(tmp) == []
+
+
 if __name__ == '__main__':
     for name, fn in sorted(globals().items()):
         if name.startswith('test_') and callable(fn):
