@@ -136,8 +136,14 @@ function extractMethodBody(content, annotIndex) {
 
 // jwork + Spring 범용 JSON 응답 시그널 — 메서드 바디 안에서 이 중 하나라도 있으면 api
 // ※ @ResponseBody는 바디 외부(선언부)에 있으므로 별도 탐지
-const API_BODY_SIGNALS = /GridResultUtil|AjaxMessageMapRenderer|ResponseEntity/;
+const API_BODY_SIGNALS = /GridResultUtil|AjaxMessageMapRenderer|ResponseEntity|MAPPING_JACKSON_JSON_VIEW|JSON_VIEW|jsonView|MappingJackson|new\s+ModelAndView\s*\(\s*[A-Za-z0-9_.]*[Jj]son/;
 const METHOD_RESPONSE_BODY = /@ResponseBody/;
+
+// @RequestMapping(... method=RequestMethod.POST ...) → verb 추출 (없으면 null). 복수 시 첫째.
+function methodVerbFromAnnotation(text) {
+  const m = /method\s*=\s*\{?\s*RequestMethod\.([A-Z]+)/.exec(text || '');
+  return m ? m[1] : null;
+}
 
 // ── Tree-sitter Java AST 헬퍼 ─────────────────────────────────────────────────
 
@@ -252,7 +258,8 @@ function parseJavaAST(content, filePath) {
           if (!verbMatch) continue;
 
           const verbMap = { Get:'GET', Post:'POST', Put:'PUT', Delete:'DELETE', Patch:'PATCH', Request:'ANY' };
-          const verb = verbMap[verbMatch[1]];
+          let verb = verbMap[verbMatch[1]];
+          if (verb === 'ANY') verb = methodVerbFromAnnotation(mod.text) || 'ANY';  // H-3: method= 속성 우선
           const subPaths = tsAnnotPaths(mod);
           if (subPaths.length === 0) subPaths.push('');
 
@@ -366,11 +373,12 @@ function parseJavaRegex(content, filePath) {
   const methodContent = classPos > 0 ? content.slice(classPos) : content;
   const methodPat = /@(Get|Post|Put|Delete|Patch|Request)Mapping\s*\(\s*(?:value\s*=\s*)?["']([^"']+)["']/g;
   while ((m = methodPat.exec(methodContent)) !== null) {
-    const verb     = m[1] === 'Request' ? 'ANY' : m[1].toUpperCase();
     const subPath  = m[2];
     const fullPath = (baseMapping + '/' + subPath).replace(/\/+/g, '/');
     // find method name after annotation (methodContent 기준 인덱스 사용)
     const afterAnnot = methodContent.slice(m.index, m.index + 300);
+    let verb       = m[1] === 'Request' ? 'ANY' : m[1].toUpperCase();
+    if (verb === 'ANY') verb = methodVerbFromAnnotation(afterAnnot) || 'ANY';  // H-3: method= 속성 우선
     const handlerM  = afterAnnot.match(/(?:public|private|protected)?\s+\w+\s+(\w+)\s*\(/);
 
     let kind = 'api';
