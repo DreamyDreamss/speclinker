@@ -32,8 +32,13 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 
+import re as _re
 BATCH_TIMEOUT   = 1800  # 배치당 최대 30분 — 3파일 연관체인 읽기+INF 생성, 병렬 부하 감안
-MODEL           = "claude-sonnet-4-6"
+MODEL           = os.environ.get("SL_DISPATCH_MODEL", "claude-sonnet-4-6")
+# H-1: 주간/세션 한도 시 별도 쿼터의 haiku로 자동 폴백 (haiku는 sonnet과 쿼터 분리)
+FALLBACK_MODEL  = os.environ.get("SL_DISPATCH_FALLBACK", "claude-haiku-4-5-20251001")
+RATE_LIMIT_RE   = _re.compile(r"weekly limit|session limit|usage limit|rate.?limit", _re.I)
+_rate_limited   = {"on": False}  # 한 번 감지되면 이후 그룹은 처음부터 폴백 모델 사용
 MAX_PARALLEL    = 3     # 병렬 실행 수 — 도메인 무관 동시 실행 (INF-ID 사전배정으로 충돌 없음)
 LAUNCH_STAGGER  = 3     # 프로세스 시작 최소 간격(초) — claude CLI 초기화 충돌 방지
 LOG_DIR_NAME    = "_tmp/dispatch_logs"
@@ -140,15 +145,16 @@ def run_batch(
     workspace: str,
     batch_idx: int,
     log_dir: Path,
-) -> tuple[bool, str]:
-    """단일 배치를 claude subprocess로 실행한다. (ok, message) 반환."""
+    model: str = None,
+) -> tuple[bool, str, bool]:
+    """단일 배치를 claude subprocess로 실행한다. (ok, message, rate_limited) 반환."""
     log_file = log_dir / f"batch_{batch_idx:03d}.log"
 
     cmd = [
         "claude",
         "--print",
         "--dangerously-skip-permissions",
-        "--model", MODEL,
+        "--model", model or MODEL,
     ]
 
     try:
@@ -165,13 +171,14 @@ def run_batch(
                 timeout=BATCH_TIMEOUT,
             )
         if result.returncode == 0:
-            return True, f"로그: {log_file}"
+            return True, f"로그: {log_file}", False
         else:
             tail = _tail(log_file, 10)
-            return False, f"exit={result.returncode}\n{tail}"
+            rl = bool(RATE_LIMIT_RE.search(tail or ""))
+            return False, f"exit={result.returncode}\n{tail}", rl
 
     except subprocess.TimeoutExpired:
-        return False, f"TIMEOUT ({BATCH_TIMEOUT}s)"
+        return False, f"TIMEOUT ({BATCH_TIMEOUT}s)", False
 
     except FileNotFoundError:
         return False, "claude CLI를 찾을 수 없음 (PATH 확인)"
@@ -332,7 +339,13 @@ def main() -> int:
         print(f"{label}  ▶  실행 중...", flush=True)
         t0 = time.time()
         prompt = build_prompt(group, workspace, agent_md)
-        ok, msg = run_batch(prompt, workspace, i, log_dir)
+        model = FALLBACK_MODEL if _rate_limited["on"] else MODEL
+        ok, msg, rl = run_batch(prompt, workspace, i, log_dir, model)
+        # H-1: 한도 감지 시 폴백 모델로 1회 자동 재시도 + 이후 그룹 폴백 전환
+        if not ok and rl and model != FALLBACK_MODEL:
+            _rate_limited["on"] = True
+            print(f"{label}  ⚠ 모델 한도 감지 → {FALLBACK_MODEL}로 폴백 재시도", flush=True)
+            ok, msg, rl = run_batch(prompt, workspace, i, log_dir, FALLBACK_MODEL)
         elapsed = time.time() - t0
         return i, ok, msg, elapsed, label
 
@@ -344,6 +357,9 @@ def main() -> int:
                 print(f"{label}  ✔  완료 ({elapsed:.0f}s)  {msg}", flush=True)
                 with status_lock:
                     status.setdefault("done", []).append(i)
+                    # M-5: 성공 시 failed[]에서 제거 (done/failed 상호배타)
+                    if i in status.get("failed", []):
+                        status["failed"] = [x for x in status["failed"] if x != i]
                     done_count += 1
                     save_status(workspace, status)
             else:
