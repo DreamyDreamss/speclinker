@@ -126,9 +126,14 @@ def build_si_graph(workspace):
                     add_node(target_id, os.path.basename(ref), 'file', ref, '')
                 add_edge(node_id, target_id)
 
-        # UIS 파일 (UI/{screenId}/spec.md)
-        ui_subdir = os.path.join(domain_dir, 'UI')
-        if os.path.isdir(ui_subdir):
+        # UIS 파일 — 현행 'UIS'(v3.9~) 우선, 구버전 'UI' 하위호환
+        ui_subdir, ui_dirname = None, None
+        for cand in ('UIS', 'UI'):
+            p = os.path.join(domain_dir, cand)
+            if os.path.isdir(p):
+                ui_subdir, ui_dirname = p, cand
+                break
+        if ui_subdir:
             for screen_id in sorted(os.listdir(ui_subdir)):
                 screen_dir = os.path.join(ui_subdir, screen_id)
                 if not os.path.isdir(screen_dir):
@@ -136,7 +141,7 @@ def build_si_graph(workspace):
                 spec_path = os.path.join(screen_dir, 'spec.md')
                 if not os.path.isfile(spec_path):
                     continue
-                rel_path = f'docs/05_설계서/{domain}/UI/{screen_id}/spec.md'
+                rel_path = f'docs/05_설계서/{domain}/{ui_dirname}/{screen_id}/spec.md'
                 node_id = f'spec:UIS-{screen_id}'
                 add_node(node_id, screen_id, 'uis', rel_path, domain)
 

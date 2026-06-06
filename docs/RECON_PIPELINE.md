@@ -50,7 +50,7 @@
   STEP 9     Phase-C: 색인 + FUNC 생성 + FUNC_MAP
              9-0 build_funcs_index.py / 9-0-1 build_si_graph.py
              9-1 merge_index.py (전체 색인 3종) / 9-2 rd-agent / 9-3 srs-agent / 9-4 rtm-agent
-  STEP 10    IA 맵 생성 (ia_map_builder.py)
+  STEP 10    IA 맵은 /sl-ia 커맨드로 생성 (별도)
   STEP 11    si-graph 갱신 확인 → RECON 완료
 ```
 
@@ -108,7 +108,7 @@
 
 ## Phase 3: `/sl-recon-doc` (STEP 9~11)
 
-**진입 전제:** `_tmp/recon_checkpoint.json`, `_tmp/screen_inventory.json`, `{도메인}/INF/INF-*.md` 1개 이상
+**진입 전제:** `_tmp/recon_checkpoint.json`, `{도메인}/UIS/*/spec.md` 1개 이상(구버전 UI/ 호환), `{도메인}/INF/INF-*.md` 1개 이상
 
 | STEP | 핵심 동작 | 스크립트 / 에이전트 | 주요 출력 |
 |------|----------|-------------------|----------|
@@ -119,7 +119,7 @@
 | 9-2 | FUNC 생성 | `rd-agent` (sonnet) | `docs/00_FUNC/FUNC_v1.0.md` (+ domains/) |
 | 9-3 | SRS 생성 | `srs-agent` (sonnet) | `docs/03_기능명세서/SRS_v1.0.md` (+ domains/) |
 | 9-4 | FUNC_MAP 생성 | `rtm-agent` (**opus**) | `docs/00_FUNC/FUNC_MAP.md`, `linked-func-cache.json` |
-| 10 | IA 맵 생성 | `ia_map_builder.py` | `_tmp/ia-map.json` |
+| 10 | IA 맵 생성 | `/sl-ia` (별도 커맨드) | `docs/06_IA/IA_MAP.md` |
 | 11 | si-graph 갱신 확인 | 인라인 | checkpoint(phase=recon-complete) |
 
 ---

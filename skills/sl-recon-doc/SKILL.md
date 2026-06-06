@@ -11,22 +11,22 @@ triggers:
 
 ```bash
 !python3 -c "
-import json, os, sys, glob
-errors    = []
-cp        = '_tmp/recon_checkpoint.json'
-inventory = '_tmp/screen_inventory.json'
+import os, sys, glob
+errors = []
+cp = '_tmp/recon_checkpoint.json'
 if not os.path.exists(cp):
     errors.append('[FAIL] recon_checkpoint.json 없음 — /sl-recon 먼저 실행')
-if not os.path.exists(inventory):
-    errors.append('[FAIL] screen_inventory.json 없음 — /sl-recon-uis STEP 6-1 확인')
 inf_files = glob.glob('docs/05_설계서/*/INF/INF-*.md')
 if not inf_files:
     errors.append('[FAIL] INF 파일 없음 — /sl-recon 먼저 실행 (STEP 4-3에서 INF 생성)')
+# 화면(UIS) 전제: 현행 {도메인}/UIS/{화면}/spec.md (구버전 UI/ 하위호환)
+uis_files = glob.glob('docs/05_설계서/*/UIS/*/spec.md') + glob.glob('docs/05_설계서/*/UI/*/spec.md')
+if not uis_files:
+    errors.append('[FAIL] UIS spec.md 없음 — /sl-recon-uis 먼저 실행')
 if errors:
     for e in errors: print(e)
     sys.exit(1)
-inv_data = json.load(open(inventory, encoding='utf-8'))
-print(f'[OK] INF {len(inf_files)}개 | screen_inventory {len(inv_data)}개 확인. 문서 색인 생성 진행')
+print(f'[OK] INF {len(inf_files)}개 | UIS 화면 {len(uis_files)}개 확인. 문서 색인 생성 진행')
 "
 ```
 
@@ -209,29 +209,14 @@ else:
 
 > 산출 `docs/05_설계서/{도메인}/OVERVIEW_{도메인}.md` = **사람 SOP 레이어**(개념·완전성 부담 면제). AI 그라운딩은 별도(앵커+소스 JIT).
 
-## STEP 10 — IA 맵 생성
+## STEP 10 — IA 맵 생성 (별도 커맨드)
 
-INF + UIS + screen_inventory를 조합하여 화면 계층 맵을 생성한다.
-
-```bash
-!python3 -c "
-import os, sys
-env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
-           if '=' in l and not l.startswith('#'))
-plugin = env.get('PLUGIN_PATH','')
-script = os.path.join(plugin, 'scripts', 'ia_map_builder.py') if plugin else ''
-if script and os.path.exists(script):
-    import subprocess
-    subprocess.run([sys.executable, script, '.'], check=False)
-else:
-    print('ia_map_builder.py 없음 — PLUGIN_PATH 확인')
-"
-```
+화면 계층(IA) 맵은 현행 **`/sl-ia`** 커맨드가 담당한다 — UIS `menu-path` + 화면↔INF 연결로
+`docs/06_IA/IA_MAP.md`를 생성하고 UIS `menu-path`를 일괄 보완한다.
+(SpecLens 뷰어의 [IA 트리]도 `gen_docsify.py`가 UIS `menu-path`로 만든 `spec_index.json`의 `ia_tree`를 그대로 보여준다.)
 
 ```bash
-!test -f _tmp/ia-map.json \
-  && python3 -c "import json; d=json.load(open('_tmp/ia-map.json')); print(f'IA 맵 생성 완료: 화면 {d[\"totalScreens\"]}개, API 연결 {d[\"totalApis\"]}건')" \
-  || echo "ia-map.json 없음 — ia_map_builder.py 실패 확인 필요"
+!echo "IA 맵은 /sl-ia 커맨드로 생성하세요 (이 STEP에서 자동 호출하지 않음)."
 ```
 
 ---
@@ -254,7 +239,7 @@ else:
 
 [상세 설계]
 - docs/05_설계서/{도메인}/INF/INF-XXX.md × N개  (인터페이스 개별 파일)
-- docs/05_설계서/{도메인}/UI/{화면ID}/spec.md × N개
+- docs/05_설계서/{도메인}/UIS/UIS-{CODE}-{NNN}_{화면명}/spec.md × N개  (화면설계서, 화면당 디렉토리)
 - docs/05_설계서/{도메인}/SCH/SCH-XXX.md × N개  (DB 스키마 개별 파일)
 - docs/05_설계서/{도메인}/DB_{도메인}.md  (슬림 도메인 개요: 도메인 ERD + 테이블 목록, DDL 없음)
 - docs/05_설계서/{도메인}/BAT/BAT-XXX.md × N개  (배치 명세 — 배치 파일 존재 시)
@@ -267,10 +252,9 @@ else:
 - docs/03_기능명세서/domains/SRS_{도메인}.md × N개
 
 [IA 맵]
-- _tmp/ia-map.json                      (화면 계층 구조 + 화면↔INF 연결 매트릭스)
-  → /understand-dashboard 실행 후 "IA" 탭에서 확인 가능
+- /sl-ia 로 docs/06_IA/IA_MAP.md 생성 (선택) — SpecLens 뷰어 [IA 트리]에서도 확인 가능
 
-다음 단계: /sl-aidd (코드 구현·수정 필요 시) 또는 납품
+다음 단계: /sl-ia (IA 맵, 선택) → /sl-viewer (SpecLens 확인) → /sl-aidd (코드 구현·수정 필요 시) 또는 납품
 ```
 
 > **POC 모드 사용자 안내** (POC_MODE=true 였을 때):  
@@ -309,9 +293,10 @@ if env.get('POC_MODE','false').lower() == 'true':
 !python3 -c "
 import json, os, datetime
 cp = json.load(open('_tmp/recon_checkpoint.json', encoding='utf-8')) if os.path.exists('_tmp/recon_checkpoint.json') else {}
+import glob
 cp.update({'phase': 'recon-complete', 'completed_at': datetime.datetime.now().isoformat(), 'status': 'ok'})
 json.dump(cp, open('_tmp/recon_checkpoint.json','w'), ensure_ascii=False, indent=2)
-inv = json.load(open('_tmp/screen_inventory.json', encoding='utf-8')) if os.path.exists('_tmp/screen_inventory.json') else []
-print(f'RECON 완료: 화면 {len(inv)}개, 체크포인트 저장')
+screens = glob.glob('docs/05_설계서/*/UIS/*/spec.md') + glob.glob('docs/05_설계서/*/UI/*/spec.md')
+print(f'RECON 완료: 화면 {len(screens)}개, 체크포인트 저장')
 "
 ```
