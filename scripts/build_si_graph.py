@@ -100,12 +100,12 @@ def build_si_graph(workspace):
         # INF 파일 (도메인 루트 + INF/ 서브디렉터리)
         inf_files = []
         for fname in os.listdir(domain_dir):
-            if re.match(r'^INF-\d+\.md$', fname):
+            if re.match(r'^INF-.+\.md$', fname):
                 inf_files.append((fname, os.path.join(domain_dir, fname), f'docs/05_설계서/{domain}/{fname}'))
         inf_subdir = os.path.join(domain_dir, 'INF')
         if os.path.isdir(inf_subdir):
             for fname in sorted(os.listdir(inf_subdir)):
-                if re.match(r'^INF-\d+\.md$', fname):
+                if re.match(r'^INF-.+\.md$', fname):
                     inf_files.append((fname, os.path.join(inf_subdir, fname), f'docs/05_설계서/{domain}/INF/{fname}'))
 
         for fname, fpath, rel_path in inf_files:
