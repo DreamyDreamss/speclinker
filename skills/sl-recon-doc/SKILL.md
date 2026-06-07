@@ -77,12 +77,12 @@ else:
 도메인별 INF/SCH/UIS 파일을 스캔해서 색인 3종(API_Design.md, DB_Schema.md, UI_Spec_v1.0.md)을 자동 생성한다.  
 색인은 merge_index.py가 자동 생성한다 (spec-agent 호출 없음).
 
-**9-2. FUNC 생성** — `agents/rd-agent.md`를 서브에이전트로 실행 (RECON 모드, **Sonnet**):
+**9-2. FUNC 생성** — `agents/rd-agent.md`를 서브에이전트로 실행 (RECON 모드, **Haiku** — v3.24):
 
 ```
 Agent 도구 호출:
   subagent_type: "speclinker:rd-agent"
-  model: "sonnet"      ← RECON 다운그레이드 (인덱스 → 마크다운 포맷팅 작업)
+  model: "haiku"      ← v3.24 토큰절감 (인덱스 → 마크다운 포맷팅, 기계적 작업)
   description: "RECON: FUNC_v1.0.md 생성"
   prompt: |
     RECON 모드.

@@ -1,7 +1,7 @@
 {
   "name": "speclinker",
   "description": "SM(운영 시스템) 스펙 역생성 + AIDD 자동화 — 현행 소스에서 INF/SCH/UIS/FUNC 역추출, FUNC-ID 체이닝, 변경관리(SR). (SI/신규구축용은 별도 플러그인)",
-  "version": "3.24.0",
+  "version": "3.24.1",
   "author": {
     "name": "DreamyDreamss"
   },
