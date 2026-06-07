@@ -48,7 +48,7 @@ model: claude-opus-4-7
 **spec.md / INF/*.md / screen-map.json / FUNC_v1.0.md 본문 전체를 cat 하지 않는다.**
 
 ```bash
-!python3 -c "
+!python -c "
 import json, os
 path = '_tmp/funcs_index.json'
 if not os.path.exists(path):

@@ -10,7 +10,7 @@ triggers:
 ## 실행 전 확인
 
 ```bash
-!python3 -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
+!python -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
 import os, sys, glob
 errors = []
 cp = '_tmp/recon_checkpoint.json'
@@ -39,7 +39,7 @@ print(f'[OK] INF {len(inf_files)}개 | UIS 화면 {len(uis_files)}개 확인. �
 **9-0. 통합 인덱스 빌드 (rd/srs/rtm 공유용 — LLM 호출 없음)** — `scripts/build_funcs_index.py` 실행:
 
 ```bash
-!python3 -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
+!python -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
 import os, sys, subprocess
 env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8') if '=' in l and not l.startswith('#'))
 plugin = env.get('PLUGIN_PATH','')
@@ -62,7 +62,7 @@ else:
 **9-1. 전체 색인 생성 (스크립트, LLM 호출 없음)** — `scripts/merge_index.py` 실행:
 
 ```bash
-!python3 -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
+!python -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
 import os, sys, subprocess
 env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8') if '=' in l and not l.startswith('#'))
 plugin = env.get('PLUGIN_PATH','')
@@ -180,7 +180,7 @@ Agent 도구 호출:
 목적·핵심 엔티티·대표 기능(코드의미 주입)·진입점. zero-LLM(그래프 기반).
 
 ```bash
-!python3 -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
+!python -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
 import os, sys, subprocess
 env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8') if '=' in l and not l.startswith('#'))
 plugin = env.get('PLUGIN_PATH','')
@@ -244,7 +244,7 @@ else:
 > 3. `/sl-recon` 재실행 → 전체 도메인 처리
 
 ```bash
-!python3 -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
+!python -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
 import os, json
 env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8')
            if '=' in l and not l.startswith('#'))
@@ -269,7 +269,7 @@ if env.get('POC_MODE','false').lower() == 'true':
 
 **최종 체크포인트:**
 ```bash
-!python3 -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
+!python -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
 import json, os, datetime
 cp = json.load(open('_tmp/recon_checkpoint.json', encoding='utf-8')) if os.path.exists('_tmp/recon_checkpoint.json') else {}
 import glob

@@ -32,7 +32,7 @@ model: claude-opus-4-7
 > 압축본은 도메인 분류에 필요한 5개 필드(id/type/filePath/summary[:100]/tags/layer)만 포함하므로 토큰을 크게 절감한다.
 
 ```bash
-!python3 -c "
+!python -c "
 import json, collections, os
 try:
     s = json.load(open('_tmp/kg_summary.json'))
@@ -61,7 +61,7 @@ except Exception as e:
 ```
 
 ```bash
-!python3 -c "
+!python -c "
 import json
 try:
     dg = json.load(open('.understand-anything/domain-graph.json'))

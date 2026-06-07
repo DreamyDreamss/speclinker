@@ -106,7 +106,7 @@ INF 3개 이상이면 경고 후 사용자 확인.
 ### 1-0. 로컬 파일 우선 확인
 
 ```python
-!python3 -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
+!python -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
 import os, sys
 sr_id = sys.argv[1] if len(sys.argv) > 1 else ''
 local_path = f'docs/변경관리/{sr_id}/00_요구사항.md'
@@ -615,7 +615,7 @@ docs/변경관리/{SR-ID}/after/ 에 TO-BE 스펙 초안이 있습니다.
 **sprint-status.yaml 업데이트:**
 
 ```bash
-!python3 -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
+!python -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
 import yaml, os
 sp = '.speclinker/sprint-status.yaml'
 if not os.path.exists(sp):

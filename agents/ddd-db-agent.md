@@ -113,7 +113,7 @@ INF 생성 단계에서 `resolve_call_chain.py`가 미리 만들어 둔 **sch_dr
 
 ```bash
 !ls _tmp/sch_draft/{도메인}/ 2>/dev/null | head -30
-!python3 -c "
+!python -c "
 import json, os, glob
 ddir = '_tmp/sch_draft/{도메인}'
 if not os.path.isdir(ddir):
@@ -144,7 +144,7 @@ else:
 자기 도메인 rootPaths 범위로 knowledge-graph 필터링 (DB 관련 노드만):
 
 ```bash
-!python3 -c "
+!python -c "
 import json, os
 plan = json.load(open('docs/05_설계서/_domain_plan.json'))
 domain = '{도메인}'  # 호출자가 전달한 도메인명으로 치환
@@ -175,7 +175,7 @@ for n in db_nodes[:30]:
 자기 도메인 rootPaths 안에서만 모델 파일 검색:
 
 ```bash
-!python3 -c "
+!python -c "
 import os, json, glob
 plan = json.load(open('docs/05_설계서/_domain_plan.json'))
 d = next((x for x in plan['domains'] if x['name'] == '{도메인}'), None)

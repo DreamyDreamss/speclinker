@@ -270,7 +270,7 @@ Write-Output "디렉토리 생성 완료"
 
 ```powershell
 $PLUGIN_PATH = (Get-Content "project.env" -Encoding UTF8 | Where-Object {$_ -match "^PLUGIN_PATH="} | ForEach-Object {$_ -replace "^PLUGIN_PATH=",""}).Trim()
-$py = if (Get-Command python3 -ErrorAction SilentlyContinue) { "python3" } else { "python" }
+$py = if (Get-Command python -ErrorAction SilentlyContinue) { "python" } else { "python" }
 
 # 필수 패키지 설치 여부만 조용히 확인 (설치 시도 없음)
 $checks = @(

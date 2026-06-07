@@ -2,7 +2,7 @@
   "mcpServers": {
     "db-{별칭}": {
       "command": "python",
-      "args": ["D:/gen-harness/mcp-servers/mariadb_schema_server.py"],
+      "args": ["{PLUGIN_PATH}/mcp-servers/mariadb_schema_server.py"],
       "env": {
         "PROJECT_DIR": "여기에_프로젝트_루트_절대경로_입력",
         "ENV": "local",

@@ -340,7 +340,7 @@ curl -X {METHOD} {path} \
 ```
 
 ```bash
-!python3 -c "
+!python -c "
 import json, os
 os.makedirs('_tmp', exist_ok=True)
 data = {'inf_id': 'INF-{NNN}', 'domain': '{도메인}', 'tables': ['{TABLE_NAME_A}', '{TABLE_NAME_B}']}

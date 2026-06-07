@@ -28,7 +28,7 @@ docs/00_FUNC/ + docs/05_설계서/ 의 설계 문서를 읽고 기능 코드를 
 ## 실행 전 확인
 
 ```python
-!python3 -c "
+!python -c "
 import os
 env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8') if '=' in l and not l.startswith('#'))
 for f in ['docs/00_FUNC/FUNC_MAP.md','docs/00_FUNC/FUNC_v1.0.md']:
@@ -70,7 +70,7 @@ for f in ['docs/00_FUNC/FUNC_MAP.md','docs/00_FUNC/FUNC_v1.0.md']:
 특정 FUNC-ID를 구현해야 할 때:
 
 ```python
-!python3 -c "
+!python -c "
 import os, sys, subprocess, json
 env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8') if '=' in l and not l.startswith('#'))
 plugin = env.get('PLUGIN_PATH','')
@@ -100,7 +100,7 @@ else:
 2. 미구현 FUNC-ID 목록 확인:
 
 ```python
-!python3 -c "
+!python -c "
 import os, sys, subprocess, json
 env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8') if '=' in l and not l.startswith('#'))
 plugin = env.get('PLUGIN_PATH','')
@@ -135,7 +135,7 @@ if os.path.exists(script):
 ## 코드 생성 완료 후 반드시 실행
 
 ```python
-!python3 -c "
+!python -c "
 import os, sys, subprocess
 env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8') if '=' in l and not l.startswith('#'))
 plugin = env.get('PLUGIN_PATH','')

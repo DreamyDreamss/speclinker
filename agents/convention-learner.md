@@ -50,7 +50,7 @@ model: claude-sonnet-4-6
 이미 만들어진 strategy + profile 합성이 어떤 코드를 잡고 있는지 확인.
 
 ```bash
-!python3 -c "
+!python -c "
 import os, sys
 sys.path.insert(0, os.environ.get('PLUGIN_PATH','') + '/scripts')
 from resolve_call_chain import load_effective_layers

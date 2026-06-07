@@ -48,7 +48,7 @@ model: claude-sonnet-4-6
 ## Phase 1: source_index.json 1차 신호 흡수
 
 ```bash
-!python3 -c "
+!python -c "
 import json, sys, os
 try:
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')

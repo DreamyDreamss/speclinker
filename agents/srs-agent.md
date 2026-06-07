@@ -30,7 +30,7 @@ model: claude-sonnet-4-6
 **spec.md / INF/*.md 를 다시 cat 하지 않는다.**
 
 ```bash
-!python3 -c "
+!python -c "
 import json, os
 path = '_tmp/funcs_index.json'
 if not os.path.exists(path):

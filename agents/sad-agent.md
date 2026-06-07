@@ -29,7 +29,7 @@ SRS 비기능 요구사항과 knowledge-graph 레이어를 결합하여 SAD(Soft
 
 ```bash
 !cat docs/03_기능명세서/SRS_v1.0.md
-!python3 -c "
+!python -c "
 import json
 kg = json.load(open('.understand-anything/knowledge-graph.json'))
 print('=== 감지된 레이어 ===')

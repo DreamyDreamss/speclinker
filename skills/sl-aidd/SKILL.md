@@ -30,7 +30,7 @@ FUNC를 story로 다루어, 각 FUNC에 대해 [story 생성 → ✋승인 → �
 ## STEP 0 — 사전 확인
 
 ```python
-!python3 -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
+!python -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
 import os, re
 func_map = 'docs/00_FUNC/FUNC_MAP.md'
 if os.path.exists(func_map):
@@ -52,7 +52,7 @@ FUNC_MAP이 없으면 중단하고 `/sl-recon` 안내.
 `/sl-aidd` (Ready 전체):
 
 ```python
-!python3 -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
+!python -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
 import os, sys, subprocess, json
 env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8') if '=' in l and not l.startswith('#'))
 plugin = env.get('PLUGIN_PATH','')
@@ -77,7 +77,7 @@ for f in ready:
 ### STEP 2 — SM: story 생성 + ✋승인
 
 ```python
-!python3 -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
+!python -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
 import os, sys, subprocess, json
 env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8') if '=' in l and not l.startswith('#'))
 plugin = env.get('PLUGIN_PATH','')
@@ -135,7 +135,7 @@ dev와 **분리된 컨텍스트**로 qa-agent를 호출한다.
 완료 시:
 
 ```python
-!python3 -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
+!python -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
 import os, sys, subprocess
 env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8') if '=' in l and not l.startswith('#'))
 plugin = env.get('PLUGIN_PATH','')
@@ -156,7 +156,7 @@ if os.path.exists(script):
 ## STEP 7 — 최종 커버리지 리포트
 
 ```python
-!python3 -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
+!python -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
 import os, json, re
 func_map = 'docs/00_FUNC/FUNC_MAP.md'
 cache_path = '.understand-anything/linked-func-cache.json'
@@ -186,7 +186,7 @@ else:
 ## `/sl-aidd --list` — FUNC 목록
 
 ```python
-!python3 -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
+!python -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
 import os, sys, subprocess, json
 env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8') if '=' in l and not l.startswith('#'))
 plugin = env.get('PLUGIN_PATH','')

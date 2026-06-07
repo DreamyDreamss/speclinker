@@ -124,7 +124,7 @@ scheduler·job·trigger 정의 패턴.
 작성 직후 다음을 직접 확인:
 
 ```bash
-!python3 -c "
+!python -c "
 import yaml, sys, os
 p = 'strategies/community/{target_kind}-{target_name}.yaml'
 try:
@@ -146,7 +146,7 @@ except Exception as e:
 추가 검증: profile 매칭이 실제로 동작하는지
 
 ```bash
-!python3 -c "
+!python -c "
 import sys, os
 sys.path.insert(0, os.environ.get('PLUGIN_PATH','') + '/scripts')
 from resolve_call_chain import load_effective_layers
