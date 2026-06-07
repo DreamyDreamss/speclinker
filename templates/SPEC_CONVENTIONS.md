@@ -43,7 +43,7 @@ SR-XXX  (변경 요구사항, 독립 트리)
 
 **INF 핵심 규칙**: **1 INF = 1 HTTP 메소드(엔드포인트).** 같은 `API_Design.md` 파일 안에 여러 행 → 각각 개별 `inf` 노드. 파일 단위가 아님.
 
-**UIS→INF 링크** (별도): `docs/05_설계서/screens/UIS-F-NNN.md` § 2.5 사용 INF 절  
+**UIS→INF 링크** (별도): `docs/05_설계서/screens/UIS-F-NNN.md`  2.5 사용 INF 절  
 → `\| UIS-F-001 \| INF-001 \|` (2열, 한 화면이 여러 메소드 호출 시 행 추가)
 
 ---
@@ -60,7 +60,7 @@ docs/
     API_Design.md    INF SoT — INF 색인 표 필수 (1행=1메소드)
     DB_Schema.md     SCH SoT — 스키마 색인 표 필수
     UI_Spec_v1.0.md  UIS 색인 표 필수
-    screens/         UIS-F-NNN.md (상세 와이어 + §2.5 사용INF 절)
+    screens/         UIS-F-NNN.md (상세 와이어 + 2.5 사용INF 절)
   07_TC/             TC SoT
   08_TR/             테스트 결과
   ops/               운영 이슈·변경 로그

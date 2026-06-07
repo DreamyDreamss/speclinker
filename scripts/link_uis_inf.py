@@ -1,8 +1,8 @@
 ﻿# STATUS: 완료
 """
-link_uis_inf.py — INF 생성 완료 후 UIS spec.md §5의 URL을 INF 링크로 교체
+link_uis_inf.py — INF 생성 완료 후 UIS spec.md 5의 URL을 INF 링크로 교체
 
-UIS 작성 시점에 INF가 없어서 URL만 적혀있던 §5 셀을
+UIS 작성 시점에 INF가 없어서 URL만 적혀있던 5 셀을
 ddd-api-agent가 INF를 생성한 뒤 이 스크립트로 일괄 링크화.
 
 LLM 재호출 없이 스크립트로 처리 — 토큰 절약.
@@ -13,7 +13,7 @@ LLM 재호출 없이 스크립트로 처리 — 토큰 절약.
   - docs/05_설계서/{domain}/UIS/{화면ID}/spec.md (패치 대상)
 
 출력:
-  - spec.md §5 내 URL → [INF-NNN](../../INF/INF-NNN.md) 교체
+  - spec.md 5 내 URL → [INF-NNN](../../INF/INF-NNN.md) 교체
   - _tmp/{화면ID}_inf_required.json 의 매칭된 항목 제거 (남은 것 = 아직 INF 없음)
 
 사용:
@@ -116,8 +116,8 @@ def find_inf(url, method, inf_idx):
 
 
 def patch_spec(spec_path, url_to_inf):
-    """spec.md §5 내의 URL 백틱 표기를 INF 링크로 교체.
-    패턴: `url` 또는 url (§5 표의 API 호출 셀)
+    """spec.md 5 내의 URL 백틱 표기를 INF 링크로 교체.
+    패턴: `url` 또는 url (5 표의 API 호출 셀)
     """
     try:
         body = open(spec_path, encoding='utf-8').read()

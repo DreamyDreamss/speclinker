@@ -65,7 +65,7 @@ def generate(root, domain_filter=None):
         lines += ['', f'## 대표 기능 ({len(infs)}개 중 진입점)', '']
         for iid, n in reps:
             lines.append(f"- {n.get('method','')} `{n.get('path','')}` — [{iid}](INF/{iid}.md)")
-        entry = ['1. **대표 화면**부터: 화면 1~2개를 열어 "무슨 버튼→무슨 API→무슨 결과"(UIS §5) 파악'] if dom_uis else []
+        entry = ['1. **대표 화면**부터: 화면 1~2개를 열어 "무슨 버튼→무슨 API→무슨 결과"(UIS 5) 파악'] if dom_uis else []
         entry += [
             f'{len(entry)+1}. **핵심 엔티티** 상위 2~3개의 SCH(DB_{domain}.md)로 데이터 구조 파악',
             f'{len(entry)+2}. **대표 기능** INF 1~2개로 요청/응답·비즈니스 규칙 확인',

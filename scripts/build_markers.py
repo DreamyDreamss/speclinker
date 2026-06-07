@@ -4,7 +4,7 @@
 build_markers.py — 에이전트가 고른 위젯 id 목록 → bbox 결정론 해소 → annotate용 widgets.json
 
 마커 생성의 책임 분리(휴리스틱 금지):
-  - **에이전트**: 소스를 읽어 §4에 적을 *의미있는* 위젯/이벤트를 고른다(무엇을). id·번호·라벨만 준다.
+  - **에이전트**: 소스를 읽어 4에 적을 *의미있는* 위젯/이벤트를 고른다(무엇을). id·번호·라벨만 준다.
   - **이 스크립트**: dom_snapshot에서 그 id의 bbox를 찾아 widgets.json을 만든다(어디에). LLM이 bbox를
     베끼다 틀리는 일·실재하지 않는 위젯 마킹을 원천 차단(스냅샷에 없는 id는 경고+skip).
   - annotate_preview.py: 그린다.
@@ -58,7 +58,7 @@ def main():
     if missing:
         print(f'[WARN] 스냅샷에 없는 위젯(skip): {", ".join(missing[:10])}'
               + (f' 외 {len(missing)-10}' if len(missing) > 10 else ''))
-        print('  → 에이전트가 §4에 실재하지 않는 위젯을 적었거나 id 오기. 소스/스냅샷 재확인.')
+        print('  → 에이전트가 4에 실재하지 않는 위젯을 적었거나 id 오기. 소스/스냅샷 재확인.')
     return 0
 
 
