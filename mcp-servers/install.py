@@ -303,9 +303,100 @@ DB2 IBM CLI Driver (별도 다운로드):
 """)
 
 # ---------------------------------------------------------------------------
+# 전역(사용자 스코프) DB MCP 등록 — `--global`
+# 한 번 등록하면 모든 프로젝트에서 사용(프로젝트별 .mcp.json 불필요).
+# ---------------------------------------------------------------------------
+DB_SPECS = {
+    "oracle": {
+        "alias": "db-oracle", "server": "oracle_schema_server.py",
+        "driver": ["python-oracledb>=2.0.0"],
+        "fields": [("ORA_HOST", "호스트/IP", ""), ("ORA_PORT", "포트", "1521"),
+                   ("ORA_SERVICE", "Service Name", ""), ("ORA_USER", "사용자", ""),
+                   ("ORA_PASSWORD", "비밀번호", "")],
+    },
+    "db2": {
+        "alias": "db-db2", "server": "db2_schema_server.py",
+        "driver": ["ibm_db>=3.2.0", "ibm_db_sa>=0.4.0"],
+        "fields": [("DB2_HOST", "호스트/IP", ""), ("DB2_PORT", "포트", "50000"),
+                   ("DB2_DATABASE", "DB명", ""), ("DB2_USER", "사용자", ""),
+                   ("DB2_PASSWORD", "비밀번호", "")],
+    },
+    "mariadb": {
+        "alias": "db-mariadb", "server": "mariadb_schema_server.py",
+        "driver": ["PyMySQL>=1.1.0"],
+        "fields": [("MDB_HOST", "호스트/IP", "127.0.0.1"), ("MDB_PORT", "포트", "3306"),
+                   ("MDB_DATABASE", "DB명", ""), ("MDB_USER", "사용자", ""),
+                   ("MDB_PASSWORD", "비밀번호", "")],
+    },
+}
+_CORE = ["mcp[cli]>=1.0.0", "sqlalchemy>=2.0.0", "pandas>=2.0.0", "python-dotenv>=1.0.0"]
+
+
+def _ask_secret(prompt: str) -> str:
+    try:
+        import getpass
+        return getpass.getpass(prompt).strip()
+    except Exception:
+        return ask(prompt)
+
+
+def register_global():
+    here = os.path.dirname(os.path.abspath(__file__))
+    if not shutil.which("claude"):
+        print(c(RED, "claude CLI를 찾을 수 없습니다 — Claude Code 설치/PATH 확인 후 재실행"))
+        return
+    print(f"\n{c(CYAN + BOLD, '=== DB MCP 전역(사용자 스코프) 등록 ===')}")
+    print(c(GRAY, "한 번 등록하면 모든 프로젝트에서 사용됩니다 (claude mcp add --scope user)."))
+    ans = ask("등록할 DB? [oracle/db2/mariadb, 쉼표구분 또는 all]: ").strip().lower()
+    chosen = list(DB_SPECS) if ans in ("all", "") else [d.strip() for d in ans.split(",") if d.strip() in DB_SPECS]
+    if not chosen:
+        print(c(YELLOW, "선택 없음 — 종료.")); return
+
+    for db in chosen:
+        spec = DB_SPECS[db]
+        print(f"\n{c(BOLD, '[' + db + ']')} 접속정보 입력 (Enter=기본/건너뜀)")
+        # 라이브러리 보장(코어 + 드라이버)
+        print(c(GRAY, "  라이브러리 확인/설치..."))
+        pip_install(*_CORE)
+        if db != "db2":
+            pip_install(*spec["driver"])
+        else:
+            print(c(GRAY, "  (db2 ibm_db는 IBM CLI Driver 필요 — 누락 시 별도 설치)"))
+            pip_install(*spec["driver"])
+        env = {}
+        for key, label, default in spec["fields"]:
+            if key.endswith("PASSWORD"):
+                v = _ask_secret(f"  {label}: ")
+            else:
+                hint = f" [{default}]" if default else ""
+                v = ask(f"  {label}{hint}: ").strip() or default
+            if v:
+                env[key] = v
+        alias = ask(f"  MCP 별칭 [{spec['alias']}]: ").strip() or spec["alias"]
+        server = os.path.join(here, spec["server"])
+        cmd = ["claude", "mcp", "add", alias, "--scope", "user"]
+        for k, v in env.items():
+            cmd += ["--env", f"{k}={v}"]
+        cmd += ["--", sys.executable, server]
+        ret, out = run_silent(cmd)
+        if ret == 0:
+            print(c(GREEN, f"  [OK] {alias} 전역 등록 완료"))
+        else:
+            print(c(YELLOW, f"  [!!] 등록 실패: {out[:200]}"))
+            print(c(GRAY, f"       수동: claude mcp add {alias} --scope user --env ... -- {os.path.basename(sys.executable)} {spec['server']}"))
+
+    print(f"\n{c(GREEN, '완료.')} 확인: {c(CYAN, 'claude mcp list')} (scope: user)")
+    print(c(GRAY, "Claude Code 재시작 후 모든 프로젝트에서 DB MCP 사용 가능. project.env엔 MCP_DB_{별칭}=true 만 두면 됨."))
+
+
+# ---------------------------------------------------------------------------
 # 메인
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
+    if "--global" in sys.argv:
+        print(f"{c(CYAN+BOLD, '=== Speclinker MCP 전역 등록 ===')} {c(GRAY, f'({OS_NAME} / {ARCH})')}")
+        register_global()
+        sys.exit(0)
     AUTO = "--yes" in sys.argv or "-y" in sys.argv
     print(f"{c(CYAN+BOLD, '=== Speclinker MCP 환경 검사 ===')} "
           f"{c(GRAY, f'({OS_NAME} / {ARCH})')}{c(GRAY, ' [--yes]' if AUTO else '')}")
