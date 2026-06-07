@@ -1,0 +1,28 @@
+{
+  "scanned_at": "2026-06-07T11:20:00",
+  "total": 3,
+  "_note": "정적 폴백 미리보기용 샘플. docs/viewer/drift.json 으로 복사하면 세션 없이 '🔄 변경 점검' UI를 확인할 수 있다(재생성 버튼은 세션 연결 시 동작).",
+  "items": [
+    {
+      "id": "INF-ORD-002", "type": "INF", "domain": "order",
+      "file": "docs/05_설계서/order/INF/INF-ORD-002.md",
+      "reason": "소스 1개가 스펙보다 최신",
+      "sources": ["src/main/java/order/OrderController.java"],
+      "spec_mtime": "2026-06-01T09:00:00", "src_mtime": "2026-06-07T08:14:00"
+    },
+    {
+      "id": "SCH-ORD-001", "type": "SCH", "domain": "order",
+      "file": "docs/05_설계서/order/SCH/SCH-ORD-001.md",
+      "reason": "소스 2개가 스펙보다 최신",
+      "sources": ["src/main/resources/sqlmapper/OrderMapper.xml", "src/main/java/order/OrderServiceImpl.java"],
+      "spec_mtime": "2026-06-01T09:00:00", "src_mtime": "2026-06-06T18:42:00"
+    },
+    {
+      "id": "UIS-PRD-001", "type": "UIS", "domain": "product",
+      "file": "docs/05_설계서/product/UIS/UIS-PRD-001_상품등록/spec.md",
+      "reason": "소스 1개 사라짐",
+      "sources": ["(삭제됨) src/main/webapp/product/pr301mForm.jsp"],
+      "spec_mtime": "2026-06-02T10:00:00", "src_mtime": "2026-06-02T10:00:00"
+    }
+  ]
+}

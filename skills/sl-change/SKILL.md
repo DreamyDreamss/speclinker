@@ -181,6 +181,14 @@ Jira 첨부를 `docs/변경관리/{SR-ID}/attachments/`에 다운로드(MCP `jir
 산출 `docs/변경관리/{SR-ID}/_extracted.md`(PPT/Word/Excel 본문)를 요구사항 분석에 **병합**한다 — 고객사 요청자료가 분석에 실제로 반영됨.
 PDF·이미지는 Read 도구로 직접 읽는다. 라이브러리(pptx/docx/openpyxl) 미설치 포맷은 `[추출 불가]`로 표기되며 사용자에게 내용 입력을 요청한다.
 
+### 1-D-2. 사용자 보강자료 병합 (DRM/부실 SR 대응 — inputs/)
+SR 본문이 부실하거나 첨부가 DRM/HWP라 추출 불가일 때, 사용자가 SpecLens 보드 **[📁 자료]** 로 `docs/변경관리/{SR-ID}/inputs/`에 직접 넣은 캡처·메모를 분석에 **병합**한다:
+```bash
+!ls docs/변경관리/{SR-ID}/inputs/ 2>/dev/null
+```
+- 이미지(스크린샷)는 Read 도구로 읽어 화면/요건 파악, `.md`/`.txt`는 본문 병합, `_notes.md`(화면 입력 메모)도 포함.
+- **inputs/가 있으면 부실 본문·DRM 첨부를 이 자료로 보완**해 분석을 계속한다(중단하지 않음).
+
 ---
 
 ## `/sl-change --new` — 요구사항 파일 템플릿 생성

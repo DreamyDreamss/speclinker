@@ -22,6 +22,15 @@
   let SIDEBAR_MODE = 'domain'; // 'domain' | 'ia'
   let DASH_SORT = { key: null, dir: -1 }; // 대시보드 도메인 테이블 정렬
 
+  // ── SR 작업보드 상태 ──────────────────────────────────────
+  // window.__slBoard(데이터)·window.__slStatus(진행)·window.__slQueue(버튼→세션)는
+  // /sl-viewer 세션이 CDP로 주입/폴링한다. 세션 없으면 sr_board.json 정적 폴백.
+  let BOARD_VIEW = false;            // 보드 뷰 활성 여부
+  let BOARD_FILTER = { q: '', prio: '', col: '' };
+  let BOARD_TIMER = null;           // 보드 활성 중 재렌더 틱
+  let BOARD_SIG = '';               // 변동 감지용 시그니처
+  window.__slQueue = window.__slQueue || [];
+
   // ── 인덱스 로드 ────────────────────────────────────────────
   async function loadIndex() {
     try {
@@ -74,7 +83,9 @@
       <div>
         <span class="sl-nav-link" onclick="SlViewer.showGuide()">📖 사용자 가이드</span>
         <span class="sl-nav-link" onclick="SlViewer.showDashboard()">🏠 대시보드</span>
-        <a class="sl-nav-link" href="#/docs/00_FUNC/FUNC_MAP">📋 FUNC_MAP</a>
+        <span class="sl-nav-link sl-nav-board" onclick="SlViewer.showBoard()">📋 SR 작업보드${boardBadge()}</span>
+        <span class="sl-nav-link sl-nav-drift" onclick="SlViewer.showDrift()">🔄 변경 점검${driftBadge()}</span>
+        <a class="sl-nav-link" href="#/docs/00_FUNC/FUNC_MAP">🗂 FUNC_MAP</a>
         <span class="sl-nav-link" onclick="SlViewer.openSpec('.speclinker/sprint-status.yaml')">⚡ Sprint</span>
       </div>
       <div class="sl-toggle">
@@ -743,6 +754,280 @@
     });
   }
 
+  // ── SR 작업보드 ────────────────────────────────────────────
+  const BOARD_COLS = [
+    { key: 'todo',     label: '대기', match: ['to do', 'todo', 'open', 'backlog', '신규', '접수', '대기'] },
+    { key: 'analyze',  label: '분석', match: ['analysis', '분석', 'triage'] },
+    { key: 'progress', label: '진행', match: ['progress', 'development', 'doing', '구현', '진행'] },
+    { key: 'review',   label: '검토', match: ['review', 'qa', 'test', '검토', '테스트'] },
+    { key: 'done',     label: '완료', match: ['done', 'closed', 'resolved', '완료', '종료'] },
+  ];
+  const PRIO_META = {
+    highest: ['🔺', '#f85149'], high: ['🔴', '#f85149'], medium: ['🟠', '#e6c79c'],
+    low: ['🟢', '#52c489'], lowest: ['⚪', '#6e7681'],
+  };
+  const WORK_COLOR = {
+    '분석중': '#7aa2ff', '승인대기': '#e6c79c', '구현중': '#7aa2ff',
+    'QA': '#c79bf0', '완료': '#52c489', '실패': '#f85149',
+  };
+
+  function getBoard()  { return (window.__slBoard && Array.isArray(window.__slBoard.srs)) ? window.__slBoard : null; }
+  function getStatus() { return window.__slStatus || {}; }
+  function boardColOf(status) {
+    const s = String(status || '').toLowerCase();
+    for (const c of BOARD_COLS) if (c.match.some(m => s.includes(m))) return c.key;
+    return 'todo';
+  }
+  function boardBadge() {
+    const b = getBoard();
+    return b && b.srs.length ? ` <span class="sl-nav-count">${b.srs.length}</span>` : '';
+  }
+  function prioDot(p) {
+    const m = PRIO_META[String(p || '').toLowerCase()] || ['⚪', '#6e7681'];
+    return `<span class="sl-prio" style="color:${m[1]}" title="${escAttr(p || '')}">${m[0]}</span>`;
+  }
+  function workBadge(key) {
+    const st = getStatus()[key];
+    if (!st || !st.state) return '';
+    const col = WORK_COLOR[st.state] || '#6e7681';
+    return `<span class="sl-work" style="border-color:${col};color:${col}">${escAttr(st.state)}${st.step ? ' · ' + escAttr(st.step) : ''}</span>`;
+  }
+  function impactChips(im) {
+    im = im || {};
+    const cell = (ic, arr, col) => {
+      const ids = arr || [];
+      if (!ids.length) return '';
+      return `<span class="sl-imp" style="color:${col}" title="${escAttr(ids.join(', '))}"
+                role="button" tabindex="0" onclick="event.stopPropagation();SlViewer.goToId('${escAttr(ids[0])}')">${ic} ${ids.length}</span>`;
+    };
+    return (cell('⬡', im.inf, 'var(--c-inf)') + cell('⛁', im.sch, 'var(--c-sch)') +
+            cell('▭', im.uis, 'var(--c-uis)') + cell('◆', im.func, 'var(--c-srs)')) ||
+           '<span class="sl-imp-none">영향 미산정</span>';
+  }
+  function matBadge(sr) {
+    const m = sr.material;
+    if (!m || m.state === 'ok') return '';
+    return `<span class="sl-mat warn" title="${escAttr(m.note || '보강 필요')}">⚠ 보강</span>`;
+  }
+  function srCard(sr) {
+    const st = getStatus()[sr.key] || {};
+    const link = sr.jira_url
+      ? `<a class="sl-sr-key" href="${escAttr(sr.jira_url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escAttr(sr.key)}</a>`
+      : `<span class="sl-sr-key">${escAttr(sr.key)}</span>`;
+    const matBtn = `<button class="sl-bbtn mat" onclick="event.stopPropagation();SlViewer.openDossier('${escAttr(sr.key)}')" title="티켓 자료 폴더 열기/보강">📁 자료</button>`;
+    const actions = st.state === '승인대기'
+      ? `<button class="sl-bbtn approve" onclick="event.stopPropagation();SlViewer.boardAction('${escAttr(sr.key)}','approve')">승인</button>
+         <button class="sl-bbtn reject" onclick="event.stopPropagation();SlViewer.boardAction('${escAttr(sr.key)}','reject')">반려</button>`
+      : `${matBtn}<button class="sl-bbtn" onclick="event.stopPropagation();SlViewer.boardAction('${escAttr(sr.key)}','analyze')" title="영향 분석">영향</button>
+         <button class="sl-bbtn primary" onclick="event.stopPropagation();SlViewer.boardAction('${escAttr(sr.key)}','change')" title="/sl-change 실행">AIDD 시작</button>`;
+    return `<div class="sl-card" role="button" tabindex="0" onclick="SlViewer.boardDetail('${escAttr(sr.key)}')">
+      <div class="sl-card-top">${prioDot(sr.priority)}${link}${workBadge(sr.key)}${matBadge(sr)}</div>
+      <div class="sl-card-title">${escAttr(sr.summary || '')}</div>
+      <div class="sl-card-imp">${impactChips(sr.impact)}</div>
+      <div class="sl-card-actions">${actions}</div>
+    </div>`;
+  }
+  function boardSig() { return JSON.stringify([window.__slBoard && window.__slBoard.generated_at, getStatus()]); }
+
+  function boardShell(inner, b, shownN) {
+    const meta = b
+      ? `${escAttr(b.project || '')} · ${b.srs.length}건${shownN != null && shownN !== b.srs.length ? ' (필터 ' + shownN + ')' : ''} · 동기화 ${escAttr(b.generated_at || '-')}`
+      : '세션 미연결 — 마지막 저장본 또는 비어있음';
+    return `<div class="sl-board">
+      <div class="sl-board-head">
+        <div><div class="sl-board-title">📋 SR 작업보드</div><div class="sl-board-sub">${meta}</div></div>
+        <button class="sl-bbtn sync" onclick="SlViewer.boardSync()">⟳ 동기화</button>
+      </div>
+      <div class="sl-board-toolbar">
+        <input class="sl-board-search" type="text" placeholder="🔎 SR·요약·담당자" value="${escAttr(BOARD_FILTER.q)}"
+               oninput="SlViewer.boardFilter('q', this.value)">
+        <select class="sl-board-sel" onchange="SlViewer.boardFilter('prio', this.value)">
+          <option value="">전체 우선순위</option>
+          ${['Highest', 'High', 'Medium', 'Low', 'Lowest'].map(p =>
+            `<option value="${p.toLowerCase()}" ${BOARD_FILTER.prio === p.toLowerCase() ? 'selected' : ''}>${p}</option>`).join('')}
+        </select>
+      </div>
+      ${inner}</div>`;
+  }
+
+  function renderBoard() {
+    const main = document.getElementById('sl-main');
+    if (!main) return;
+    removeQuickNav(); removeRelationPanel();
+    document.getElementById('sl-breadcrumb')?.remove();
+    document.body.classList.add('sl-custom-view');
+    BOARD_VIEW = true;
+    renderSidebar();
+    startBoardTimer();
+
+    const b = getBoard();
+    if (!b) {
+      main.innerHTML = boardShell(
+        `<div class="sl-board-empty"><div class="sl-be-icon">📋</div>
+          <div class="sl-be-title">SR 보드 데이터가 없습니다</div>
+          <div class="sl-be-desc">CLI에서 <code>/sl-viewer</code>를 실행하면 담당 지라 SR을 가져와 여기에 띄웁니다.<br>
+          이미 실행 중이면 <b>⟳ 동기화</b>를 누르세요. 세션이 꺼져 있으면 마지막 저장본만 보입니다.</div></div>`);
+      tryFallbackLoad();
+      return;
+    }
+    BOARD_SIG = boardSig();
+
+    const f = BOARD_FILTER;
+    const srs = b.srs.filter(sr => {
+      if (f.prio && String(sr.priority || '').toLowerCase() !== f.prio) return false;
+      if (f.q) {
+        const hay = (sr.key + ' ' + (sr.summary || '') + ' ' + (sr.assignee || '')).toLowerCase();
+        if (!hay.includes(f.q)) return false;
+      }
+      return true;
+    });
+    const cols = BOARD_COLS.map(c => {
+      const items = srs.filter(sr => boardColOf(sr.status) === c.key);
+      return `<div class="sl-bcol">
+        <div class="sl-bcol-h">${c.label} <span class="sl-bcol-n">${items.length}</span></div>
+        <div class="sl-bcol-body">${items.map(srCard).join('') || '<div class="sl-bcol-empty">—</div>'}</div>
+      </div>`;
+    }).join('');
+    main.innerHTML = boardShell(`<div class="sl-board-cols">${cols}</div>`, b, srs.length);
+  }
+
+  function tryFallbackLoad() {
+    fetch('sr_board.json?_=' + Date.now()).then(r => r.ok ? r.json() : null).then(d => {
+      if (d && Array.isArray(d.srs)) { window.__slBoard = d; if (document.querySelector('#sl-main .sl-board')) renderBoard(); }
+    }).catch(function () {});
+  }
+  function startBoardTimer() {
+    if (BOARD_TIMER) return;
+    BOARD_TIMER = setInterval(function () {
+      const main = document.getElementById('sl-main');
+      if (!main || !main.querySelector('.sl-board')) return;   // 보드 화면 아닐 때 무시
+      if (boardSig() !== BOARD_SIG && getBoard()) renderBoard();
+    }, 3000);
+  }
+
+  function boardEnqueue(sr, action) {
+    window.__slQueue = window.__slQueue || [];
+    window.__slQueue.push({ id: 'q-' + Date.now(), sr: sr || null, action: action, ts: new Date().toISOString() });
+    boardToast(action === 'sync' ? '동기화 요청됨 — 세션이 지라를 다시 가져옵니다'
+                                 : `${sr || ''} · ${action} 요청됨 (세션 처리 대기)`);
+  }
+  function boardToast(msg) {
+    let t = document.getElementById('sl-toast');
+    if (!t) { t = document.createElement('div'); t.id = 'sl-toast'; document.body.appendChild(t); }
+    t.textContent = msg; t.classList.add('show');
+    clearTimeout(t._h); t._h = setTimeout(function () { t.classList.remove('show'); }, 2600);
+  }
+
+  function boardDetail(key) {
+    const b = getBoard(); if (!b) return;
+    const sr = b.srs.find(s => s.key === key); if (!sr) return;
+    const st = getStatus()[key] || {};
+    document.getElementById('sl-drawer')?.remove();
+    const impRow = (lbl, arr) => (arr && arr.length)
+      ? `<div class="sl-dr-imp"><b>${lbl}</b> ${arr.map(id => `<span class="sl-xlink" role="button" tabindex="0" onclick="SlViewer.goToId('${escAttr(id)}')">${escAttr(id)}</span>`).join(' ')}</div>` : '';
+    const gate = st.gate ? `<div class="sl-dr-gate">⚠ 승인 대기: ${escAttr(st.gate)}
+        <div class="sl-dr-gbtns"><button class="sl-bbtn approve" onclick="SlViewer.boardAction('${escAttr(key)}','approve')">승인</button>
+        <button class="sl-bbtn reject" onclick="SlViewer.boardAction('${escAttr(key)}','reject')">반려</button></div></div>` : '';
+    const mat = sr.material;
+    const matSec = `<div class="sl-dr-sec">티켓 자료 ${mat && mat.state !== 'ok'
+        ? `<span class="sl-mat warn">⚠ ${escAttr(mat.note)}</span>`
+        : '<span class="sl-mat ok">✅ 충분</span>'}</div>
+      <div class="sl-dr-mat">
+        <div class="sl-dr-matpath">📁 ${escAttr((mat && mat.dossier_path) || ('docs/변경관리/' + sr.key))}/</div>
+        ${(mat && mat.attachments && mat.attachments.length) ? `<div class="sl-dr-matrow">첨부: ${mat.attachments.map(a => `<code class="sl-drift-src">${a.parseable ? '' : '✕ '}${escAttr(a.name)}</code>`).join(' ')}</div>` : ''}
+        <div class="sl-dr-matrow">보강(inputs): ${(mat && mat.inputs && mat.inputs.length) ? mat.inputs.map(f => `<code class="sl-drift-src">${escAttr(f)}</code>`).join(' ') : '<span class="sl-imp-none">없음 — 캡처/메모를 폴더에 넣어 보강하세요</span>'}</div>
+        <div class="sl-dr-gbtns"><button class="sl-bbtn mat" onclick="SlViewer.openDossier('${escAttr(key)}')">📁 폴더 열기</button>
+          <button class="sl-bbtn" onclick="SlViewer.refreshMaterial('${escAttr(key)}')">자료 새로고침</button></div>
+      </div>`;
+    const el = document.createElement('div');
+    el.id = 'sl-drawer';
+    el.innerHTML = `<div class="sl-dr-head"><span>${escAttr(sr.key)}</span>
+        <span class="sl-dr-x" role="button" tabindex="0" onclick="SlViewer.closeDrawer()">✕</span></div>
+      <div class="sl-dr-body">
+        <div class="sl-dr-title">${escAttr(sr.summary || '')}</div>
+        <div class="sl-dr-meta">${prioDot(sr.priority)} ${escAttr(sr.priority || '')} · ${escAttr(sr.status || '')} · ${escAttr(sr.assignee || '')}</div>
+        ${sr.jira_url ? `<a class="sl-dr-link" href="${escAttr(sr.jira_url)}" target="_blank" rel="noopener">지라에서 열기 ↗</a>` : ''}
+        ${sr.description ? `<div class="sl-dr-sec">설명</div><div class="sl-dr-desc">${escAttr(sr.description)}</div>` : ''}
+        ${matSec}
+        <div class="sl-dr-sec">영향 범위</div>
+        ${impRow('⬡ INF', sr.impact && sr.impact.inf)}${impRow('⛁ SCH', sr.impact && sr.impact.sch)}${impRow('▭ UIS', sr.impact && sr.impact.uis)}${impRow('◆ FUNC', sr.impact && sr.impact.func)}
+        ${(!sr.impact || !(sr.impact.inf || sr.impact.sch || sr.impact.uis || sr.impact.func)) ? '<div class="sl-imp-none">영향 미산정 — [영향 분석]으로 계산</div>' : ''}
+        ${st.state ? `<div class="sl-dr-sec">진행</div><div class="sl-dr-prog"><b style="color:${WORK_COLOR[st.state] || '#6e7681'}">${escAttr(st.state)}</b> ${escAttr(st.step || '')}</div>` : ''}
+        ${gate}
+        ${st.log_tail ? `<div class="sl-dr-sec">로그</div><pre class="sl-dr-log">${escAttr(st.log_tail)}</pre>` : ''}
+        <div class="sl-dr-actions">
+          <button class="sl-bbtn" onclick="SlViewer.boardAction('${escAttr(key)}','analyze')">영향 분석</button>
+          <button class="sl-bbtn primary" onclick="SlViewer.boardAction('${escAttr(key)}','change')">AIDD 시작</button>
+        </div>
+      </div>`;
+    document.body.appendChild(el);
+  }
+
+  // ── 변경 점검(Drift) ────────────────────────────────────────
+  const TYPE_COLOR = { INF: 'var(--c-inf)', SCH: 'var(--c-sch)', UIS: 'var(--c-uis)' };
+  function getDrift() { return (window.__slDrift && Array.isArray(window.__slDrift.items)) ? window.__slDrift : null; }
+  function driftBadge() {
+    const d = getDrift();
+    return d && d.total ? ` <span class="sl-nav-count warn">${d.total}</span>` : '';
+  }
+  function slEnqueue(action, extra) {
+    window.__slQueue = window.__slQueue || [];
+    window.__slQueue.push(Object.assign({ id: 'q-' + Date.now(), action: action, ts: new Date().toISOString() }, extra || {}));
+  }
+  function driftRow(it) {
+    const col = TYPE_COLOR[it.type] || 'var(--text-muted)';
+    const srcs = (it.sources || []).map(s => `<code class="sl-drift-src">${escAttr(s)}</code>`).join(' ');
+    return `<div class="sl-drift-item">
+      <div class="sl-drift-main">
+        <span class="sl-drift-type" style="color:${col};border-color:${col}">${escAttr(it.type)}</span>
+        <span class="sl-xlink sl-drift-id" role="button" tabindex="0" onclick="SlViewer.goToId('${escAttr(it.id)}')">${escAttr(it.id)}</span>
+        <span class="sl-drift-reason">${escAttr(it.reason || '')}</span>
+      </div>
+      ${srcs ? `<div class="sl-drift-srcs">${srcs}</div>` : ''}
+      <div class="sl-drift-act"><button class="sl-bbtn primary" onclick="SlViewer.regenSpec('${escAttr(it.id)}')">재생성</button></div>
+    </div>`;
+  }
+  function renderDrift() {
+    const main = document.getElementById('sl-main'); if (!main) return;
+    removeQuickNav(); removeRelationPanel();
+    document.getElementById('sl-breadcrumb')?.remove();
+    document.body.classList.add('sl-custom-view');
+    renderSidebar();
+    const d = getDrift();
+    const head = `<div class="sl-board-head">
+        <div><div class="sl-board-title">🔄 변경 점검</div>
+          <div class="sl-board-sub">${d ? `${d.total}건 변경 감지 · 점검 ${escAttr(d.scanned_at || '')}` : '아직 점검하지 않음 — 버튼을 누르세요'}</div></div>
+        <button class="sl-bbtn primary" onclick="SlViewer.driftScan()">🔄 변경 점검 실행</button>
+      </div>`;
+    let body;
+    if (!d) {
+      body = `<div class="sl-board-empty"><div class="sl-be-icon">🔄</div>
+        <div class="sl-be-title">변경 점검을 실행하세요</div>
+        <div class="sl-be-desc"><b>🔄 변경 점검 실행</b>을 누르면 세션이 각 스펙의 근거 소스(anchors) 변경 여부를 검사해<br>
+        재생성이 필요한 INF/SCH/UIS를 표시합니다. (<code>/sl-viewer</code> 세션 필요)</div></div>`;
+      tryDriftFallback();
+    } else if (!d.items.length) {
+      body = `<div class="sl-board-empty"><div class="sl-be-icon">✅</div>
+        <div class="sl-be-title">모든 스펙이 최신입니다</div>
+        <div class="sl-be-desc">소스 대비 낡은 스펙이 없습니다. (점검 ${escAttr(d.scanned_at || '')})</div></div>`;
+    } else {
+      const byDom = {};
+      d.items.forEach(it => { const k = it.domain || '(기타)'; (byDom[k] = byDom[k] || []).push(it); });
+      body = Object.entries(byDom).map(([dom, items]) => `
+        <div class="sl-drift-group">
+          <div class="sl-drift-dom">${escAttr(dom)} <span class="sl-bcol-n">${items.length}</span>
+            <button class="sl-bbtn sl-drift-dombtn" onclick="SlViewer.regenDomain('${escAttr(dom)}')">도메인 재생성</button></div>
+          ${items.map(driftRow).join('')}
+        </div>`).join('');
+    }
+    main.innerHTML = `<div class="sl-driftview">${head}${body}</div>`;
+  }
+  function tryDriftFallback() {
+    fetch('drift.json?_=' + Date.now()).then(r => r.ok ? r.json() : null).then(j => {
+      if (j && Array.isArray(j.items)) { window.__slDrift = j; if (document.querySelector('#sl-main .sl-driftview')) renderDrift(); }
+    }).catch(function () {});
+  }
+
   // ── 공개 API ──────────────────────────────────────────────────
   window.SlViewer = {
     showGuide() {
@@ -808,6 +1093,23 @@
              <span class="sl-sr-type">${r.type}</span> ${escAttr(r.x.id)} <span class="sl-sr-name">${escAttr(r.x.name || r.x.table || r.x.route || '')}</span></div>`).join('')
         : '<div class="sl-sr-empty">결과 없음</div>';
     },
+    // ── SR 작업보드 ──
+    showBoard() { renderBoard(); },
+    renderBoard() { renderBoard(); },          // 세션(CDP)이 __slBoard/__slStatus 주입 후 호출
+    boardSync() { boardEnqueue(null, 'sync'); },
+    boardAction(sr, action) { boardEnqueue(sr, action); if (action === 'approve' || action === 'reject') this.closeDrawer(); },
+    boardFilter(k, v) { BOARD_FILTER[k] = (v || '').toLowerCase(); renderBoard(); },
+    boardDetail(key) { boardDetail(key); },
+    closeDrawer() { document.getElementById('sl-drawer')?.remove(); },
+    openDossier(sr) { slEnqueue('open-dossier', { target: sr }); boardToast(sr + ' 자료 폴더 — 세션이 생성·탐색기로 엽니다. 캡처/메모를 넣은 뒤 [자료 새로고침]'); },
+    refreshMaterial(sr) { slEnqueue('refresh-material', { target: sr }); boardToast(sr + ' 자료 재점검 요청됨'); },
+    // ── 변경 점검 ──
+    showDrift() { renderDrift(); },
+    renderDrift() { renderDrift(); },          // 세션(CDP)이 __slDrift 주입 후 호출
+    onDrift() { renderSidebar(); if (document.querySelector('#sl-main .sl-driftview')) renderDrift(); },
+    driftScan() { slEnqueue('drift-scan'); boardToast('변경 점검 요청됨 — 세션이 소스 변경을 검사합니다'); },
+    regenSpec(id) { slEnqueue('regen-spec', { target: id }); boardToast(id + ' 재생성 요청됨'); },
+    regenDomain(d) { slEnqueue('regen-domain', { target: d }); boardToast(d + ' 도메인 재생성 요청됨'); },
     goToId(id) {
       if (!INDEX) return;
       const inf = INDEX.infs && INDEX.infs.find(i => i.id === id);

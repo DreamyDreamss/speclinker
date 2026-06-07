@@ -24,11 +24,14 @@ argument-hint: [port]
 
 ---
 
-## STEP 2 — 뷰어 서버 시작 (⚠️ 반드시 프로젝트 루트에서)
+## STEP 2 — 뷰어 서버 시작 (⚠️ 반드시 프로젝트 루트에서, **백그라운드**)
 
 ```bash
 !python -m http.server {port|5173}
 ```
+
+> **반드시 백그라운드로 실행한다**(Bash `run_in_background: true`). 포그라운드로 띄우면 세션이
+> 막혀 STEP 3(SR 보드)의 MCP·CDP 작업을 이어서 못 한다.
 
 > **서빙 루트 = 프로젝트 루트.** 문서(`docs/05_설계서/...`, `docs/00_FUNC/...` 등 docs 전체)와
 > 루트 리소스(`.speclinker/sprint-status.yaml`)가 모두 한 서버 루트 아래 있어야
@@ -36,6 +39,100 @@ argument-hint: [port]
 > 루트로 잡으면 문서가 서빙 루트 밖이 되어 클릭 시 404가 난다.
 
 접속: **`http://localhost:{port|5173}/docs/viewer/index.html`**
+
+---
+
+## STEP 3 — SR 작업보드 (선택 — `NETWORK=open` + `MCP_JIRA` + CDP Chrome)
+
+> 담당 지라 SR을 보드에 띄우고, 화면 버튼으로 영향분석·AIDD(`/sl-change`)를 트리거한다.
+> **새 명령어 없음** — `/sl-viewer` 세션이 MCP(지라)+CDP(SpecLens)를 둘 다 쥐고 있으므로 이 세션이 직접 처리한다.
+>
+> **전제**: SpecLens를 띄운 Chrome이 `--remote-debugging-port=9222`로 떠 있을 것(캡처와 동일).
+> MCP·CDP 권한은 이 세션에만 있으므로 **세션이 살아있는 동안** 라이브로 동작한다(닫으면 마지막 `sr_board.json` 정적 폴백).
+
+### 3-1. 지라에서 내 SR 수집 (MCP)
+```
+mcp-atlassian 호출:
+  tool: jira_search
+  args: { jql: "assignee = currentUser() AND project = {PROJECT} AND statusCategory != Done ORDER BY updated DESC",
+          fields: "summary,status,priority,assignee,issuetype,updated", limit: 50 }
+```
+각 이슈 → `{ key, summary, status, priority, assignee, jira_url(=<JIRA_URL>/browse/<key>), updated }`.
+
+### 3-2. SR별 영향 범위 + 자료 충분도 산정 (zero-LLM)
+**영향**: 각 SR 요약/설명에서 엔티티를 뽑아 영향 슬라이스를 계산한다:
+```bash
+!python "{PLUGIN_PATH}/scripts/build_change_context.py" "<SR 요약+설명 텍스트>" --json
+```
+→ 영향 INF/SCH/UIS/FUNC ID 목록을 각 카드 `impact`에 채운다. (그래프 미존재 시 spec_index 키워드 매칭 폴백)
+
+**자료 충분도**: 부실 SR/DRM 첨부를 감지해 "⚠ 보강 필요"를 띄운다. SR 도시에(`docs/변경관리/{SR}/`)를 점검:
+```bash
+!python "{PLUGIN_PATH}/scripts/scan_sr_material.py" . --sr <SR-KEY>
+```
+→ 산출 `{state(ok|thin|drm),note,dossier_path,attachments,inputs}`를 각 카드 `material`에 채운다.
+(thin=본문 부실+첨부없음, drm=첨부 추출불가, ok=본문 충분 or 사용자 inputs/ 보강 있음)
+
+### 3-3. 보드 데이터 작성 + 화면 주입
+`docs/viewer/sr_board.json`을 아래 형식으로 쓰고 CDP로 주입한다:
+```jsonc
+{ "generated_at":"<ISO>", "project":"{PROJECT}", "jql":"<위 JQL>",
+  "srs":[ { "key","summary","status","priority","assignee","jira_url","updated",
+            "description"(선택), "impact":{"inf":[],"sch":[],"uis":[],"func":[]}, "suggested":"/sl-change <key>" } ] }
+```
+```bash
+!node "{PLUGIN_PATH}/scripts/sl_board_cdp.js" inject docs/viewer/sr_board.json
+```
+→ SpecLens 사이드바 **📋 SR 작업보드**에 칸반으로 표시된다.
+
+### 3-4. 버튼 클릭 처리 루프 (큐 폴링)
+화면 버튼은 `window.__slQueue`에 의도만 쌓는다. 세션이 주기적으로 비워 처리한다:
+```bash
+!node "{PLUGIN_PATH}/scripts/sl_board_cdp.js" poll
+```
+반환 `requests[]`의 각 `{sr, action}` 분기:
+| action | 처리 |
+|--------|------|
+| `sync` | 3-1~3-3 재수행(지라 재조회→주입) |
+| `analyze` | 해당 SR `build_change_context` 재계산 → 카드 impact 갱신 후 inject |
+| `change` | **`/sl-change <sr>` 실행** — 단계마다 `sl_board_cdp.js status`로 진행 주입(분석중→승인대기→구현중→QA→완료) |
+| `approve`/`reject` | 진행 중인 sl-change 게이트에 사람 결정 반영 후 계속/중단 |
+| `open-dossier` (`target`=SR) | `docs/변경관리/{SR}/inputs/` **없으면 생성** + OS 탐색기로 폴더 열기(`explorer`/`open`/`xdg-open`) → 사용자가 캡처·메모 투입. (DRM/부실 SR 보강용) |
+| `refresh-material` (`target`=SR) | `scan_sr_material.py --sr {SR}` 재실행 → 카드 `material` 갱신 후 inject(보강 반영) |
+| `drift-scan` | **변경 점검**(아래 STEP 5) — `detect_drift.py` 실행 → `sl_board_cdp.js drift`로 결과 주입 |
+| `regen-spec` (`target`=스펙ID) | 해당 INF/SCH/UIS만 강제 재생성 → `gen_docsify` → 인덱스/drift 재주입 (※ 디스패처 `--only` = 후속 슬라이스) |
+| `regen-domain` (`target`=도메인) | 그 도메인 `/sl-recon` 재실행(변경분만) → `gen_docsify` → 재주입 |
+
+---
+
+## STEP 5 — 변경 점검 (스펙 최신화 — 버튼 트리거)
+
+> 소스가 바뀌었는데 스펙이 안 따라온 INF/SCH/UIS를 찾아 SpecLens **🔄 변경 점검** 화면에 띄운다.
+> 사용자가 화면에서 **[🔄 변경 점검 실행]** 을 누르면 큐에 `drift-scan`이 쌓이고(STEP 3-4 poll이 픽업), 세션이 아래를 수행한다:
+
+```bash
+!python "{PLUGIN_PATH}/scripts/detect_drift.py" . --out docs/viewer/drift.json
+!node "{PLUGIN_PATH}/scripts/sl_board_cdp.js" drift docs/viewer/drift.json
+```
+
+`detect_drift.py`(zero-LLM)는 각 스펙 frontmatter `anchors:`의 소스 mtime과 스펙 .md mtime을 비교해
+**소스가 더 최신이면 STALE**(=재생성 필요), 소스가 사라졌으면 MISSING으로 판정한다(freshness 게이트와 동일 원칙).
+화면에 도메인별로 변경 스펙이 뜨고, 각 항목 **[재생성]**(→`regen-spec`)·**[도메인 재생성]**(→`regen-domain`) 버튼으로 최신화한다.
+
+> 세션이 없을 땐 SpecLens가 마지막 `docs/viewer/drift.json`을 정적 폴백으로 읽어 보여준다(읽기 전용).
+
+진행상태 주입 예:
+```bash
+!python -c "import json;json.dump({'<SR>':{'state':'구현중','step':'dev-agent','updated':'<ISO>'}}, open('_tmp/board_status.json','w',encoding='utf-8'),ensure_ascii=False)"
+!node "{PLUGIN_PATH}/scripts/sl_board_cdp.js" status _tmp/board_status.json
+```
+
+> **손 안 대고 운영**하려면 `/loop`로 3-4 폴링을 주기 실행한다(예: 5초). 단 `/sl-change`의
+> **사람 승인 게이트는 유지**된다 — 게이트 도달 시 `state=승인대기`로 주입하고, 화면 [승인]/[반려]
+> 버튼이 큐로 결정을 보내면 그때 진행한다(자동 폭주 없음).
+
+> **보안**: CDP 다리는 페이지 read/write만 한다. 실제 코드 변경은 세션이 sl-change/sl-aidd
+> 게이트를 거쳐 수행하며, 큐에는 *의도(intent)*만 담긴다 — 브라우저發 임의 실행 경로는 없다.
 
 ---
 

@@ -1,0 +1,44 @@
+{
+  "generated_at": "2026-06-07T10:00:00",
+  "project": "NKSHOP",
+  "jql": "assignee = currentUser() AND project = NKSHOP AND statusCategory != Done ORDER BY updated DESC",
+  "_note": "정적 폴백 미리보기용 샘플. 프로젝트의 docs/viewer/sr_board.json 으로 복사하면 세션/지라 없이 SR 보드 UI를 확인할 수 있다(버튼은 세션 연결 시 동작).",
+  "srs": [
+    {
+      "key": "SR-1234", "summary": "주문 목록 화면에 날짜 범위 검색 조건 추가",
+      "status": "To Do", "priority": "High", "assignee": "홍길동",
+      "jira_url": "https://jira.example.com/browse/SR-1234", "updated": "2026-06-06",
+      "description": "주문 조회 화면에서 기간(시작~종료) 필터가 없어 운영팀이 불편. 날짜 범위 검색을 추가한다.",
+      "impact": { "inf": ["INF-ORD-002"], "sch": ["SCH-ORD-001"], "uis": ["UIS-ORD-001"], "func": ["FUNC-order-002"] },
+      "material": { "state": "ok", "note": "자료 충분", "dossier_path": "docs/변경관리/SR-1234", "attachments": [], "inputs": [] },
+      "suggested": "/sl-change SR-1234"
+    },
+    {
+      "key": "SR-1230", "summary": "환불 상태 코드 '부분환불(05)' 신규 추가",
+      "status": "In Analysis", "priority": "Medium", "assignee": "홍길동",
+      "jira_url": "https://jira.example.com/browse/SR-1230", "updated": "2026-06-05",
+      "description": "환불 정책 변경. 상세는 첨부 참조.",
+      "impact": { "inf": ["INF-ORD-014", "INF-ORD-015"], "sch": ["SCH-ORD-007"], "uis": ["UIS-ORD-004"], "func": [] },
+      "material": { "state": "drm", "note": "첨부 추출 불가(DRM/HWP) — 보강 필요", "dossier_path": "docs/변경관리/SR-1230",
+        "attachments": [{ "name": "환불정책_개정안.hwp", "parseable": false }, { "name": "화면안.pdf", "parseable": false }], "inputs": [] },
+      "suggested": "/sl-change SR-1230"
+    },
+    {
+      "key": "SR-1228", "summary": "상품 등록 8번째 탭 저장 시 간헐 오류 수정",
+      "status": "In Progress", "priority": "Highest", "assignee": "홍길동",
+      "jira_url": "https://jira.example.com/browse/SR-1228", "updated": "2026-06-07",
+      "impact": { "inf": ["INF-PRD-001"], "sch": ["SCH-SCM-230"], "uis": ["UIS-PRD-001"], "func": ["FUNC-product-001"] },
+      "material": { "state": "ok", "note": "자료 충분", "dossier_path": "docs/변경관리/SR-1228",
+        "attachments": [{ "name": "에러로그.txt", "parseable": true }], "inputs": ["상품등록_탭8_오류캡처.png", "재현절차_메모.md"] },
+      "suggested": "/sl-change SR-1228"
+    },
+    {
+      "key": "SR-1219", "summary": "배송지 변경 이력 조회 API 신규",
+      "status": "Review", "priority": "Low", "assignee": "홍길동",
+      "jira_url": "https://jira.example.com/browse/SR-1219", "updated": "2026-06-04",
+      "impact": { "inf": ["INF-ORD-021"], "sch": ["SCH-ORD-012"], "uis": [], "func": [] },
+      "material": { "state": "thin", "note": "본문 부실 — 보강 필요", "dossier_path": "docs/변경관리/SR-1219", "attachments": [], "inputs": [] },
+      "suggested": "/sl-change SR-1219"
+    }
+  ]
+}
