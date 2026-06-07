@@ -194,7 +194,7 @@ def load_linked_func_cache(root):
     return {}
 
 def load_spec_graph(root):
-    """gen_obsidian_index.py가 생성한 spec_graph.json 로드."""
+    """spec_graph_build.py가 생성한 _tmp/spec_graph.json 로드(있으면 링크 확장)."""
     path = os.path.join(root, '_tmp', 'spec_graph.json')
     if os.path.exists(path):
         try:
@@ -239,7 +239,7 @@ def expand_linked_ids(ids_dict, spec_graph):
 def make_bundle(func_id, root, env, func_map):
     entry = func_map[func_id]
 
-    # spec_graph로 링크 확장 (gen_obsidian_index 실행 후 사용 가능)
+    # spec_graph로 링크 확장 (spec_graph_build.py가 spec_graph.json 생성 시 사용 가능)
     spec_graph = load_spec_graph(root)
     ids = expand_linked_ids(
         {k: entry[k] for k in ['req', 'srs', 'inf', 'sch', 'uis']},
