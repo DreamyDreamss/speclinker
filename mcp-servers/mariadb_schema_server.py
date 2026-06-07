@@ -68,10 +68,30 @@ def _engine_get() -> sqlalchemy.engine.Engine:
         _engine = _build_engine()
     return _engine
 
-def _query(sql: str, params: dict | None = None) -> list[dict]:
-    with _engine_get().connect() as conn:
-        df = pd.read_sql_query(sqlalchemy.text(sql), conn, params=params or {})
-    return json.loads(df.to_json(orient="records", date_format="iso", force_ascii=False))
+# 동시 접속 시 간헐 연결종료 — 엔진 폐기 후 재접속 재시도 (L-4)
+_TRANSIENT = ("2006", "2013", "lost connection", "server has gone away",
+              "broken pipe", "not connected", "connection closed")
+
+def _query(sql: str, params: dict | None = None, _retries: int = 2) -> list[dict]:
+    global _engine
+    import time
+    for attempt in range(_retries + 1):
+        try:
+            with _engine_get().connect() as conn:
+                df = pd.read_sql_query(sqlalchemy.text(sql), conn, params=params or {})
+            return json.loads(df.to_json(orient="records", date_format="iso", force_ascii=False))
+        except Exception as e:
+            transient = any(s.lower() in str(e).lower() for s in _TRANSIENT)
+            if attempt < _retries and transient:
+                try:
+                    if _engine is not None:
+                        _engine.dispose()
+                except Exception:
+                    pass
+                _engine = None
+                time.sleep(0.5 * (attempt + 1))
+                continue
+            raise
 
 _SYS_SCHEMAS = ("information_schema", "performance_schema", "mysql", "sys")
 

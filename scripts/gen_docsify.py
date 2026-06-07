@@ -237,6 +237,7 @@ def scan_schs(spec_root: str) -> list:
                 'domain': fm.get('domain', domain_dir),
                 'domain_code': fm.get('domain-code', ''),
                 'inf': _parse_inf_list(fb, fm),
+                'anchor_count': len(_extract_list_field(fb, 'anchors')),
                 'file': os.path.relpath(fpath, spec_root).replace('\\', '/'),
             })
     return schs

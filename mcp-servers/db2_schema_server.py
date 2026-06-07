@@ -75,11 +75,31 @@ def _engine_get() -> sqlalchemy.engine.Engine:
         _engine = _build_engine()
     return _engine
 
-def _query(sql: str) -> list[dict]:
-    """SELECT 쿼리 실행 후 dict 목록 반환."""
-    with _engine_get().connect() as conn:
-        df = pd.read_sql_query(sql, conn)
-    return json.loads(df.to_json(orient="records", date_format="iso", force_ascii=False))
+# 동시 접속 시 간헐 연결종료 — 엔진 폐기 후 재접속 재시도 (L-4)
+_TRANSIENT = ("SQL30081", "SQL1224", "connection", "not connected",
+              "closed", "communication", "broken pipe")
+
+def _query(sql: str, _retries: int = 2) -> list[dict]:
+    """SELECT 쿼리 실행 후 dict 목록 반환 (연결종료 시 재접속 재시도)."""
+    global _engine
+    import time
+    for attempt in range(_retries + 1):
+        try:
+            with _engine_get().connect() as conn:
+                df = pd.read_sql_query(sql, conn)
+            return json.loads(df.to_json(orient="records", date_format="iso", force_ascii=False))
+        except Exception as e:
+            transient = any(s.lower() in str(e).lower() for s in _TRANSIENT)
+            if attempt < _retries and transient:
+                try:
+                    if _engine is not None:
+                        _engine.dispose()
+                except Exception:
+                    pass
+                _engine = None
+                time.sleep(0.5 * (attempt + 1))
+                continue
+            raise
 
 # ------------------------------------------------------------------
 # 4. MCP 서버

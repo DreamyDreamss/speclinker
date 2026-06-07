@@ -80,6 +80,8 @@ table: {테이블명}
 domain: {도메인}
 domain-code: {CODE}
 inf: [INF-{CODE}-NNN]
+anchors:                       # 근거 소스 구조화(JIT) — DDL/쿼리/라우터 파일
+  - "path/to/Mapper.xml (query)"
 ---
 
 # SCH-{CODE}-001: users
@@ -92,7 +94,8 @@ inf: [INF-{CODE}-NNN]
 (CREATE TABLE + 인덱스)
 
 ### 컬럼 설명
-| 컬럼명 | 타입 | NULL | 기본값 | 설명 |
+| 컬럼명 | 타입 | NULL | 키 | 기본값 | 설명 |
+(키 = PK/FK)
 
 ### 인덱스
 | 인덱스명 | 컬럼 | 타입 | 목적 |
@@ -100,8 +103,12 @@ inf: [INF-{CODE}-NNN]
 ### 코드값
 (_CD/_TP/_STS/_YN/_FL 계열 컬럼만. 없으면 섹션 생략)
 
-### 관계 (FK)
-| 참조 컬럼 | 참조 테이블 | ON DELETE |
+### 관계 (FK / 관찰된 조인)
+| 자식 컬럼 | 참조 테이블 | 참조 컬럼 | 출처 | ON DELETE |
+(출처 = DB FK / 쿼리관찰(N) — 레거시 FK미선언 시 관찰조인이 유일한 JOIN 근거)
+
+🔧 쿼리 작성 가이드 — 상시 필터 (접이식 `<details>`; soft-delete·테넌트 술어, 없으면 생략)
+| 컬럼 | 조건 | 빈도 | 의미 | 출처 |
 
 ### mini-ERD
 (mermaid erDiagram — 이 테이블 + 직결 FK 이웃만)

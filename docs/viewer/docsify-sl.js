@@ -163,7 +163,7 @@
       ['/sl-change --quick "설명"', '소규모 경량 변경 (SR 없이 INF≤2 인라인 처리)', 'INF, context'],
     ]},
     { name: '개발 · 테스트', color: '#3fb950', cmds: [
-      ['/sl-test', '테스트 케이스 작성 + 실행 → 결과 보고서', '06_소스코드/'],
+      ['/sl-test', '테스트 케이스 작성 + 실행 → 결과 보고서', '실제 소스 트리'],
     ]},
     { name: '뷰어', color: 'var(--accent)', cmds: [
       ['/sl-viewer [port]', 'SpecLens (이 웹 뷰어) 실행 (대시보드·INF/UIS/SCH·IA 트리)', 'docs/05_설계서/'],

@@ -1,7 +1,7 @@
 ---
 name: ddd-batch-agent
 description: 배치/Job 파일을 받아 BAT-XXX 배치 명세서를 생성하는 에이전트. 배치로 명확히 판별된 파일만 처리하며, 소스 분석 + MCP_DB 스케줄 보완을 수행한다.
-model: claude-sonnet-4-6
+model: claude-haiku-4-5-20251001
 ---
 
 # ddd-batch-agent — 배치 명세서 작성기

@@ -28,8 +28,10 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 BATCH_TIMEOUT  = 1800
-MODEL          = "claude-sonnet-4-6"
-MAX_PARALLEL   = 3
+MODEL          = os.environ.get("SL_DISPATCH_MODEL", "claude-haiku-4-5-20251001")
+# L-4: Oracle MCP 동시접속(DPY-4011) 시 SL_DISPATCH_PARALLEL=2로 낮춘다.
+# (각 서브프로세스가 자체 MCP 서버=별도 DB 커넥션을 열어 동시 부하가 커짐. MCP _query엔 재접속 재시도 내장.)
+MAX_PARALLEL   = int(os.environ.get("SL_DISPATCH_PARALLEL", "3"))
 LAUNCH_STAGGER = 3
 LOG_DIR_NAME   = "_tmp/sch_dispatch_logs"
 STATUS_FILE    = "_tmp/sch_dispatch_status.json"
@@ -70,11 +72,13 @@ enrichment 모드: 아래 도메인의 스켈레톤 SCH 파일에서 <!-- LLM-TO
 채울 것 (마커가 있는 곳만):
 - ### 코드값 : 코드성 컬럼(_CD/_TP/_STS/_YN/_FL/_GB/_DIV)의 값·의미 표. 근거 없으면 마커 줄 삭제(섹션 비움).
 - ### 비즈니스 주의사항 : 참조 INF의 ## 비즈니스 규칙/트랜잭션 순서/사이드이펙트 + sch_draft evidence 기반.
-- 컬럼표 '설명' 칸의 <!-- LLM-TODO --> : 컬럼 한글 설명.
+- 컬럼표('| 컬럼명 | 타입 | NULL | 키 | 기본값 | 설명 |') '설명' 칸의 <!-- LLM-TODO --> : 컬럼 한글 설명.
+- 컬럼표 타입·NULL·기본값 칸의 <!-- LLM-TODO -->/⚠️추론, ### 관계 FK '참조 컬럼' 빈칸 : 환경에 맞는 DB MCP describe/get_foreign_keys로 사실 채움(미연결 시 유지).
+- 🔧 쿼리 작성 가이드(상시 필터) 표 '의미' 칸의 <!-- LLM-TODO --> : 술어 의미(예: DEL_YN='N'→soft-delete 제외, COMP_CD→법인 스코프). 근거 없으면 [미확인].
 
 절대 수정 금지 (읽기 전용):
-- frontmatter(sch-id/table/domain/domain-code/inf)
-- DDL/컬럼 타입·NULL·기본값, ### 인덱스, ### 관계(FK), ### mini-ERD, 상단 크로스링크 블록
+- frontmatter(sch-id/table/domain/domain-code/inf), 상단 크로스링크 블록
+- DDL, ### 인덱스, ### mini-ERD, ### 관계의 관찰조인 행(출처=쿼리관찰)·이미 채워진 DB FK 행, 컬럼표 '키'(PK/FK)
 
 근거 소스: 각 SCH의 inf: frontmatter가 가리키는 docs/05_설계서/{name}/INF/INF-*.md 본문 + sch_draft evidence.
 한 SCH 파일을 채우면 다음 파일로. 도메인 내 모든 SCH 파일을 처리한다.

@@ -33,14 +33,69 @@ def inf_range_for(root, domain, table):
     return d.get('referencedByInfRange', []) or []
 
 def col_table_md(columns):
-    out = ['| 컬럼명 | 타입 | NULL | 기본값 | 설명 |', '|--------|------|------|--------|------|']
+    out = ['| 컬럼명 | 타입 | NULL | 키 | 기본값 | 설명 |',
+           '|--------|------|------|----|--------|------|']
     for c in columns:
         typ = c['type'] or '<!-- LLM-TODO -->'
         nul = 'N' if c['nullable'] is False else ('Y' if c['nullable'] else '?')
+        key = 'PK' if c['pk'] else ('FK' if c.get('fk') else '')
         dft = c['default'] if c['default'] not in (None, '') else '—'
         desc = c['comment'] or '<!-- LLM-TODO -->'
-        out.append(f"| {c['name']} | {typ} | {nul} | {dft} | {desc} |")
+        out.append(f"| {c['name']} | {typ} | {nul} | {key} | {dft} | {desc} |")
     return '\n'.join(out)
+
+
+def load_query_patterns(root):
+    """scan_query_patterns 산출 — 관찰 조인쌍 + 상시필터. 없으면 빈 구조."""
+    for rel in ('docs/05_설계서/_machine/query_patterns.json', '_tmp/query_patterns.json'):
+        d = load_json(os.path.join(root, rel))
+        if d:
+            return d
+    return {'joins': [], 'filters': []}
+
+
+def join_rows_md(table, fks, qp):
+    """DB 선언 FK(ref_col 포함) + 코드에서 관찰된 조인을 통합한 행 + 상시필터 여부."""
+    T = table.upper()
+    rows, seen = [], set()
+    for f in fks:
+        rc = f.get('ref_col') or f.get('ref_column') or '—'
+        k = (f['col'].upper(), f['ref_table'].upper(), str(rc).upper())
+        seen.add(k)
+        rows.append(f"| {f['col']} | {f['ref_table']} | {rc} | DB FK | {f.get('on_delete', '—')} |")
+    for j in qp.get('joins', []):
+        pairs = []
+        if j['table_a'] == T:
+            pairs.append((j['col_a'], j['table_b'], j['col_b']))
+        if j['table_b'] == T:
+            pairs.append((j['col_b'], j['table_a'], j['col_a']))
+        for mycol, otable, ocol in pairs:
+            k = (mycol.upper(), otable.upper(), ocol.upper())
+            if k in seen:
+                continue
+            seen.add(k)
+            rows.append(f"| {mycol} | {otable} | {ocol} | 쿼리관찰({j['freq']}) | — |")
+    return '\n'.join(rows) or '| — | — | — | — | — |'
+
+
+def standing_filter_md(table, qp):
+    """상시 필터(soft-delete/테넌트) 접이식 섹션. 없으면 ('', False)."""
+    T = table.upper()
+    filt = [f for f in qp.get('filters', []) if f['table'] == T]
+    if not filt:
+        return '', False
+    rows = '\n'.join(
+        f"| {f['col']} | {f['op']} {f['value']} | {f['freq']} | <!-- LLM-TODO --> | {', '.join(f.get('sources', [])[:2]) or '—'} |"
+        for f in filt)
+    block = (
+        "\n<details>\n"
+        f"<summary>🔧 쿼리 작성 가이드 — 상시 필터 (관찰 {len(filt)}건)</summary>\n\n"
+        "> 이 테이블 조회 시 코드에서 반복 관찰된 술어. AIDD 쿼리 생성 시 누락하면 결과가 틀어진다.\n\n"
+        "| 컬럼 | 조건 | 빈도 | 의미 | 출처 |\n"
+        "|------|------|------|------|------|\n"
+        f"{rows}\n\n"
+        "</details>\n")
+    return block, True
 
 def erd_md(table, columns, fks):
     lines = ['```mermaid', 'erDiagram', f'    {table} {{']
@@ -54,22 +109,45 @@ def erd_md(table, columns, fks):
     lines.append('```')
     return '\n'.join(lines)
 
-def emit_sch(root, domain, code, table, seq, facts):
+def collect_anchors(facts, draft_json):
+    """SCH 근거 소스를 구조화 anchors(소스 파일)로 — DDL/쿼리/라우터. JIT 소스 정밀조회용.
+    (INF anchors가 file:line 풀체인이라면, SCH anchors는 테이블을 정의·사용하는 소스 파일 목록.)"""
+    anchors, seen = [], set()
+    def add(path, role):
+        p = (path or '').replace('\\', '/').strip()
+        if not p or p in seen:
+            return
+        seen.add(p)
+        anchors.append(f'{p} ({role})')
+    src = facts.get('source', '') or ''
+    if src.startswith('ddl:'):
+        add(src[4:], 'DDL')
+    for q in (facts.get('evidence') or [])[:8]:
+        add(q, 'query')
+    for r in ((draft_json or {}).get('referencedByRouter') or [])[:4]:
+        add(r, 'router')
+    return anchors[:12]
+
+
+def emit_sch(root, domain, code, table, seq, facts, qp=None, draft_json=None):
+    qp = qp or {'joins': [], 'filters': []}
     sid = f'SCH-{code}-{seq:03d}'
     infs = inf_range_for(root, domain, table)
     inf_fm = '[' + ', '.join(infs) + ']' if infs else '[]'
     api_link = f'[{infs[0]}](../INF/{infs[0]}.md)' if infs else '[TBD]'
-    fk_rows = '\n'.join(f"| {f['col']} | {f['ref_table']} | {f.get('on_delete', '—')} |"
-                        for f in facts['fks']) or '| — | — | — |'
+    fk_rows = join_rows_md(table, facts['fks'], qp)
+    filt_block, has_filter = standing_filter_md(table, qp)
     idx_rows = '\n'.join(f"| {i['name']} | {', '.join(i['cols'])} | {'UNIQUE' if i.get('unique') else 'INDEX'} | |"
                          for i in facts['indexes']) or '| — | — | — | — |'
     has_code = any(CODE_COL_RE.search(c['name']) for c in facts['columns'])
+    anchors = collect_anchors(facts, draft_json)
+    anchors_yaml = ('\nanchors:\n' + '\n'.join(f'  - "{a}"' for a in anchors)) if anchors else ''
     md = f"""---
 sch-id: {sid}
 table: {table}
 domain: {domain}
 domain-code: {code}
-inf: {inf_fm}
+inf: {inf_fm}{anchors_yaml}
 ---
 
 # {sid}: {table}
@@ -89,11 +167,13 @@ inf: {inf_fm}
 ### 코드값
 <!-- LLM-TODO: 코드성 컬럼(_CD/_TP/_STS/_YN 등) 값·의미. 없으면 섹션 생략 가능 -->
 
-### 관계 (FK)
-| 참조 컬럼 | 참조 테이블 | ON DELETE |
-|---------|-----------|----------|
+### 관계 (FK / 관찰된 조인)
+| 자식 컬럼 | 참조 테이블 | 참조 컬럼 | 출처 | ON DELETE |
+|---------|-----------|---------|------|----------|
 {fk_rows}
 
+> 출처 `DB FK`=DB 선언 제약, `쿼리관찰(N)`=소스 SQL에서 N회 등장한 등가조인(논리 FK).
+{filt_block}
 ### mini-ERD
 {erd_md(table, facts['columns'], facts['fks'])}
 
@@ -103,7 +183,7 @@ inf: {inf_fm}
     sch_dir = os.path.join(root, 'docs/05_설계서', domain, 'SCH')
     os.makedirs(sch_dir, exist_ok=True)
     open(os.path.join(sch_dir, sid + '.md'), 'w', encoding='utf-8').write(md)
-    return sid, infs, has_code
+    return sid, infs, has_code, has_filter
 
 def emit_domain_index(root, domain, code, rows):
     erd = ['```mermaid', 'erDiagram']
@@ -140,20 +220,26 @@ def main():
     db = sch_facts.connect_db(env)
     if db:
         print('DB 드라이버 연결됨 — 권위 DDL 사용')
+    qp = load_query_patterns(root)
+    if qp.get('joins') or qp.get('filters'):
+        print(f"query_patterns 로드: 조인쌍 {len(qp.get('joins', []))} / 상시필터 {len(qp.get('filters', []))}")
     all_rows, enrich = [], []
     for d in todo:
         domain, code = d['name'], d['code']
         sch_dir = os.path.join(root, 'docs/05_설계서', domain, 'SCH')
         seq = next_seq(sch_dir, code)
-        rows, dom_has_code, dom_needs_type = [], False, False
+        rows, dom_has_code, dom_needs_type, dom_has_filter = [], False, False, False
         for table in d.get('missing', []):
             draft = os.path.join(root, '_tmp/sch_draft', domain, table + '.json')
+            draft_json = load_json(draft, {}) if os.path.exists(draft) else {}
             facts = sch_facts.collect_table_facts(
                 table, [draft] if os.path.exists(draft) else [], db=db, src_roots=[root])
-            sid, infs, has_code = emit_sch(root, domain, code, table, seq, facts)
+            sid, infs, has_code, has_filter = emit_sch(
+                root, domain, code, table, seq, facts, qp, draft_json)
             rows.append((sid, table, infs))
             all_rows.append((domain, sid, table, infs))
             dom_has_code = dom_has_code or has_code
+            dom_has_filter = dom_has_filter or has_filter
             # 타입 미상(컬럼 type=None)이면 enrichment에서 DB MCP(ora_describe_table)로 채워야 함
             dom_needs_type = dom_needs_type or any(c.get('type') is None for c in facts.get('columns', []))
             seq += 1
@@ -166,11 +252,12 @@ def main():
                     t = re.search(r'^table:\s*(\S+)', c, re.M)
                     rows.append((m.group(1), t.group(1) if t else '?', []))
         emit_domain_index(root, domain, code, rows)
-        dom_enrich = dom_has_code or dom_needs_type
+        dom_enrich = dom_has_code or dom_needs_type or dom_has_filter
         if dom_enrich:
             enrich.append({'name': domain, 'code': code, 'missing': d.get('missing', []),
-                           'needs_type': dom_needs_type})
-        print(f'{domain}: SCH {len(d.get("missing", []))}건 스켈레톤 생성 (enrich={dom_enrich}, 타입미상={dom_needs_type})')
+                           'needs_type': dom_needs_type, 'has_filter': dom_has_filter})
+        print(f'{domain}: SCH {len(d.get("missing", []))}건 스켈레톤 생성 '
+              f'(enrich={dom_enrich}, 타입미상={dom_needs_type}, 상시필터={dom_has_filter})')
     emit_global_index(root, all_rows)
     json.dump(enrich, open(os.path.join(root, '_tmp/sch_enrich_todo.json'), 'w', encoding='utf-8'),
               ensure_ascii=False, indent=2)

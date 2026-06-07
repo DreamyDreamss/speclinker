@@ -56,18 +56,24 @@ pnpm --filter @understand-anything/core build
 
 ## STEP 2 — MCP 런타임 패키지 설치 (NETWORK=open 인 경우만)
 
-DB MCP(DB2/MariaDB/Oracle) 또는 Jira/Wiki 연동을 사용한다면,  
-**Claude Code 밖 일반 터미널**에서 아래를 실행합니다.  
-(Claude Code 안에서는 대화형 입력이 불가합니다.)
+> **자동(v3.20.1+):** `project.env`에 `MCP_DB_oracle/db2/mariadb=true`가 있으면(=/sl-init이 기록),
+> 다음 세션 시작 시 SessionStart 훅이 **선언된 DB의 드라이버 + 코어(mcp·sqlalchemy·pandas·python-dotenv)를 자동 설치**합니다.
+> (DB 미사용 프로젝트엔 안 깔립니다. DB2 `ibm_db`는 IBM CLI Driver가 필요할 수 있어 실패 시 경고만.)
+> **MCP 등록(.mcp.json)과 접속 creds는 보안상 수동**입니다(아래 STEP 4).
+
+수동/일괄 설치가 필요하면 **Claude Code 밖 일반 터미널**에서:
 
 ```bash
-# Windows PowerShell / cmd
+# Windows PowerShell / cmd  (대화형)
 python "%USERPROFILE%\.claude\plugins\speclinker\mcp-servers\install.py"
+# 비대화형 한 방 설치 (필수 전부, DB2는 스킵)
+python "%USERPROFILE%\.claude\plugins\speclinker\mcp-servers\install.py" --yes
 ```
 
 ```bash
 # Mac / Linux
-python3 ~/.claude/plugins/speclinker/mcp-servers/install.py
+python3 ~/.claude/plugins/speclinker/mcp-servers/install.py        # 대화형
+python3 ~/.claude/plugins/speclinker/mcp-servers/install.py --yes  # 비대화형
 ```
 
 스크립트가 아래 패키지 설치 여부를 안내합니다:
@@ -275,6 +281,16 @@ pnpm --filter @understand-anything/core build
 2. Claude Code 재시작
 3. DB 호스트/포트 방화벽 확인
 4. DB2: IBM CLI Driver 경로(`DB2_CLIDRIVER_PATH`) 확인
+
+### Oracle 동시접속 간헐 종료 (DPY-4011 등)
+`/sl-recon` SCH enrichment가 서브프로세스 병렬(기본 3)로 각자 Oracle MCP에 접속할 때 간헐적 연결종료가 날 수 있다.
+- MCP `_query`에 **재접속 재시도(2회)가 내장**되어 일시적 종료는 자동 복구된다.
+- 그래도 잦으면 병렬도를 낮춘다: 실행 전 `SL_DISPATCH_PARALLEL=2`(또는 1) 설정.
+  ```bash
+  # Windows PowerShell
+  $env:SL_DISPATCH_PARALLEL = "2"
+  ```
+- Oracle 세션 한도(`sessions`/`processes`)도 함께 확인.
 
 ### PLUGIN_PATH가 잘못 감지됨
 `project.env`의 `PLUGIN_PATH`를 직접 수정합니다:

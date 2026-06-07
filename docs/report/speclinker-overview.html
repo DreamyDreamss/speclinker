@@ -72,24 +72,37 @@
       <div class="card"><h3>현행을 모른다</h3><p>레거시 시스템은 소스 한 파일만 봐선 "지금 어떻게 도는지"를 알 수 없다. 비즈니스 규칙이 컨트롤러→서비스→DAO→SQL→배치에 흩어져 있다.</p></div>
       <div class="card"><h3>변경 영향이 안 보인다</h3><p>공통 테이블 하나 바꾸면 어디가 깨지는지 추적 불가. 보이지 않는 곳에서 회귀가 터진다.</p></div>
       <div class="card"><h3>문서가 없거나 낡았다</h3><p>설계서는 부재하거나 현행과 어긋남(stale). 신규 인력 온보딩·고객 보고에 매번 비용.</p></div>
-      <div class="card"><h3>AI를 써도 현행을 모른다</h3><p>AIDD를 도입해도 AI가 운영 시스템의 현행 맥락을 모르면 위험한 변경을 만든다.</p></div>
+      <div class="card"><h3>AI를 써도 현행을 모른다</h3><p>AIDD를 도입해도 AI가 운영 시스템의 현행 맥락을 모르면 위험한 변경을 만든다. 특히 <b>쿼리는 소스만 봐선 정확히 못 쓴다</b>(조인·상시필터·코드값).</p></div>
     </div>
-    <div class="foot"><span>Speclinker</span><span>01 / 15</span></div>
+    <div class="foot"><span>Speclinker</span><span>01 / 16</span></div>
   </section>
 
-  <!-- 3 -->
+  <!-- 3 (신규: 동기) -->
+  <section class="slide">
+    <h2><span class="num">02</span>왜 SPEC 문서인가 — 한 substrate, 세 청중</h2>
+    <p class="muted" style="margin:-.4rem 0 1rem">운영 시스템에 설계문서가 없으면 그 공백 비용은 <b>세 부류 모두</b>에게 전가된다. 한 번의 역추출(RECON)로 셋을 동시에 충족 — 이것이 도구를 만든 이유.</p>
+    <div class="grid g3">
+      <div class="card"><h3>① 신규 입사자 온보딩</h3><p>코드 정글에서 "이 화면→어떤 API→어떤 테이블·규칙"을 스스로 재구성하는 수 주~수개월 비용. FUNC→UIS→INF→SCH 지도를 <b>코드 읽기 전에</b> 손에 쥔다.</p></div>
+      <div class="card"><h3>② 이해관계자 협업</h3><p>기획자·PM·고객사는 소스를 못 읽는다. 화면 시나리오(UIS)·기능 명세(SRS)·영향 범위(INF/SCH)가 <b>업무협의·분석·설계의 공통 언어</b>가 된다. 스펙 = 협의·영향분석의 매개체.</p></div>
+      <div class="card"><h3>③ AIDD의 JIT 기초자료</h3><p>LLM은 현행(AS-IS)을 모른다. 실데이터·실쿼리에서 뽑은 SCH(타입·조인·코드값·상시필터)가 코드/쿼리 생성 시 <b>마크다운 재파싱 없이 직접 소비하는 구조화 JIT 그라운딩</b>.</p></div>
+    </div>
+    <p class="muted" style="margin-top:1rem"><b>핵심:</b> 사람(①②)이 보든 기계(③)가 먹든 <b>사실의 원천은 동일</b>(현행 소스·DB) → 청중별로 따로 만들지 않고 <b>하나의 substrate를 레이어로 렌더</b>. 사람=가독성(접이식), 기계=구조화 JSON.</p>
+    <div class="foot"><span>Speclinker</span><span>02 / 16</span></div>
+  </section>
+
+  <!-- 4 -->
   <section class="slide center">
-    <h2><span class="num">02</span>한 문장 정의</h2>
+    <h2><span class="num">03</span>한 문장 정의</h2>
     <p class="lead" style="font-size:1.9rem;color:var(--ink)">
       "운영 시스템의 <b class="tag">현행을 합성 지식으로 역추출</b>해,<br>
       <b class="tag">소스만으론 판단하기 어려운 부분</b>을 AI 변경개발에 주입하고,<br>
       동시에 <b class="tag">사람이 보는 산출물</b>로 납품한다."</p>
-    <div class="foot"><span>Speclinker</span><span>02 / 15</span></div>
+    <div class="foot"><span>Speclinker</span><span>03 / 16</span></div>
   </section>
 
-  <!-- 4 -->
+  <!-- 5 -->
   <section class="slide">
-    <h2><span class="num">03</span>무엇을 만드는가 — 전체 파이프라인</h2>
+    <h2><span class="num">04</span>무엇을 만드는가 — 전체 파이프라인</h2>
     <div class="flow">
       <span class="box">운영 소스코드</span><span class="arr">→</span>
       <span class="box"><b>RECON</b><br><span class="muted">역추출</span></span><span class="arr">→</span>
@@ -101,51 +114,51 @@
       <div class="card"><h3>② 스펙 코퍼스</h3><p>API(INF)·DB(SCH)·화면(UIS)·기능(FUNC) — 기계 탐색 가능한 ID·링크·소스앵커 구조.</p></div>
       <div class="card"><h3>③ AIDD / 변경</h3><p>BMAD story 루프 + Jira(MCP) 변경 + 그래프 JIT 그라운딩으로 안전한 개발.</p></div>
     </div>
-    <div class="foot"><span>Speclinker</span><span>03 / 15</span></div>
-  </section>
-
-  <!-- 5 -->
-  <section class="slide">
-    <h2><span class="num">04</span>활용 오픈소스·기술과 "왜"</h2>
-    <div class="grid g2">
-      <div class="card"><h3>BMAD-METHOD</h3><p>AIDD를 <b>story-driven + QA 게이트</b>로. FUNC=story, 전용 qa-agent가 독립 컨텍스트로 3-Layer(스펙·보안·회귀) 검증. → 자동 폭주 없는 개발 규율.</p></div>
-      <div class="card"><h3>MCP (Atlassian·DB)</h3><p>Jira에서 SR 요구사항·첨부 수집, Confluence 게시, DB information_schema 권위 조회. → 실제 업무 흐름과 직결.</p></div>
-      <div class="card"><h3>Docsify → SpecLens</h3><p>역추출 산출물을 무빌드 웹 뷰어로. 대시보드·INF/SCH/UIS·IA 트리·크로스링크 네비게이션. → 사람용 산출물 열람.</p></div>
-      <div class="card"><h3>tree-sitter · Playwright · Claude</h3><p>tree-sitter=제로-LLM 정적 소스 스캔, Playwright=화면 DOM 골격 캡처(보조), Claude(Sonnet/Opus)=소스 판독·의미 합성(권위). → 사실은 무료로, 의미만 LLM.</p></div>
-    </div>
-    <p class="muted" style="margin-top:.7rem">보조: python-pptx/docx/openpyxl(첨부 추출) · pymysql/psycopg2(DB 권위) — 전부 <b>선택 의존성</b>(없으면 우아하게 폴백).</p>
-    <div class="foot"><span>Speclinker</span><span>04 / 15</span></div>
+    <div class="foot"><span>Speclinker</span><span>04 / 16</span></div>
   </section>
 
   <!-- 6 -->
   <section class="slide">
-    <h2><span class="num">05</span>RECON — 현행을 스펙으로</h2>
+    <h2><span class="num">05</span>활용 오픈소스·기술과 "왜"</h2>
+    <div class="grid g2">
+      <div class="card"><h3>BMAD-METHOD</h3><p>AIDD를 <b>story-driven + QA 게이트</b>로. FUNC=story, 전용 qa-agent가 독립 컨텍스트로 3-Layer(스펙·보안·회귀) 검증. → 자동 폭주 없는 개발 규율.</p></div>
+      <div class="card"><h3>MCP (Atlassian·DB)</h3><p>Jira에서 SR 요구사항·첨부 수집, Confluence 게시, DB 스키마 권위 조회(Oracle·DB2·MySQL/MariaDB 내장 MCP). → 실제 업무 흐름·실데이터와 직결.</p></div>
+      <div class="card"><h3>Docsify → SpecLens</h3><p>역추출 산출물을 무빌드 웹 뷰어로. 대시보드·INF/SCH/UIS·IA 트리·크로스링크 네비게이션. → 사람용 산출물 열람.</p></div>
+      <div class="card"><h3>tree-sitter · Playwright · Claude</h3><p>tree-sitter=제로-LLM 정적 소스 스캔, Playwright=화면 DOM 골격 캡처(보조), Claude(Sonnet/Opus)=소스 판독·의미 합성(권위). → 사실은 무료로, 의미만 LLM.</p></div>
+    </div>
+    <p class="muted" style="margin-top:.7rem">보조: python-pptx/docx/openpyxl(첨부 추출) · pymysql/psycopg2/oracledb(DB 권위) — 전부 <b>선택 의존성</b>(없으면 우아하게 폴백).</p>
+    <div class="foot"><span>Speclinker</span><span>05 / 16</span></div>
+  </section>
+
+  <!-- 7 -->
+  <section class="slide">
+    <h2><span class="num">06</span>RECON — 현행을 스펙으로</h2>
     <ul>
       <li><b>제로-LLM 정적 스캔</b> — tree-sitter로 라우터·서비스·DAO·SQL 구조를 토큰 0으로 추출</li>
       <li><b>호출체인 합성</b> — 컨트롤러→서비스→DAO→쿼리를 따라가 흩어진 비즈니스 규칙을 한 곳에 모음 (소스 한 파일론 안 보이는 것)</li>
       <li><b>디스패처 병렬화</b> — 독립 서브프로세스로 대량 생성, 메인 컨텍스트 오염 없음, 실패 자동 재시도·멱등</li>
       <li><b>다중 스택 중립</b> — Java/Spring, Next.js, Python 등 경로 기반 도메인 분류(특정 스택 비종속)</li>
     </ul>
-    <p class="muted" style="margin-top:.8rem">실측(運영 admin 1종): API <b class="tag">657</b>개·테이블 <b class="tag">270</b>개 스펙을 자동 역생성.</p>
-    <div class="foot"><span>Speclinker</span><span>05 / 15</span></div>
-  </section>
-
-  <!-- 7 -->
-  <section class="slide">
-    <h2><span class="num">06</span>산출물 — 이중 용도(사람 + AI)</h2>
-    <div class="grid g2">
-      <div class="card"><h3>INF (API 명세)</h3><p>엔드포인트·요청/응답·비즈니스 규칙·트랜잭션 순서·사이드이펙트 + <b>근거소스 file:line 앵커</b></p></div>
-      <div class="card"><h3>SCH (DB 스키마)</h3><p>컬럼·타입·인덱스·FK·ERD·코드값·비즈주의 (테이블당 개별 파일)</p></div>
-      <div class="card"><h3>UIS (화면 설계 · SOP+JIT)</h3><p><b>가이드형 진입</b>(사용자가 메뉴로 실화면) + <b>에이전트 소스판독</b> → ①작업 시나리오 SOP ②<b>api_hints·소스앵커로 화면→INF JIT</b>. 캡처는 보조.</p></div>
-      <div class="card"><h3>FUNC (추적 축)</h3><p>INF/SCH/UIS를 묶는 기능 단위 — RTM·AIDD의 단일 진실</p></div>
-    </div>
-    <p class="muted" style="margin-top:.8rem"><b>핵심:</b> 같은 산출물이 사람에겐 <b>읽는 문서</b>, AI에겐 <b>frontmatter·링크·소스앵커로 기계 탐색되는 인덱스</b>.</p>
-    <div class="foot"><span>Speclinker</span><span>06 / 15</span></div>
+    <p class="muted" style="margin-top:.8rem">실측(운영 admin 1종): API <b class="tag">657</b>개·테이블 <b class="tag">270</b>개 스펙을 자동 역생성.</p>
+    <div class="foot"><span>Speclinker</span><span>06 / 16</span></div>
   </section>
 
   <!-- 8 -->
   <section class="slide">
-    <h2><span class="num">07</span>AIDD — BMAD story 루프</h2>
+    <h2><span class="num">07</span>산출물 — 이중 용도(사람 + AI)</h2>
+    <div class="grid g2">
+      <div class="card"><h3>INF (API 명세)</h3><p>엔드포인트·요청/응답·비즈니스 규칙·트랜잭션 순서·사이드이펙트 + <b>근거소스 file:line 앵커</b></p></div>
+      <div class="card"><h3>SCH (DB 스키마 = 쿼리 작성 계약)</h3><p>컬럼·타입·키·인덱스·코드값 + <b>관찰된 조인(논리 FK)·상시필터</b>(soft-delete·테넌트). MCP=물리사실 + 실쿼리=논리관계 → AIDD가 정확한 JOIN·필터 생성.</p></div>
+      <div class="card"><h3>UIS (화면 설계 · SOP+JIT)</h3><p><b>가이드형 진입</b>(사용자가 메뉴로 실화면) + <b>에이전트 소스판독</b> → ①작업 시나리오 SOP ②<b>api_hints·소스앵커로 화면→INF JIT</b>. 캡처는 보조.</p></div>
+      <div class="card"><h3>FUNC (추적 축)</h3><p>INF/SCH/UIS를 묶는 기능 단위 — RTM·AIDD의 단일 진실</p></div>
+    </div>
+    <p class="muted" style="margin-top:.8rem"><b>핵심:</b> 같은 산출물이 사람에겐 <b>읽는 문서</b>, AI에겐 <b>frontmatter·링크·소스앵커·구조화 쿼리패턴(_machine/*.json)으로 직접 소비되는 인덱스</b>.</p>
+    <div class="foot"><span>Speclinker</span><span>07 / 16</span></div>
+  </section>
+
+  <!-- 9 -->
+  <section class="slide">
+    <h2><span class="num">08</span>AIDD — BMAD story 루프</h2>
     <div class="flow">
       <span class="box">story 생성</span><span class="arr">→</span>
       <span class="box warn">✋사람 승인</span><span class="arr">→</span>
@@ -155,16 +168,16 @@
       <span class="box warn">✋확인</span>
     </div>
     <ul style="margin-top:1.2rem">
-      <li><b>FUNC = story</b> — RECON 산출물이 PRD·아키텍처 대용</li>
+      <li><b>FUNC = story</b> — RECON 산출물이 PRD·아키텍처 대용. story에 <b>해당 FUNC 테이블의 조인·상시필터를 구조화로 직접 주입</b>(JIT).</li>
       <li><b>전용 QA 게이트</b> — dev와 분리된 독립 컨텍스트로 객관 검증</li>
       <li><b>사람 승인 3지점</b> — 자동 폭주 방지(BMAD 정석)</li>
     </ul>
-    <div class="foot"><span>Speclinker</span><span>07 / 15</span></div>
+    <div class="foot"><span>Speclinker</span><span>08 / 16</span></div>
   </section>
 
-  <!-- 9 -->
+  <!-- 10 -->
   <section class="slide">
-    <h2><span class="num">08</span>변경관리 — Jira(MCP) + JIT 그라운딩</h2>
+    <h2><span class="num">09</span>변경관리 — Jira(MCP) + JIT 그라운딩</h2>
     <div class="flow">
       <span class="box">Jira SR(MCP)<br>+ PPT/Word 첨부</span><span class="arr">→</span>
       <span class="box">요구사항 분석</span><span class="arr">→</span>
@@ -176,81 +189,82 @@
       <li>요약 스펙 주입의 한계(<span class="warn">lossy·stale·coarse</span>)를 넘어, <b>그래프로 영향을 정밀 특정 + 실코드를 그 자리에서 읽음</b></li>
       <li><b>Ripple 검출</b> — 공유 테이블 변경 시 영향받는 모든 곳을 자동 노출</li>
     </ul>
-    <div class="foot"><span>Speclinker</span><span>08 / 15</span></div>
-  </section>
-
-  <!-- 10 -->
-  <section class="slide">
-    <h2><span class="num">09</span>핵심 설계원칙 = 실효성의 근거</h2>
-    <div class="grid g2">
-      <div class="card"><h3>토큰 최소화</h3><p>사실(컬럼·타입·링크)은 스크립트가 zero-LLM 생성, 의미(코드값·비즈규칙)만 LLM. SCH는 사실 ~70%를 토큰 0으로(추정).</p></div>
-      <div class="card"><h3>컨텍스트 격리</h3><p>대량 생성은 독립 서브프로세스 디스패처 → 메인 컨텍스트 오버플로 없음 + 실패 자동 재시도.</p></div>
-      <div class="card"><h3>JIT 그라운딩</h3><p>요약 주입 대신 그래프+소스앵커 → 무손실·최신·정밀. RECON은 "인덱스", 실소스는 "정밀 회귀".</p></div>
-      <div class="card"><h3>멱등 · 범용 · 문서동기화</h3><p>재실행 안전, 스택 중립, 변경 시 정본 문서 강제 동기화로 stale 방지.</p></div>
-    </div>
-    <div class="foot"><span>Speclinker</span><span>09 / 15</span></div>
+    <div class="foot"><span>Speclinker</span><span>09 / 16</span></div>
   </section>
 
   <!-- 11 -->
   <section class="slide">
-    <h2><span class="num">10</span>실효성 — 정량 증거</h2>
+    <h2><span class="num">10</span>핵심 설계원칙 = 실효성의 근거</h2>
+    <div class="grid g2">
+      <div class="card"><h3>토큰 최소화</h3><p>사실(컬럼·타입·링크·조인·필터)은 스크립트가 zero-LLM 생성, 의미(코드값·비즈규칙·필터의미)만 LLM. SCH는 사실 ~70~80%를 토큰 0으로(추정).</p></div>
+      <div class="card"><h3>컨텍스트 격리</h3><p>대량 생성은 독립 서브프로세스 디스패처 → 메인 컨텍스트 오버플로 없음 + 실패 자동 재시도.</p></div>
+      <div class="card"><h3>JIT 그라운딩 (2층)</h3><p>요약 주입 대신 그래프+소스앵커+구조화 쿼리패턴. 한 마크다운이 JIT 원천이 되지 않게 <b>사람 레이어/기계 레이어 분리</b>.</p></div>
+      <div class="card"><h3>멱등 · 범용 · 문서동기화</h3><p>재실행 안전, 스택 중립(DB MCP도 ora/db2/mdb 환경별), 변경 시 정본 문서 강제 동기화로 stale 방지.</p></div>
+    </div>
+    <div class="foot"><span>Speclinker</span><span>10 / 16</span></div>
+  </section>
+
+  <!-- 12 -->
+  <section class="slide">
+    <h2><span class="num">11</span>실효성 — 정량 증거</h2>
     <div class="stat">
       <div class="s"><b>657</b><span>운영 admin 1종 API(INF) 자동 역생성</span></div>
       <div class="s"><b>176</b><span>공통코드(JT_CODE) 변경 시 영향 INF<br>= ripple 자동 검출(실측)</span></div>
       <div class="s"><b>~70%↓</b><span>SCH 생성 토큰(사실=스크립트, 추정)</span></div>
       <div class="s"><b>19→12</b><span>명령어 통합(BMAD 기반 정리)</span></div>
     </div>
-    <p class="muted" style="margin-top:1.2rem">→ "공통 테이블 하나 바꾸면 어디가 깨지나"를 <b>176곳으로 즉시 가시화</b> — 소스 수작업으론 불가능한 안전망.</p>
-    <div class="foot"><span>Speclinker</span><span>10 / 15</span></div>
+    <p class="muted" style="margin-top:1.2rem">→ "공통 테이블 하나 바꾸면 어디가 깨지나"를 <b>176곳으로 즉시 가시화</b> — 소스 수작업으론 불가능한 안전망. SCH 쿼리계약은 레거시 <b>FK 미선언</b> 환경에서도 정확한 JOIN을 가능케 함.</p>
+    <div class="foot"><span>Speclinker</span><span>11 / 16</span></div>
   </section>
 
-  <!-- 12 -->
+  <!-- 13 -->
   <section class="slide">
-    <h2><span class="num">11</span>차별점 — 단순 문서화와 무엇이 다른가</h2>
+    <h2><span class="num">12</span>차별점 — 단순 문서화와 무엇이 다른가</h2>
     <table>
       <tr><th></th><th>일반 문서화 도구</th><th>Speclinker</th></tr>
       <tr><td>목적</td><td>사람이 읽는 문서</td><td><b>AI 주입 + 사람 산출물 겸용</b></td></tr>
       <tr><td>생성</td><td>수작업/요약</td><td>정적스캔+합성, 사실은 zero-LLM</td></tr>
       <tr><td>변경 활용</td><td>거의 없음</td><td><b>그래프 영향분석 + 소스앵커 JIT</b></td></tr>
+      <tr><td>쿼리 생성</td><td>지원 안 함</td><td><b>실쿼리 채굴 조인·필터로 정확</b></td></tr>
       <tr><td>현행성</td><td>금방 stale</td><td>JIT 실소스 read로 최신 보정</td></tr>
       <tr><td>개발 연계</td><td>없음</td><td>BMAD AIDD 루프에 직접 주입</td></tr>
     </table>
-    <div class="foot"><span>Speclinker</span><span>11 / 15</span></div>
+    <div class="foot"><span>Speclinker</span><span>12 / 16</span></div>
   </section>
 
-  <!-- 13 -->
+  <!-- 14 -->
   <section class="slide">
-    <h2><span class="num">12</span>정직한 한계</h2>
+    <h2><span class="num">13</span>정직한 한계</h2>
     <ul>
       <li><span class="warn">의도/why</span> — 코드가 "무엇을" 하는지는 잡지만 "왜"는 못 잡음(주석 한계)</li>
       <li><span class="warn">런타임 암묵 의존</span> — 동적 SQL·이벤트 리스너·리플렉션은 정적분석 사각지대</li>
       <li><span class="warn">freshness</span> — 코드가 움직이면 스펙이 낡음 → drift 감지 + JIT 실소스로 완화하나 완전 해결은 아님</li>
     </ul>
     <p class="muted" style="margin-top:1rem">→ 이 한계를 인정하고, <b>JIT 실소스 read</b>로 lossy·stale을 구조적으로 보완하는 것이 설계의 핵심.</p>
-    <div class="foot"><span>Speclinker</span><span>12 / 15</span></div>
-  </section>
-
-  <!-- 14 -->
-  <section class="slide">
-    <h2><span class="num">13</span>기대 효과</h2>
-    <div class="grid g3">
-      <div class="card"><h3>변경 안전성</h3><p>ripple 가시화로 회귀 사고↓, 변경 영향분석 자동화</p></div>
-      <div class="card"><h3>온보딩·보고</h3><p>현행 산출물 즉시 확보 — 신규 인력·고객 보고 비용↓</p></div>
-      <div class="card"><h3>AIDD 생산성</h3><p>AI가 현행을 알고 변경 → SM 운영·유지보수 자동화</p></div>
-    </div>
-    <h2 style="margin-top:1.8rem;color:var(--accent2)">로드맵</h2>
-    <p class="muted">엔티티 자동추출 고도화 · 앵커 line-level 정밀화 · 의도/why 보강 · drift 강제화</p>
-    <div class="foot"><span>Speclinker</span><span>13 / 15</span></div>
+    <div class="foot"><span>Speclinker</span><span>13 / 16</span></div>
   </section>
 
   <!-- 15 -->
+  <section class="slide">
+    <h2><span class="num">14</span>기대 효과 — 세 청중에 대한 가치</h2>
+    <div class="grid g3">
+      <div class="card"><h3>신규자 온보딩·보고</h3><p>현행 산출물 즉시 확보 — 신규 인력 온보딩·고객 보고 비용↓. 코드 읽기 전에 시스템 지도 확보.</p></div>
+      <div class="card"><h3>이해관계자 협업</h3><p>기획·PM·고객사와 화면·기능·영향 범위를 같은 산출물로 협의 — 분석·설계 누락·오해↓.</p></div>
+      <div class="card"><h3>변경 안전 · AIDD 생산성</h3><p>ripple 가시화로 회귀 사고↓. AI가 현행(조인·필터 포함)을 알고 변경 → SM 운영·유지보수 자동화.</p></div>
+    </div>
+    <h2 style="margin-top:1.8rem;color:var(--accent2)">로드맵</h2>
+    <p class="muted">엔티티 자동추출 고도화 · 앵커 line-level 정밀화 · 의도/why 보강 · drift 강제화 · query_patterns 실데이터 샘플링(분포·카디널리티)</p>
+    <div class="foot"><span>Speclinker</span><span>14 / 16</span></div>
+  </section>
+
+  <!-- 16 -->
   <section class="slide center">
     <h1 style="font-size:2.6rem">Speclinker</h1>
     <p class="lead" style="font-size:1.6rem">
       "운영 시스템의 현행을 <b class="tag">AI가 쓸 수 있는 지식</b>으로 바꾸고,<br>
       그것이 동시에 <b class="tag">사람의 산출물</b>이 된다."</p>
-    <p class="muted" style="margin-top:1.2rem">제로-LLM 사실 + LLM 의미 · 그래프 JIT 그라운딩 · BMAD AIDD · MCP · Docsify(SpecLens)</p>
-    <div class="foot"><span>감사합니다</span><span>15 / 15</span></div>
+    <p class="muted" style="margin-top:1.2rem">제로-LLM 사실 + LLM 의미 · 그래프 JIT 그라운딩 · SCH 쿼리 작성 계약 · BMAD AIDD · MCP · Docsify(SpecLens)</p>
+    <div class="foot"><span>감사합니다</span><span>16 / 16</span></div>
   </section>
 
 </div>

@@ -1,7 +1,7 @@
 ---
 name: srs-agent
 description: 스펙 파일(화면 spec.md + INF)을 읽고 SRS-F-XXX를 상세화하는 전담 에이전트 — 화면 시퀀스·API 체인·비즈니스 규칙을 use-case 단위로 집약한다.
-model: claude-opus-4-7
+model: claude-sonnet-4-6
 ---
 
 # srs-agent — SRS 기능 명세 전담

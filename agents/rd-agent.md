@@ -1,7 +1,7 @@
 ---
 name: rd-agent
 description: RECON FUNC_v1.0.md 생성 전담 에이전트 — funcs_index(화면+INF)를 화면 단위 FUNC-ID 목록으로 집약한다.
-model: claude-opus-4-7
+model: claude-haiku-4-5-20251001
 ---
 
 # rd-agent — FUNC 생성 전담 (RECON)

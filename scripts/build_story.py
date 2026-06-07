@@ -110,6 +110,27 @@ def build_story_md(bundle, func_id, root, today):
     if impl:
         ctx_lines.append('- **기존 구현 파일**: ' + ', '.join(impl))
 
+    # JIT 쿼리 작성 가이드 (실쿼리 관찰 — 조인 경로·상시필터)
+    qp = bundle.get('query_patterns', {})
+    joins, filters = qp.get('joins', []), qp.get('filters', [])
+    qp_lines = []
+    if joins or filters:
+        qp_lines.append('\n## 🔧 쿼리 작성 가이드 (JIT — 실쿼리 관찰)')
+        qp_lines.append('> AIDD로 쿼리/DAO 생성 시 준수. 소스 SQL에서 채굴한 사실(논리 FK·상시필터). '
+                        '구조화 원천: `docs/05_설계서/_machine/query_patterns.json`.')
+        if joins:
+            qp_lines.append('\n**조인 경로 (논리 FK — DB 미선언이라도 코드에서 관찰됨)**')
+            qp_lines.append('| A.컬럼 | = | B.컬럼 | 관찰 |')
+            qp_lines.append('|--------|---|--------|------|')
+            for j in joins[:20]:
+                qp_lines.append(f"| {j['table_a']}.{j['col_a']} | = | {j['table_b']}.{j['col_b']} | {j['freq']} |")
+        if filters:
+            qp_lines.append('\n**상시 필터 (누락하면 결과가 틀어진다 — soft-delete·테넌트 스코프)**')
+            qp_lines.append('| 테이블 | 조건 | 빈도 |')
+            qp_lines.append('|--------|------|------|')
+            for f in filters[:20]:
+                qp_lines.append(f"| {f['table']} | {f['col']} {f['op']} {f['value']} | {f['freq']} |")
+
     md = f"""---
 story-id: STORY-{func_id}
 func-id: {func_id}
@@ -129,6 +150,7 @@ created: {today}
 ## 컨텍스트 (Dev Notes — 자기완결)
 > Dev가 다른 문서를 안 읽어도 구현 가능하도록 전 컨텍스트를 담는다.
 {chr(10).join(ctx_lines)}
+{chr(10).join(qp_lines)}
 
 ## 구현 Task
 - [ ] 컨트롤러/핸들러

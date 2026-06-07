@@ -1,7 +1,7 @@
 ---
 name: ddd-db-agent
-description: SCH 스키마 생성 에이전트. 기본은 enrichment 모드(build_sch_static 스켈레톤의 LLM-TODO 마커 보강 — 코드값·비즈주의·컬럼설명 + **DB MCP 연결 시 미상 타입/NULL/PK를 ora_describe_table로 사실 채움(JIT/AIDD용)**). 이미 채워진 사실은 읽기전용. 스켈레톤 없을 때만 from-scratch 폴백.
-model: claude-sonnet-4-6
+description: SCH 스키마 생성 에이전트. 기본은 enrichment 모드(build_sch_static 스켈레톤의 LLM-TODO 마커 보강 — 코드값·비즈주의·컬럼설명·상시필터 의미 + **환경에 맞는 DB MCP(ora/db2/mdb)로 미상 타입/NULL/PK·FK 참조컬럼을 사실 채움(JIT/AIDD 쿼리 생성용)**). 관찰조인·이미 채워진 사실은 읽기전용. 스켈레톤 없을 때만 from-scratch 폴백.
+model: claude-haiku-4-5-20251001
 ---
 
 # ddd-db-agent — DB 스키마 consolidator
@@ -38,11 +38,33 @@ INF 생성 단계에서 `resolve_call_chain.py`가 미리 만들어 둔 **sch_dr
   컬럼표 '설명' 칸의 `<!-- LLM-TODO -->`.
 - **타입/NULL/PK 정밀화 (DB MCP 연결 시 — JIT/AIDD 필수)**: 컬럼표의 '타입·NULL·기본값' 칸이
   `<!-- LLM-TODO -->`(=build_sch_static가 못 채운 미상)이거나 DDL 상단에 `⚠️ ...추론` 면책이 붙어있으면 →
-  내장 Oracle MCP **`ora_describe_table(table_name)`**(또는 `db-{별칭}` describe 도구)로 조회해
-  `data_type`→타입, `nullable`→NULL, `data_default`→기본값, `is_pk`→PK를 **사실로 채우고 DDL도 실제 정의로 교체**한다.
-  채운 뒤 상단 `⚠️ ...추론` 면책 줄을 **`> ✔ 컬럼 타입/제약 = DB MCP(ora_describe_table) 검증값`** 으로 바꾼다.
-  (`ora_get_indexes`/`ora_get_foreign_keys`로 인덱스·FK도 검증값으로 보강 가능.)
-  → 이는 SCH가 **AIDD JIT 메타데이터**(정확한 컬럼·타입 기반 코드생성)로 기능하기 위한 핵심. MCP 미연결 시에만 추론값 유지.
+  **환경에 맞는 DB MCP**의 `describe_table(table_name)`로 조회해 `data_type`→타입, `nullable`→NULL,
+  `data_default`→기본값, `is_pk`→PK를 **사실로 채우고 DDL도 실제 정의로 교체**한다.
+  채운 뒤 상단 `⚠️ ...추론` 면책 줄을 **`> ✔ 컬럼 타입/제약 = DB MCP 검증값`** 으로 바꾼다.
+
+  > **DB MCP 선택 (스택 중립)** — `project.env`의 `DB_TYPE`(또는 가용 MCP 별칭)에 맞는 도구 prefix를 쓴다.
+  > 플러그인 내장 3종 모두 동일 도구셋(`{prefix}_describe_table`/`_get_indexes`/`_get_foreign_keys`/`_execute_select`):
+  >
+  > | DB_TYPE | MCP prefix | describe | FK |
+  > |---------|-----------|----------|----|
+  > | oracle | `ora_` | `ora_describe_table` | `ora_get_foreign_keys` |
+  > | db2 | `db2_` | `db2_describe_table` | `db2_get_foreign_keys` |
+  > | mysql/mariadb | `mdb_` | `mdb_describe_table` | `mdb_get_foreign_keys` |
+  >
+  > 그 외 별칭의 describe/foreign_keys 도구가 있으면 그것을 쓴다. 미연결 시에만 추론값 유지.
+
+- **관계(FK / 관찰된 조인) 보강 — JOIN 정확성의 핵심**: `### 관계 (FK / 관찰된 조인)` 표는
+  build_sch_static이 ① DB 선언 FK(있으면) ② `query_patterns.json`의 **관찰된 등가조인**(`출처=쿼리관찰(N)`)으로 이미 채운다.
+  DB MCP 연결 시 `{prefix}_get_foreign_keys`로 **선언 FK 행의 `참조 컬럼`(ref_column)을 사실로 채우고** `출처=DB FK`로 표기한다
+  (레거시는 FK 미선언이라 빈 경우가 많음 — 그럴 땐 관찰조인 행이 유일한 JOIN 근거이므로 **삭제 금지**).
+  → 자식컬럼↔참조컬럼 쌍이 있어야 AIDD가 올바른 `JOIN ON` 절을 생성한다.
+
+- **`🔧 쿼리 작성 가이드 — 상시 필터` 의미 채움**: 이 접이식 섹션은 코드에서 반복 관찰된 술어(soft-delete `_YN/_FL`, 테넌트 `COMP_CD/SITE_CD` 등)를
+  build_sch_static이 사실(컬럼·조건·빈도·출처)로 채워두고 **'의미' 칸만 `<!-- LLM-TODO -->`** 로 남긴다.
+  각 행의 의미를 사실 기반으로 채운다 — 예: `DEL_YN = 'N'` → `soft-delete(논리삭제) 행 제외`, `COMP_CD = :BIND` → `로그인 법인 스코프(멀티테넌트)`.
+  근거(소스 if/주석/INF 규칙)를 못 찾으면 `[미확인]`. **이 술어들은 AIDD 쿼리 생성 시 누락하면 결과가 틀어지는 상시 조건**이다.
+
+  → 이는 SCH가 **AIDD JIT 메타데이터**(정확한 컬럼·타입·조인·상시필터 기반 코드/쿼리 생성)로 기능하기 위한 핵심.
 - **코드값은 *사실로 역인용*(요약의 요약 금지)** — 값·의미를 ① 공통코드 테이블(JT_CODE/CMM_CODE 등) 조회,
   ② 소스 if/switch 분기, ③ 참조 INF 응답 예시에서 **사실로** 가져오고 **출처(`테이블` 또는 `file:line`)를 각 행에 표기**한다.
   근거를 못 찾은 값은 임의 의미부여 금지 — **`[미확인]`** 으로 명시한다. (예: `| 03 | 환불완료 | JT_CODE.REFUND_STS | |`)
@@ -51,9 +73,11 @@ INF 생성 단계에서 `resolve_call_chain.py`가 미리 만들어 둔 **sch_dr
   ② `group`이 없으면 **probe-match**: `WHERE CODE IN ({values})` 조회 → 일치 그룹 추론(모호하면 `[후보 N]`).
   ③ JT_CODE에 없으면 소스 enum/상수 → 그래도 없으면 `[미확인]`.
   복원된 코드 의미는 SCH `### 코드값`뿐 아니라 해당 컬럼이 쓰인 **쿼리의 의도**(예: `WHERE PRD_APP_STS_CD='20'` → `상품승인대기`)로도 요약한다.
-- **읽기 전용(수정 금지)**: frontmatter(sch-id/table/domain/domain-code/inf), 상단 크로스링크 블록,
-  그리고 **이미 사실로 채워진**(추론·LLM-TODO가 아닌) DDL·타입·NULL·기본값·`### 인덱스`·`### 관계(FK)`·`### mini-ERD`.
-  단 **`<!-- LLM-TODO -->` 미상 칸과 `⚠️ ...추론` 표시분은** 위 "타입/NULL/PK 정밀화"에 따라 DB MCP describe로 **채운다**(덮어쓰기 아님 — 미채움 보강).
+- **읽기 전용(수정 금지)**: frontmatter(sch-id/table/domain/domain-code/inf/**anchors**), 상단 크로스링크 블록,
+  그리고 **이미 사실로 채워진**(추론·LLM-TODO가 아닌) DDL·타입·NULL·기본값·`### 인덱스`·`### mini-ERD`,
+  그리고 `### 관계` 표의 **관찰조인 행(`출처=쿼리관찰`)과 이미 채워진 DB FK 행**.
+  단 **`<!-- LLM-TODO -->` 미상 칸·`⚠️ ...추론` 표시분·FK `참조 컬럼` 빈칸·상시필터 '의미' 빈칸은** 위 정밀화/보강 지침대로 **채운다**(덮어쓰기 아님 — 미채움 보강).
+  컬럼표는 `| 컬럼명 | 타입 | NULL | 키 | 기본값 | 설명 |` 형식이며 '설명' 칸의 `<!-- LLM-TODO -->`만 채운다('키'=PK/FK는 사실, 건드리지 않음).
 - **근거**: 해당 SCH의 `inf:` frontmatter가 가리키는 INF 파일 `## 비즈니스 규칙/트랜잭션 순서/사이드이펙트`
   + sch_draft evidence(서비스 구현체 if/switch). 근거 없으면 마커 줄을 삭제(섹션 비움).
 - 도메인 내 `docs/05_설계서/{도메인}/SCH/SCH-*.md` 전부를 순회하며 채운다.
@@ -265,8 +289,13 @@ table: {테이블명}
 domain: {도메인}
 domain-code: {CODE}
 inf: [INF-{CODE}-NNN, ...]
+anchors:                       # JIT 소스 정밀조회용 — 테이블 정의·사용 소스 파일
+  - "path/to/Mapper.xml (query)"
+  - "path/to/schema.sql (DDL)"
 ---
 ```
+
+> **anchors(근거 소스 구조화)**: build_sch_static이 sch_draft evidence(쿼리 파일)·DDL 소스·referencedByRouter에서 자동 채운다(사실, 읽기전용). 소스를 읽어 `file:line`까지 정밀화 가능하면 보강해도 좋다.
 
 **본문 필수 구조:**
 
@@ -293,12 +322,13 @@ CREATE INDEX idx_users_email ON users(email);
 ```
 
 ### 컬럼 설명
-| 컬럼명 | 타입 | NULL | 기본값 | 설명 |
-|--------|------|------|--------|------|
-| id | UUID | N | gen_random_uuid() | 기본 키 |
-| email | VARCHAR(255) | N | — | 로그인 식별자, 유니크 |
-| password | VARCHAR(255) | N | — | bcrypt 해시 |
-| role | VARCHAR(50) | N | USER | 권한 (USER/ADMIN) |
+| 컬럼명 | 타입 | NULL | 키 | 기본값 | 설명 |
+|--------|------|------|----|--------|------|
+| id | UUID | N | PK | gen_random_uuid() | 기본 키 |
+| email | VARCHAR(255) | N |  | — | 로그인 식별자, 유니크 |
+| password | VARCHAR(255) | N |  | — | bcrypt 해시 |
+| user_id | UUID | N | FK | — | users 참조 |
+| role | VARCHAR(50) | N |  | USER | 권한 (USER/ADMIN) |
 
 ### 인덱스
 | 인덱스명 | 컬럼 | 타입 | 목적 |
@@ -322,10 +352,25 @@ CREATE INDEX idx_users_email ON users(email);
 3. JT_CODE/CMM_CODE 등 공통코드 테이블 참조 시 `JT_CODE.{GROUP_CD}` 형태로 표기
 4. sch_draft evidence 파일(서비스 구현체)의 if/switch 분기에서 값 의미 확인
 
-### 관계 (FK)
-| 참조 컬럼 | 참조 테이블 | ON DELETE |
-|---------|-----------|----------|
-| — | — | — |
+### 관계 (FK / 관찰된 조인)
+| 자식 컬럼 | 참조 테이블 | 참조 컬럼 | 출처 | ON DELETE |
+|---------|-----------|---------|------|----------|
+| user_id | users | id | DB FK | CASCADE |
+| order_no | order_item | order_no | 쿼리관찰(7) | — |
+
+> 출처 `DB FK`=DB 선언 제약, `쿼리관찰(N)`=소스 SQL에서 N회 등장한 등가조인(논리 FK).
+
+<details>
+<summary>🔧 쿼리 작성 가이드 — 상시 필터 (관찰 N건)</summary>
+
+> 이 테이블 조회 시 코드에서 반복 관찰된 술어. AIDD 쿼리 생성 시 누락하면 결과가 틀어진다.
+
+| 컬럼 | 조건 | 빈도 | 의미 | 출처 |
+|------|------|------|------|------|
+| del_yn | = 'N' | 12 | soft-delete(논리삭제) 행 제외 | XxxMapper.xml |
+| comp_cd | = :BIND | 9 | 로그인 법인 스코프(멀티테넌트) | XxxMapper.xml |
+
+</details>
 
 ### mini-ERD (이 테이블 + 직결 FK 이웃만)
 ```mermaid

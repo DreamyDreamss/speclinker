@@ -1,7 +1,7 @@
 ---
 name: test-agent
 description: FUNC_MAP의 FUNC-ID를 기반으로 TC를 작성하고 테스트를 실행하여 TR을 생성하는 서브에이전트. /sl-test 커맨드에서 호출됨.
-model: claude-sonnet-4-6
+model: claude-haiku-4-5-20251001
 ---
 
 # test-agent — 테스트 전담 에이전트

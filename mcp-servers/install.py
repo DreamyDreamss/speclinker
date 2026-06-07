@@ -209,10 +209,25 @@ def print_report(items: list[CheckItem]):
 # ---------------------------------------------------------------------------
 # 3단계: 누락 항목 선별 → 설치 확인
 # ---------------------------------------------------------------------------
-def select_and_install(items: list[CheckItem]):
+def select_and_install(items: list[CheckItem], auto: bool = False):
     need = [it for it in items if it.status in ("missing", "warn") and it.fix_fn]
     if not need:
         print(f"\n{c(GREEN, '모든 항목이 설치되어 있습니다. 추가 설치가 필요 없습니다.')}")
+        return
+
+    # 비대화형(--yes): 필수(비optional) 누락만 자동 설치. optional(ibm_db: CLI Driver 경로 입력 필요)은 스킵.
+    if auto:
+        targets = [it for it in need if not it.optional]
+        skipped = [it for it in need if it.optional]
+        print(f"\n{c(CYAN, '[--yes] 자동 설치:')} {', '.join(it.label.split('  ')[0] for it in targets) or '(없음)'}")
+        for it in targets:
+            try:
+                ok = it.fix_fn()
+                print(f"  {c(GREEN,'[OK]') if ok else c(YELLOW,'[!!]')} {it.label.split('  ')[0]}")
+            except Exception as e:
+                print(f"  {c(RED,'[XX]')} {it.label.split('  ')[0]}: {e}")
+        for it in skipped:
+            print(f"  {c(GRAY,'[선택 스킵]')} {it.label.split('  ')[0]} — 수동: pip install (DB2는 IBM CLI Driver 필요)")
         return
 
     print(f"\n{c(YELLOW, '아래 항목이 없거나 확인이 필요합니다:')}")
@@ -291,11 +306,13 @@ DB2 IBM CLI Driver (별도 다운로드):
 # 메인
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
+    AUTO = "--yes" in sys.argv or "-y" in sys.argv
     print(f"{c(CYAN+BOLD, '=== Speclinker MCP 환경 검사 ===')} "
-          f"{c(GRAY, f'({OS_NAME} / {ARCH})')}")
+          f"{c(GRAY, f'({OS_NAME} / {ARCH})')}{c(GRAY, ' [--yes]' if AUTO else '')}")
 
     items = scan()
     print_report(items)
-    select_and_install(items)
-    offer_atlassian_cache()
+    select_and_install(items, auto=AUTO)
+    if not AUTO:
+        offer_atlassian_cache()
     print_next()

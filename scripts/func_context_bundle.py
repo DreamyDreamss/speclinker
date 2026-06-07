@@ -91,17 +91,30 @@ def find_inf_content(root, inf_ids):
 
 def find_sch_content(root, sch_ids):
     result = {}
+    design_root = os.path.join(root, 'docs', '05_설계서')
+    # 1순위: 개별 SCH 파일({도메인}/SCH/SCH-{CODE}-NNN.md, v2.56+) — 테이블·컬럼·관계·쿼리관례 정본
+    for dirpath, _, filenames in os.walk(design_root):
+        for fname in filenames:
+            if not fname.endswith('.md') or not fname.startswith('SCH-'):
+                continue
+            for sch_id in sch_ids:
+                if sch_id not in result and (fname == f'{sch_id}.md' or sch_id in fname):
+                    c = _read_file(os.path.join(dirpath, fname))
+                    if c:
+                        result[sch_id] = c
+    # 폴백: 전역/도메인 색인에서 섹션 추출(구버전 단일파일 구조)
     db_md = os.path.join(root, 'docs', '05_설계서', 'DB_Schema.md')
     if os.path.exists(db_md):
         db_content = _read_file(db_md) or ''
         for sch_id in sch_ids:
+            if sch_id in result:
+                continue
             pat = re.search(
                 rf'(#{1,3}\s*{re.escape(sch_id)}.+?)(?=\n#{1,3}\s|\Z)',
                 db_content, re.DOTALL)
             if pat:
                 result[sch_id] = pat.group(1)
 
-    design_root = os.path.join(root, 'docs', '05_설계서')
     for dirpath, _, filenames in os.walk(design_root):
         for fname in filenames:
             if fname.startswith('DB_') and fname.endswith('.md'):
@@ -138,6 +151,38 @@ def find_uis_content(root, uis_ids):
                         if c:
                             result[uis_id] = c
     return result
+
+def load_query_patterns(root):
+    """scan_query_patterns 산출(_machine/query_patterns.json) — JIT 기계 레이어."""
+    for rel in ('docs/05_설계서/_machine/query_patterns.json', '_tmp/query_patterns.json'):
+        p = os.path.join(root, rel)
+        if os.path.exists(p):
+            try:
+                return json.load(open(p, encoding='utf-8'))
+            except Exception:
+                pass
+    return {'joins': [], 'filters': []}
+
+
+def tables_from_sch(sch_content):
+    """로드된 SCH 본문 frontmatter `table:`에서 테이블명 집합 추출."""
+    tables = set()
+    for c in sch_content.values():
+        m = re.search(r'^table:\s*(\S+)', c or '', re.M)
+        if m:
+            tables.add(m.group(1).upper())
+    return tables
+
+
+def filter_query_patterns(qp, tables):
+    """이 FUNC가 만지는 테이블에 한정한 조인·상시필터만 추린다(JIT 직접 소비용)."""
+    if not tables:
+        return {'joins': [], 'filters': []}
+    joins = [j for j in qp.get('joins', [])
+             if j.get('table_a') in tables or j.get('table_b') in tables]
+    filters = [f for f in qp.get('filters', []) if f.get('table') in tables]
+    return {'joins': joins, 'filters': filters}
+
 
 def load_linked_func_cache(root):
     cache_path = os.path.join(root, '.understand-anything', 'linked-func-cache.json')
@@ -205,6 +250,10 @@ def make_bundle(func_id, root, env, func_map):
     sch_content = find_sch_content(root, ids['sch'])
     uis_content = find_uis_content(root, ids['uis'])
 
+    # JIT 기계 레이어: 이 FUNC 테이블의 관찰 조인·상시필터(쿼리 생성 정확도용)
+    tables = tables_from_sch(sch_content)
+    query_patterns = filter_query_patterns(load_query_patterns(root), tables)
+
     annotation = f'linked_func: {func_id}'
 
     # 이미 구현된 파일 확인
@@ -217,6 +266,8 @@ def make_bundle(func_id, root, env, func_map):
         'status'      : entry['status'],
         'ids'         : ids,
         'spec_content': {'inf': inf_content, 'sch': sch_content, 'uis': uis_content},
+        'query_patterns': query_patterns,
+        'tables'      : sorted(tables),
         'annotation'  : annotation,
         'implemented_files': implemented_files,
         'spec_graph_used': bool(spec_graph),

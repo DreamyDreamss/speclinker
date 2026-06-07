@@ -45,8 +45,7 @@ def collect_scan_dirs() -> list[str]:
             if p:
                 add(p)
 
-    # 관례적 경로
-    add(os.path.join(PROJECT_ROOT, "06_소스코드", "src"))
+    # 관례적 경로 (SM: 실제 소스 트리 — SOURCE_*_PATH로 이미 커버)
     add(os.path.join(PROJECT_ROOT, "src"))
     # 루트 바로 아래 */src
     for entry in os.scandir(PROJECT_ROOT):

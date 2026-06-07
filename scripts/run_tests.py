@@ -146,10 +146,7 @@ results = []
 for label, src_path in source_paths:
     results.append(run_tests_for(label, src_path))
 
-# 06_소스코드/tests 도 실행 (sl-dev 생성 테스트)
-gen_test = os.path.join(PROJECT_ROOT, "06_소스코드", "tests")
-if os.path.isdir(gen_test) and detect_project_type(gen_test) != "unknown":
-    results.append(run_tests_for("generated", gen_test))
+# SM: AIDD 생성 테스트는 실제 소스 트리(SOURCE_*_PATH)에 들어가므로 위 루프가 이미 커버한다.
 
 # ── 결과 저장 ─────────────────────────────────────────────────────────────────
 out_dir = os.path.join(PROJECT_ROOT, "docs", "08_테스트결과보고서")

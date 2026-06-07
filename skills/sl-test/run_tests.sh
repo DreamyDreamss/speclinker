@@ -29,7 +29,7 @@ elif [ -f "package.json" ]; then
 
 elif [ -f "requirements.txt" ] || [ -f "pyproject.toml" ]; then
     echo "pytest 실행..." | tee -a "$RESULTS_FILE"
-    python -m pytest 06_소스코드/tests/ -v 2>&1 | tail -30 | tee -a "$RESULTS_FILE"
+    python -m pytest -v 2>&1 | tail -30 | tee -a "$RESULTS_FILE"
     [ $? -eq 0 ] && PASS=$((PASS+1)) || FAIL=$((FAIL+1))
 
 elif [ -f "go.mod" ]; then
@@ -39,7 +39,7 @@ elif [ -f "go.mod" ]; then
 
 else
     echo "테스트 프레임워크를 감지할 수 없습니다." | tee -a "$RESULTS_FILE"
-    echo "06_소스코드/tests/ 폴더의 테스트를 수동으로 실행하세요." | tee -a "$RESULTS_FILE"
+    echo "실제 소스 트리(SOURCE_*_PATH)의 테스트를 수동으로 실행하세요." | tee -a "$RESULTS_FILE"
     SKIP=$((SKIP+1))
 fi
 

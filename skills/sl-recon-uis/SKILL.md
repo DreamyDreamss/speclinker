@@ -46,7 +46,7 @@ docs/05_설계서/{domain}/UIS/UIS-{CODE}-{NNN}_{화면명}/
 CDP 포트가 살아있지 않으면 디버그 프로파일 Chrome을 띄운다.
 
 ```bash
-!python -c "
+!python -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
 import os, subprocess, sys, socket, time, platform, tempfile
 try: sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 except: pass

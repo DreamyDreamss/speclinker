@@ -65,7 +65,7 @@ docs/
   08_TR/             테스트 결과
   ops/               운영 이슈·변경 로그
 
-06_소스코드/             소스 (docs/ 밖)
+(소스코드)            실제 소스 트리 = project.env SOURCE_*_PATH (docs/ 밖, speclinker가 만들지 않음)
 ```
 
 ---

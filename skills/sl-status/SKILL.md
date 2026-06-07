@@ -21,7 +21,7 @@ FUNC_MAP + sprint-status.yaml을 한 뷰로. 구 `sl-rtm`(커버리지·갭·게
 ## STEP 0 — 전제 확인
 
 ```python
-!python3 -c "
+!python3 -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
 import os
 print('FUNC_MAP:', '존재' if os.path.exists('docs/00_FUNC/FUNC_MAP.md') else '없음 → /sl-recon-doc 먼저 실행')
 "
@@ -49,7 +49,7 @@ FUNC_MAP을 파싱해 `.speclinker/sprint-status.yaml`을 생성/갱신한다.
 커버리지 + 상태별 카운트 + 갭 요약을 한 번에 출력.
 
 ```python
-!python3 -c "
+!python3 -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
 import os, json, re
 func_map = 'docs/00_FUNC/FUNC_MAP.md'
 content = open(func_map, encoding='utf-8').read()
@@ -80,7 +80,7 @@ FUNC 커버리지: {covered}/{total} ({%})   미연결 갭: {N}건
 ### --coverage (구 sl-rtm --func + --gap)
 
 ```python
-!python3 -c "
+!python3 -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
 import os, json, re
 cache_path = '.understand-anything/linked-func-cache.json'
 func_map_path = 'docs/00_FUNC/FUNC_MAP.md'
@@ -114,7 +114,7 @@ for fid in uncovered:
 ### --publish (구 sl-rtm --publish)
 
 ```python
-!python3 -c "
+!python3 -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
 env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8') if '=' in l and not l.startswith('#'))
 print('NETWORK=' + env.get('NETWORK','closed'))
 "

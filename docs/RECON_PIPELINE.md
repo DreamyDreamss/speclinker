@@ -27,8 +27,9 @@
                  ※ v3.8.0: INF frontmatter anchors[](full-chain) + 코드값 의도(scan_code_literals), 본문=abstract
              4-B BAT 생성 (ddd-batch-agent)
   STEP 5-0   SCH 스킵 게이트 (build_sch_todo.py) — 이미 생성된 테이블 제외(idempotent)
-  STEP 5-A   SCH 정적 스켈레톤 (build_sch_static.py) — 컬럼·인덱스·FK·ERD·링크·색인 zero-token, 의미는 LLM-TODO
-  STEP 5-B   SCH 의미 enrichment (dispatch_sch_gen.py → ddd-db-agent) — 코드값·비즈주의만, 필요 도메인 병렬
+  STEP 5-0.5 쿼리 패턴 채굴 (scan_query_patterns.py + scan_code_literals.py) — 관찰조인·상시필터·코드값 → _machine/*.json (zero-token JIT 레이어)
+  STEP 5-A   SCH 정적 스켈레톤 (build_sch_static.py) — 컬럼(키열)·인덱스·FK+관찰조인·상시필터·ERD·링크·색인 zero-token, 의미는 LLM-TODO
+  STEP 5-B   SCH 의미 enrichment (dispatch_sch_gen.py → ddd-db-agent) — 코드값·비즈주의·상시필터의미 + 다중DB MCP 타입·FK참조컬럼, 필요 도메인 병렬
   STEP 5-1   INF→SCH 링크 패치 (link_inf_sch_new.py)
   STEP 6     완료 체크포인트(phase=recon-analysis) → 다음: /sl-recon-uis
 
@@ -75,7 +76,8 @@
 | 4-3 | **INF 생성** | `dispatch_inf_gen.py` → `ddd-api-agent` (sonnet, ×N배치) | `{도메인}/INF/INF-*.md`(frontmatter anchors[] full-chain, 본문 abstract), `_TOC.md` |
 | 4-B | BAT 생성 | `ddd-batch-agent` (sonnet) | `{도메인}/BAT/BAT-*.md` |
 | 5-0 | SCH 스킵 게이트 (idempotent) | `build_sch_todo.py` | `_tmp/sch_todo.json` (생성 대상 도메인+누락 테이블) |
-| 5-A | **SCH 정적 스켈레톤** | `build_sch_static.py` (zero-token: sch_facts → sch_draft+DDL+ORM+선택 DB드라이버) | `{도메인}/SCH/SCH-{CODE}-NNN.md`(사실+LLM-TODO), `{도메인}/DB_{도메인}.md`, `DB_Schema.md`, `sch_enrich_todo.json` |
+| 5-0.5 | **쿼리 패턴 채굴** (zero-token JIT 레이어) | `scan_query_patterns.py` + `scan_code_literals.py` | `docs/05_설계서/_machine/query_patterns.json`(관찰조인·상시필터), `code_literals.json` |
+| 5-A | **SCH 정적 스켈레톤** | `build_sch_static.py` (zero-token: sch_facts → sch_draft+DDL+ORM+선택 DB드라이버, + query_patterns) | `{도메인}/SCH/SCH-{CODE}-NNN.md`(사실+관찰조인+상시필터+LLM-TODO), `{도메인}/DB_{도메인}.md`, `DB_Schema.md`, `sch_enrich_todo.json` |
 | 5-B | **SCH 의미 enrichment** | `dispatch_sch_gen.py` → `ddd-db-agent`(enrichment, 서브프로세스 병렬, 필요 도메인만) | LLM-TODO 마커 채움(코드값·비즈주의·컬럼설명) |
 | 5-1 | INF→SCH 링크 패치 | `link_inf_sch_new.py` | INF `## 참조 테이블` `[TBD]`→`[[SCH-XXX]]` |
 | 6 | 완료 체크포인트 | 인라인 | `_tmp/recon_checkpoint.json` (phase=recon-analysis) |
@@ -131,7 +133,7 @@
 | `spec-agent` | recon 2-1 | sonnet | Phase-A: SAD + 도메인 확정 |
 | `ddd-api-agent` | recon 4-3 | sonnet | INF(API 명세) 생성 |
 | `ddd-batch-agent` | recon 4-B | sonnet | BAT(배치 명세) 생성 |
-| `ddd-db-agent` | recon 5-B | sonnet | SCH enrichment — 코드값·비즈주의·컬럼설명만(사실은 build_sch_static) |
+| `ddd-db-agent` | recon 5-B | sonnet | SCH enrichment — 코드값·비즈주의·컬럼설명·상시필터 의미 + 다중DB MCP(ora/db2/mdb) 타입·FK참조컬럼 채움(구조·관찰조인은 build_sch_static) |
 | `ddd-ui-agent` | recon-uis U2-5 | sonnet | SOP급 UIS(화면 설계서) 생성 (소스 권위, 마커·탭별 §4) |
 | `rd-agent` | recon-doc 9-2 | sonnet | FUNC 생성 |
 | `srs-agent` | recon-doc 9-3 | sonnet | SRS 생성 |

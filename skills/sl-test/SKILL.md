@@ -19,7 +19,7 @@ triggers:
 ## 실행 전 확인
 
 ```python
-!python3 -c "
+!python3 -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
 import os
 env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8') if '=' in l and not l.startswith('#'))
 fm = 'docs/00_FUNC/FUNC_MAP.md'
@@ -40,7 +40,7 @@ test-agent에 위임한다:
 테스트 실행 (언어 자동 감지):
 
 ```python
-!python3 -c "
+!python3 -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
 import os, sys, subprocess
 env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8') if '=' in l and not l.startswith('#'))
 plugin = env.get('PLUGIN_PATH','')
@@ -56,7 +56,7 @@ else:
 ## 버그 등록 (`/sl-test --bug`)
 
 ```python
-!python3 -c "
+!python3 -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
 import os
 env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8') if '=' in l and not l.startswith('#'))
 print('NETWORK=' + env.get('NETWORK','closed'))
@@ -72,7 +72,7 @@ NETWORK=closed인 경우 `docs/08_테스트결과보고서/bugs_{날짜}.md`에 
 ## 성능 테스트 (`/sl-test --perf`)
 
 ```python
-!python3 -c "print('비기능 요구사항 소스: docs/03_기능명세서/SRS_v1.0.md 비기능 섹션')"
+!python3 -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');print('비기능 요구사항 소스: docs/03_기능명세서/SRS_v1.0.md 비기능 섹션')"
 ```
 
 SRS/기능명세서의 비기능 요구사항에서 성능 기준을 추출하여 테스트 시나리오를 작성한다:

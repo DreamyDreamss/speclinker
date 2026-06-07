@@ -76,7 +76,7 @@
 | `/sl-aidd [FUNC-ID]` | `skills/sl-aidd/SKILL.md` | docs/00_FUNC/FUNC_MAP.md 존재 | AIDD (story 루프: 구현·QA·테스트 통합) |
 | `/sl-change <SR-ID> [--quick\|--full]` | `skills/sl-change/SKILL.md` | project.env, docs/05_설계서/ (로컬 파일 또는 NETWORK=open) | DELTA (변경 전주기·경량 통합) |
 | `/sl-status [--coverage\|--next\|--publish]` | `skills/sl-status/SKILL.md` | docs/00_FUNC/FUNC_MAP.md | 추적 (커버리지·진행·갭·게시 통합) |
-| `/sl-test` | `skills/sl-test/SKILL.md` | 06_소스코드/ 존재 | 전체 |
+| `/sl-test` | `skills/sl-test/SKILL.md` | 소스 존재(SOURCE_*_PATH) | 전체 |
 | `/sl-context` | `skills/sl-context/SKILL.md` | docs/05_설계서/ INF 존재 | RECON 후 |
 | `/sl-drift [도메인] [--since Nd]` | `skills/sl-drift/SKILL.md` | git 저장소, docs/05_설계서/ INF | SDD 유지 |
 | `/sl-ia [도메인\|--update-only]` | `skills/sl-ia/SKILL.md` | docs/05_설계서/UIS/ spec.md 존재 | RECON 후 |
@@ -95,24 +95,30 @@
 
 | 에이전트 | 역할 | 모델 | 기법 |
 |--------|------|------|------|
-| `agents/spec-agent.md` | Phase-A(SAD+도메인 확정) | **Sonnet** | 순차/병렬 조율 |
-| `agents/rd-agent.md` | FUNC_v1.0 생성 | **Sonnet** | 인덱스 포맷팅 |
-| `agents/srs-agent.md` | SRS 집약 | **Sonnet** | 사실 집계 |
+| `agents/spec-agent.md` | Phase-A(SAD+도메인 확정) | **Opus** | 순차/병렬 조율 |
+| `agents/rd-agent.md` | FUNC_v1.0 생성 | **Haiku** | 인덱스 포맷팅(기계적 — v3.24 opus→haiku) |
+| `agents/srs-agent.md` | SRS 집약 | **Sonnet** | 사실 집계/합성(v3.24 opus→sonnet) |
 | `agents/sad-agent.md` | 아키텍처 설계서 | Opus | 패턴 매칭 + Self-Critique |
-| `agents/ddd-api-agent.md` | API 명세 (INF-XXX) | Sonnet | DSPy-style 구조화 출력 |
-| `agents/ddd-db-agent.md` | DB 스키마 (SCH-XXX) **enrichment** — 코드값·비즈주의·컬럼설명만 (사실은 build_sch_static가 생성) | Sonnet | LLM-TODO 마커 보강 |
+| `agents/ddd-api-agent.md` | API 명세 (INF-XXX) | Sonnet | DSPy-style 구조화 출력(비즈룰 — 유지; 대량 비용시 SL_DISPATCH_MODEL=haiku) |
+| `agents/ddd-db-agent.md` | DB 스키마 (SCH-XXX) **enrichment** — 코드값·비즈주의·컬럼설명·상시필터 의미 + 다중 DB MCP(ora/db2/mdb)로 타입·FK참조컬럼 사실채움 (구조·관찰조인은 build_sch_static) | **Haiku** | LLM-TODO 마커 보강(추출형 — v3.24 sonnet→haiku) |
 | `agents/ddd-ui-agent.md` | SOP급 화면설계 (UIS) | Sonnet | 소스 권위(슬라이스 Read) + DOM 스냅샷 골격, §2 작업 시나리오·탭별 §4·마커 (v3.9 가이드형) |
-| `agents/ddd-batch-agent.md` | 배치 명세 (BAT-XXX) | Sonnet | 배치 확정 판별 + MCP DB 스케줄 조회 |
+| `agents/ddd-batch-agent.md` | 배치 명세 (BAT-XXX) | **Haiku** | 배치 확정 판별 + MCP DB 스케줄 조회(v3.24 sonnet→haiku) |
 | `agents/rtm-agent.md` | FUNC_MAP 체인 + 품질 게이트 | Opus | Constitutional AI |
 
 ### 코드·테스트 에이전트
 
 | 태스크 | 서브에이전트 | 모델 | 이유 |
 |--------|-----------|------|------|
-| 코드 생성 | `agents/dev-agent.md` | Sonnet | 반복 실행 태스크 |
-| QA 게이트 | `agents/qa-agent.md` | Sonnet | dev와 분리된 독립 컨텍스트 3-Layer 검증 |
-| 테스트 | `agents/test-agent.md` | Sonnet | 반복 실행 태스크 |
+| 코드 생성 | `agents/dev-agent.md` | Sonnet | 코드 품질 — 유지 |
+| QA 게이트 | `agents/qa-agent.md` | Sonnet | dev와 분리된 독립 컨텍스트 3-Layer 검증 — 유지 |
+| 테스트 | `agents/test-agent.md` | **Haiku** | TC 생성(기계적 — v3.24 sonnet→haiku) |
 
+> **v3.24.0** (토큰 비용 절감 — 모델 적정화 sonnet/opus→haiku): 사용자 "토큰소모 너무많아" 검토. **발견된 불일치**: rd-agent·srs-agent가 frontmatter상 `opus-4-7`로 실행 중(CLAUDE.md 표는 Sonnet 표기 — 과소비). 태스크 성격별 재배정: ①**Haiku로**(기계적/추출형) — `rd-agent`(FUNC 인덱스 포맷팅, opus→haiku), `ddd-db-agent`(SCH enrichment=LLM-TODO 마커 채움, sonnet→haiku), `ddd-batch-agent`(sonnet→haiku), `test-agent`(TC 생성, sonnet→haiku), **dispatch_sch_gen 기본 모델 sonnet→haiku**(SCH 대량 디스패치=최대 토큰 절감 지점) ②**Sonnet 유지**(합성/판단/코드품질) — srs(opus→sonnet 다운), ddd-api(INF 비즈룰), ddd-ui(SOP), dev, qa ③**Opus 유지** — sad, rtm, spec(오케스트레이터, 저빈도). **토큰 절약 모드**: 대량 INF까지 더 줄이려면 `SL_DISPATCH_MODEL=claude-haiku-4-5-20251001`(dispatch_inf_gen/sch_gen 공통 env). haiku는 sonnet과 쿼터 분리라 주간한도 회피에도 유리. 품질 민감(INF 비즈룰·코드생성·QA게이트)은 Sonnet 유지로 정확도 보존.
+> **v3.23.0** (개선안 잔여 종결 — L-2 cp949 + L-4 MCP 동시접속): nkshop 개선안 마지막 2건. **L-2(Windows cp949)**: skill 인라인 파이썬 `-c` 스니펫이 `sys.stdout.reconfigure` 누락 시 em-dash(—)·한글에서 UnicodeEncodeError → 47개 `-c` 스니펫 전수에 `import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');` 상단 표준화(이미 있는 건 스킵, 패치 스크립트로 41개 주입). **L-4(Oracle MCP 동시접속 DPY-4011)**: 메인+서브프로세스 병렬 접속 시 간헐 연결종료 → 3개 MCP 서버(oracle/db2/mariadb) `_query`에 **transient 오류(DPY-4011/ORA-03113/2006/SQL30081 등) 감지 시 엔진 dispose+재접속 재시도(2회, 백오프)** 내장 + dispatch_sch_gen `MAX_PARALLEL`을 `SL_DISPATCH_PARALLEL` env로 노출(Oracle 잦으면 2로 낮춤). SETUP_GUIDE 트러블슈팅 추가. **→ nkshop 개선안(_tmp/speclinker_plugin_improvements.md) 전 항목 종결**(C-4/H-1/H-3/M-1/M-3/M-5/L-2/L-4 등 완료, M-1[타입공백]은 v3.18 MCP·M-1[chain]은 v3.22로 해소).
+> **v3.22.0** (M-1: resolve_call_chain — service/impl + MyBatis 네임스페이스 해소, sch_draft 품질): nkshop 실측 결함 "service는 찾되 dao/query=0 → sch_draft 0테이블 → SCH가 전적으로 MCP 의존". 근본원인 2개: ①**Spring service/impl 분리** — 컨트롤러가 service *인터페이스*를 import하면 인터페이스엔 DAO import가 없고 *Impl*에만 있어 체인이 인터페이스에서 멈춤 ②**jwork류 문자열 네임스페이스 SQL** — typed Mapper 인터페이스 없이 `sqlSession.selectList("ns.id")` 문자열로 호출해 import 추적으론 XML 도달 불가. 수정: ①`impl_files()`로 service의 `*Impl`/`*ServiceImpl`를 class_index에서 찾아 traverse에 추가(인터페이스 import 0이어도 Impl이 import한 DAO/Mapper 도달) ②`_namespace_index()`(모든 *.xml `<mapper namespace>` 인덱스, 워크스페이스당 1회 메모) + `find_query_files_by_namespace()`(소스의 MyBatis 호출 문자열→namespace 최장prefix 매칭→XML)를 컨트롤러·서비스·Impl·DAO에 적용. 둘 다 스택중립(비Java/비MyBatis는 no-op). 회귀 `test_resolve_chain_m1.py`(impl_files·namespace·통합체인 3). 효과: service/impl·MyBatis 프로젝트에서 dao/query>0 → sch_draft 테이블·evidence·INF매핑 채워짐 → SCH(타입 외 구조)·v3.20 anchors·v3.19 조인 품질 향상. **개선안 잔여**: L-2(인라인 cp949 5스킬)·L-4(MCP 동시접속)만 남음.
+> **v3.21.0** (설치 자동화 + sl-init 구조 정리 — SM 정합): ①**MCP 라이브러리 자동설치**: 기존엔 setup-deps.js(SessionStart)가 playwright/Pillow/tree-sitter만 깔고 DB MCP libs(mcp·sqlalchemy·pandas·oracledb/pymysql/ibm_db)는 수동(mcp-servers/install.py)이라 "설치했는데 MCP 안 됨"이 발생. 수정: setup-deps.js가 `project.env`의 `MCP_DB_oracle/db2/mariadb=true`(=/sl-init 기록)를 보고 **선언된 DB 드라이버+코어를 자동 설치**(미사용 프로젝트엔 안 깔아 pandas/ibm_db 빌드부담 회피, 전부 graceful). install.py에 `--yes` 비대화형 모드 추가. 등록(.mcp.json)+creds는 보안상 수동 유지. ②**sl-init 디렉토리 정리**: **`docs/00_입력자료` 제거**(소비처 0 — 유일 참조가 삭제된 /sl-genesis 안내였음), **`06_소스코드/{src,tests,reviews}` 제거**(greenfield 잔재 — SM은 실소스를 직접 수정). dev-agent가 생성코드를 06_소스코드 대신 **`SOURCE_*_PATH` 실소스 트리에 기존 패키지/레이어 관례대로** 배치(linked_func 주석). req_scan/run_tests/sl-test/docsify-sl/SPEC_CONVENTIONS의 06_소스코드 참조를 실소스로 전환. 죽은 `/sl-genesis` 안내(sl-init 2곳·sl-change 1곳) 제거. **`docs/02_추적표`는 유지**(sl-change DELTA가 RTM 도메인색인·SR추적에 실사용 — 쓰임새 확인됨). SETUP_GUIDE 자동설치 안내 갱신.
+> **v3.20.0** (JIT 배선 완결 + SCH 근거 anchors 구조화): v3.19 잔여 2건 처리. **①query_patterns JIT 배선**: `func_context_bundle`이 FUNC가 만지는 테이블에 한정해 `_machine/query_patterns.json`의 조인·상시필터를 추려 번들(`query_patterns`/`tables` 필드)에 싣고, `build_story`가 STORY에 **🔧 쿼리 작성 가이드(JIT)** 표(조인 경로·상시필터)를 주입 → dev-agent가 마크다운 재파싱 없이 구조화 소비. **동시 버그수정**: `find_sch_content`가 `DB_*.md`만 보고 **개별 `SCH-*.md`를 안 읽던 결함**(v2.56 개별파일 구조 이후 방치 — dev-agent가 SCH 컬럼/관계 상세를 못 받았음) → 개별 SCH 파일 1순위 로드. **②SCH anchors 구조화**: build_sch_static `collect_anchors`가 sch_draft evidence(쿼리)·DDL 소스·referencedByRouter(컨트롤러)를 frontmatter `anchors:` 배열로 emit(INF는 file:line 풀체인, SCH는 테이블 정의·사용 소스 파일 목록 — JIT 소스 정밀조회). gen_docsify scan_schs `anchor_count` 추가(⚓ 배지 INF 동형). 회귀 test_sch_static(anchors 단언)+test_story_query_patterns 2. **stale 데이터 진단(별건)**: 사용자가 지목한 nkshop INF-PRD-002의 "테이블명 있는데 SCH 빈칸"은 구버전 산출물(req-f·구포맷 `|테이블|SCH|`+[TBD]) + SCH가 scm 도메인으로 분류(SCH-SCM-xxx)돼 옛 `[[SCH-PRD-001]]`조차 stale. 코드는 v3.17에서 이미 수정(단일목록+뷰어 자동크로스링크)됨 → /sl-recon 재생성 시 해소(또는 link_inf_sch_new 경량 재실행).
+> **v3.19.0** (SCH = "쿼리 작성 계약" — JOIN·상시필터 정확화, AIDD 쿼리 생성용): "소스만으론 정확한 쿼리를 못 만든다"는 문제 해결. LLM이 *정확한* 쿼리를 쓰려면 ①실테이블/타입(v3.18 ✅) ②**올바른 JOIN 키** ③코드값 ④**상시 필터 관례** ⑤인덱스가 필요한데, ②④는 카탈로그(describe)로는 불가 — **실제 쿼리에만 존재**(특히 레거시는 FK 미선언이라 `*_get_foreign_keys`가 빈손). 신규 `scan_query_patterns.py`(zero-token): 소스 SQL/XML에서 alias→table 해소 후 **관찰 등가조인쌍**(논리 FK)과 **상시필터**(soft-delete `_YN/_FL`·테넌트 `COMP/SITE_CD` — 바인드파라미터 `:BIND`도 포착)를 채굴→`docs/05_설계서/_machine/query_patterns.json`(영속 JIT 기계레이어). build_sch_static: 컬럼표에 **키(PK/FK)열** + `### 관계(FK/관찰된 조인)`에 **참조컬럼·출처(DB FK/쿼리관찰(N))** + **🔧 쿼리 작성 가이드(상시필터) 접이식**(뷰잉 가독성 보존). ddd-db-agent: **다중 DB MCP 일반화**(ora_/db2_/mdb_ — DB_TYPE별 prefix, 하드코딩 제거) + FK 참조컬럼·상시필터 의미 보강. 고아였던 scan_code_literals도 STEP 5-0.5로 배선. **2층 원칙(평가 결론)**: SCH.md=사람 레이어(접이식 노이즈 격리)/`_machine/*.json`=JIT 기계 레이어(마크다운 재파싱 없이 직접 소비) — 한 마크다운이 JIT 원천이 되면 안 됨. 회귀 test_sch_static 4(scan_query_patterns 추가). 잔여(권고): query_patterns를 spec_index/AIDD story 번들에 연결, SCH 근거 구조화 anchors.
 > **v3.18.0** (SCH 타입 = DB MCP 권위화, JIT/AIDD 메타데이터): 플러그인 내장 Oracle MCP(`mcp-servers/oracle_schema_server.py`, `ora_describe_table`=data_type/NULL/PK/default)를 SCH 타입 채움에 실제 연결. 기존 결함: build_sch_static(스크립트, MCP 불가; sch_facts는 pymysql/psycopg2만)가 미상 타입을 `<!-- LLM-TODO -->`로 두는데 ddd-db-agent enrichment는 "타입 읽기전용"이라 **MCP가 있어도 타입을 안 채움**→추론값 잔존. 수정: ①ddd-db-agent enrichment가 미상 타입/NULL/PK/⚠️추론 DDL을 `ora_describe_table`로 사실 채움(이미 채워진 값은 불변, MCP 미연결 시만 추론 유지) ②build_sch_static이 타입미상 도메인을 enrich 대상에 포함(needs_type)→dispatch_sch_gen이 호출. SCH가 AIDD JIT 메타데이터(정확 컬럼·타입 기반 코드생성)로 기능하기 위함. 잔여(권고): SCH 근거소스를 INF처럼 구조화 anchors(mapper file:line)로 — JIT 소스 정밀 조회용.
 > **v3.17.0** (INF 참조테이블 [TBD] 근절): ddd-api-agent `## 참조 테이블`을 `| 테이블 | SCH |`(SCH 컬럼=[TBD] placeholder)에서 **단일 테이블 목록(`- TABLE`)**으로 변경. SpecLens 뷰어가 본문 테이블명→SCH 자동 크로스링크 + INF↔SCH는 frontmatter tables↔SCH.table 정방향 인덱싱이라 [TBD]/링크 placeholder 불필요. nkshop 실측서 본문 [TBD] 4299줄의 주범이 이 참조테이블 SCH컬럼 [TBD](link_inf_sch 교체 미실행 잔존)였음. link_inf_sch_new는 새 목록포맷에 graceful no-op. 기존 산출물은 /sl-recon 재생성(+DB MCP) 시 새 포맷·권위 SCH타입으로 갱신.
 > **v3.16.0** (SpecLens v4 전면 재디자인 — 사용자 UX): 사용자 피드백("보기 불편")으로 전면 정제. CDP 라이브 진단으로 구조결함 수정: ①클릭한 문서가 목록(#sl-main) 아래 화면밖 렌더→커스텀뷰/문서뷰 display 상호배타(body.sl-custom-view) ②FUNC_MAP/SRS 색인이 크로스링크 누락(doneEach 게이트 협소)→전 문서 적용 ③UIS 본문 이미지 src 2중 prepend로 깨짐→상대경로 docsify 위임 ④직접 doc URL 진입 시 loadIndex가 대시보드로 덮어쓰던 회귀 수정. **v4 디자인**: 정제 다크 토큰(deep bg·라운드 카드·차분한 골드 #e6c79c·타입색 ⬡INF#7aa2ff ⛁SCH#52c489 ▭UIS#e6c79c ◆SRS#c79bf0) / 대시보드=커버리지 링 카드 / 목록=필터 바+행 ⛁테이블·⚓앵커 배지 / 사이드바=도메인별 타입 카운트. 별건 데이터버그도 수정: **INF↔SCH 연결을 INF.tables↔SCH.table 정방향 매칭 추가(가짜 미연결 759→167)**. nkshop 실데이터로 RECON-doc 전체(rd/srs/rtm 에이전트 실행) + SpecLens CDP 스크린샷 검증. 설계 docs/superpowers/specs/2026-06-06-speclens-v4-redesign-design.md. 잔여(폴백 폴리시): ⌘K 팔레트·UIS 마커↔위젯 좌표연동.
@@ -181,7 +187,7 @@
 |------|------|
 | project.env 없음 | `/sl-init` 실행 안내 |
 | docs/05_설계서/ 없음 | `/sl-recon` 실행 안내 |
-| 06_소스코드/ 없음 | `/sl-aidd` 실행 안내 |
+| 소스 경로(SOURCE_*_PATH) 없음 | `/sl-init`로 소스 위치 재설정 안내 |
 | MCP 연결 실패 | 로컬 파일 fallback 안내 |
 | UA 미설치 | `npm install -g understand-anything` 안내 |
 

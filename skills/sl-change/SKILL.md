@@ -106,7 +106,7 @@ INF 3개 이상이면 경고 후 사용자 확인.
 ### 1-0. 로컬 파일 우선 확인
 
 ```python
-!python3 -c "
+!python3 -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
 import os, sys
 sr_id = sys.argv[1] if len(sys.argv) > 1 else ''
 local_path = f'docs/변경관리/{sr_id}/00_요구사항.md'
@@ -607,7 +607,7 @@ docs/변경관리/{SR-ID}/after/ 에 TO-BE 스펙 초안이 있습니다.
 **sprint-status.yaml 업데이트:**
 
 ```bash
-!python3 -c "
+!python3 -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
 import yaml, os
 sp = '.speclinker/sprint-status.yaml'
 if not os.path.exists(sp):
@@ -710,7 +710,7 @@ mcp-atlassian 호출:
 | 상황 | 대응 |
 |------|------|
 | Jira 연결 실패 | SR 내용을 직접 붙여넣기 요청 후 계속 진행 |
-| AS-IS 스펙 없음 | 해당 도메인 스펙 신규 생성 후 진행 (sl-genesis 부분 실행) |
+| AS-IS 스펙 없음 | 해당 도메인 `/sl-recon` 부분 실행(도메인 선택)으로 AS-IS 스펙 역생성 후 진행 |
 | 도메인 특정 불가 | RTM 전체 로드 + 키워드 검색으로 후보 제시 |
 | DB MCP 미연결 | 스펙 기준으로만 진행, 경고 출력 |
 | COMPOSITE SR | 하위 유형별로 Step 3~10 순차 반복 |

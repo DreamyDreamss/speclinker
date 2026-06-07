@@ -92,3 +92,46 @@ if (!fs.existsSync(nmTreeSitter)) {
 } else {
   log('tree-sitter OK (skip)');
 }
+
+// ── 4. DB MCP 의존성 (project.env에 MCP_DB_* = true 선언 시에만) ───────────────
+// /sl-init이 쓰는 MCP_DB_oracle/db2/mariadb 플래그를 보고, 선언된 DB의 드라이버 + 공통
+// 코어(mcp·sqlalchemy·pandas·python-dotenv)만 설치. (등록 .mcp.json + 접속 creds는 보안상 수동.)
+// DB MCP 미사용 프로젝트엔 pandas/oracledb/ibm_db를 깔지 않는다(가벼움·ibm_db 빌드실패 회피).
+(function setupMcpDeps() {
+  if (!pyCmd) return;
+  const candidates = [
+    path.join(process.cwd(), 'project.env'),
+    process.env.CLAUDE_PROJECT_DIR ? path.join(process.env.CLAUDE_PROJECT_DIR, 'project.env') : null,
+  ].filter(Boolean);
+  const envFile = candidates.find((p) => { try { return fs.existsSync(p); } catch (_) { return false; } });
+  if (!envFile) return;                       // 프로젝트 미초기화 — 스킵
+  let text = '';
+  try { text = fs.readFileSync(envFile, 'utf-8'); } catch (_) { return; }
+  const flag = (name) => new RegExp('^\\s*' + name + '\\s*=\\s*true\\s*$', 'im').test(text);
+  const oracle = flag('MCP_DB_oracle');
+  const db2    = flag('MCP_DB_db2');
+  const maria  = flag('MCP_DB_mariadb') || flag('MCP_DB_mysql');
+  if (!(oracle || db2 || maria)) return;      // DB MCP 미사용 — 스킵
+
+  const pyHas = (mod) => {
+    try {
+      return spawnSync(pyCmd, ['-c', 'import ' + mod], { encoding: 'utf-8', timeout: 8000 }).status === 0;
+    } catch (_) { return false; }
+  };
+  const ensure = (label, mods, pkgs) => {
+    if (mods.every(pyHas)) { log('MCP deps OK (' + label + ', skip)'); return; }
+    log('MCP deps 설치 중 (' + label + ')...');
+    try {
+      execSync(`${pyCmd} -m pip install --quiet ${pkgs}`, { stdio: 'inherit', timeout: 180000 });
+      log('MCP deps 설치 완료 (' + label + ')');
+    } catch (e) {
+      log('[WARN] MCP deps 설치 실패 (' + label + '): ' + e.message);
+      log('       수동: ' + pyCmd + ' -m pip install ' + pkgs);
+    }
+  };
+
+  ensure('core', ['mcp', 'sqlalchemy', 'pandas', 'dotenv'], '"mcp[cli]" sqlalchemy pandas python-dotenv');
+  if (oracle) ensure('oracle', ['oracledb'], 'oracledb');
+  if (maria)  ensure('mysql/mariadb', ['pymysql'], 'pymysql');
+  if (db2)    ensure('db2', ['ibm_db'], 'ibm_db ibm_db_sa');  // ※ IBM CLI Driver 별도 필요할 수 있음
+})();

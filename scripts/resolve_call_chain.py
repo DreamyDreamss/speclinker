@@ -586,6 +586,85 @@ def find_query_files(dao_file, workspace_root):
 
 
 # ──────────────────────────────────────────────
+# M-1: service/impl 해소 + MyBatis 문자열 네임스페이스 → XML 해소
+# (service 인터페이스에서 멈춰 dao/query=0 되는 문제, jwork류 typed-Mapper 부재 대응)
+# ──────────────────────────────────────────────
+
+def impl_files(file_path, class_index):
+    """service 인터페이스(Foo)의 구현체(FooImpl 등)를 class_index에서 찾는다.
+    Spring service/impl 분리 구조에서 DAO/Mapper는 인터페이스가 아닌 Impl이 import한다."""
+    if not class_index:
+        return []
+    base = os.path.splitext(os.path.basename(file_path))[0]
+    if base.endswith('Impl'):
+        return []
+    out = []
+    for suffix in ('Impl', 'ServiceImpl'):
+        for cand in class_index.get(base + suffix, []):
+            if norm(cand) != norm(file_path):
+                out.append(norm(cand))
+    return out
+
+
+_NS_INDEX_CACHE = {}
+_NS_SCAN_CACHE = {}
+_NS_DECL = re.compile(r'<mapper\s+namespace\s*=\s*"([^"]+)"', re.I)
+# MyBatis 호출: session.selectList("ns.id", ...) / baseDao.update("ns.id") 등
+_MYBATIS_CALL = re.compile(
+    r'\.(?:select|selectOne|selectList|selectMap|insert|update|delete|'
+    r'queryFor\w+|getList|getOne|getMap|getObject|execute)\s*\(\s*"([\w.]+)"', re.I)
+
+
+def _namespace_index(workspace_root):
+    """모든 *.xml의 <mapper namespace="X"> → {namespace: xml경로} (워크스페이스당 1회, 메모)."""
+    key = norm(workspace_root)
+    if key in _NS_INDEX_CACHE:
+        return _NS_INDEX_CACHE[key]
+    idx = {}
+    for root, dirs, fnames in os.walk(workspace_root):
+        dirs[:] = [d for d in dirs if not d.startswith('.') and d != 'node_modules']
+        for fname in fnames:
+            if not fname.lower().endswith('.xml'):
+                continue
+            fp = os.path.join(root, fname)
+            try:
+                head = open(fp, encoding='utf-8', errors='ignore').read(4000)
+            except OSError:
+                continue
+            m = _NS_DECL.search(head)
+            if m:
+                idx[m.group(1)] = norm(fp)
+    _NS_INDEX_CACHE[key] = idx
+    return idx
+
+
+def find_query_files_by_namespace(src_file, workspace_root):
+    """소스 파일의 MyBatis 문자열 SQL 참조("ns.id")를 namespace 기준으로 XML에 매핑.
+    typed Mapper import가 없는 jwork/SqlSession 패턴 대응. 파일·워크스페이스 단위 메모."""
+    key = norm(src_file)
+    if key in _NS_SCAN_CACHE:
+        return _NS_SCAN_CACHE[key]
+    ns_idx = _namespace_index(workspace_root)
+    out = []
+    if ns_idx and str(src_file).lower().endswith(('.java', '.kt', '.kts')):
+        try:
+            content = open(src_file, encoding='utf-8', errors='ignore').read()
+        except OSError:
+            content = ''
+        namespaces = sorted(ns_idx.keys(), key=len, reverse=True)  # 최장 prefix 우선
+        for m in _MYBATIS_CALL.finditer(content):
+            ref = m.group(1)
+            for ns in namespaces:
+                if ref == ns or ref.startswith(ns + '.'):
+                    xml = ns_idx[ns]
+                    if xml not in out:
+                        out.append(xml)
+                    break
+    _NS_SCAN_CACHE[key] = out
+    return out
+
+
+# ──────────────────────────────────────────────
 # SQL/XML 스키마 추출 (응답 컬럼·nullable 사전 파싱)
 # ──────────────────────────────────────────────
 
@@ -821,6 +900,11 @@ def resolve_chain(controller_path, workspace_root, max_depth=2, class_index=None
             if depth == max_depth:  # 컨트롤러 레벨 → 서비스
                 service_files.append(rf)
                 traverse(rf, depth - 1)
+                # M-1: service 인터페이스의 Impl도 따라가 DAO/Mapper에 도달 (service/impl 분리 대응)
+                for impl in impl_files(rf, class_index):
+                    if norm(impl) not in visited:
+                        service_files.append(impl)
+                        traverse(impl, depth - 1)
             else:  # 서비스 레벨 → DAO
                 dao_files.append(rf)
                 # 쿼리 파일 탐색
@@ -828,6 +912,12 @@ def resolve_chain(controller_path, workspace_root, max_depth=2, class_index=None
                 query_files.extend(qf)
 
     traverse(controller_path, max_depth)
+
+    # M-1: MyBatis 문자열 네임스페이스 SQL 참조 해소 (typed Mapper import 없는 jwork류)
+    # 컨트롤러·서비스·Impl·DAO 어디에 박혀 있어도 namespace로 XML을 찾는다.
+    for f in [controller_path] + service_files + dao_files:
+        if str(f).lower().endswith(('.java', '.kt', '.kts')):
+            query_files.extend(find_query_files_by_namespace(f, workspace_root))
 
     services = list(dict.fromkeys(service_files))
     daos = list(dict.fromkeys(dao_files))
