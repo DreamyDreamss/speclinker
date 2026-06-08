@@ -101,13 +101,22 @@
     if (!INDEX) return '<div class="sl-tree-empty">로딩 중...</div>';
     const entries = Object.entries(INDEX.domains);
     if (!entries.length) return '<div class="sl-tree-empty">도메인 없음</div>';
-    return entries.map(([name, info]) =>
-      `<div class="sl-domain-item ${ACTIVE_DOMAIN === name ? 'active' : ''}" role="button" tabindex="0"
+    const missingOf = (info) => {
+      const c = info.coverage || {};
+      let m = 0;
+      ['inf', 'uis', 'sch'].forEach(k => { if (c[k]) m += (c[k].expected - c[k].generated); });
+      return m;
+    };
+    return entries.map(([name, info]) => {
+      const miss = missingOf(info);
+      const missBadge = miss > 0
+        ? ` <span class="sl-di-miss" title="미생성 스펙 ${miss}건">✦${miss}</span>` : '';
+      return `<div class="sl-domain-item ${ACTIVE_DOMAIN === name ? 'active' : ''}" role="button" tabindex="0"
             onclick="SlViewer.selectDomain('${escAttr(name)}')">
         <span class="sl-di-name">${name}</span>
-        <span class="sl-di-counts"><span style="color:var(--c-inf)">⬡${info.inf || 0}</span> <span style="color:var(--c-uis)">▭${info.uis || 0}</span> <span style="color:var(--c-sch)">⛁${info.sch || 0}</span> <span style="color:var(--c-srs)">✎${info.srs_count || 0}</span></span>
-      </div>`
-    ).join('');
+        <span class="sl-di-counts"><span style="color:var(--c-inf)">⬡${info.inf || 0}</span> <span style="color:var(--c-uis)">▭${info.uis || 0}</span> <span style="color:var(--c-sch)">⛁${info.sch || 0}</span> <span style="color:var(--c-srs)">✎${info.srs_count || 0}</span>${missBadge}</span>
+      </div>`;
+    }).join('');
   }
 
   function renderIaTree() {
@@ -136,7 +145,17 @@
   }
 
   // ── 사용자 가이드 ────────────────────────────────────────────
-  const GUIDE_VERSION = '3.1.0';
+  const GUIDE_VERSION = '3.31.0';
+
+  // 이 뷰어(SpecLens) 자체 기능 — 현행 반영
+  const GUIDE_VIEWER_FEATURES = [
+    ['📊 대시보드', '도메인별 커버리지 링·연결 갭 배지·stale 경고로 산출물 완성도 한눈에.'],
+    ['📁 생성/미생성 커버리지', '도메인 탭(INF/SCH/UIS)에 <code>생성/전체</code> 비율 표시. 미생성 스펙은 회색 점선 행으로 나열되고 <b>[⚙ 생성]</b> 버튼으로 그 자리에서 생성 요청.'],
+    ['🔗 연결관계 패널', 'INF/UIS/SCH 상세 우측에 호출 API·관련 테이블·linked FUNC. <b>좌측 가장자리를 드래그해 너비 조정</b>(반응형·기억됨). 🕸 그래프로 N-hop 탐색.'],
+    ['🔄 개별 재생성', '연결관계 패널 [🔄 재생성]으로 그 스펙 1개만 다시 생성(/sl-viewer 세션 필요).'],
+    ['📋 SR 작업보드', '담당 지라 SR을 칸반으로. [동기화]·[영향분석]·[변경(AIDD)] 버튼이 세션을 자동으로 깨워 처리(토큰-효율 watch 루프, Chrome CDP 닫으면 자동 종료).'],
+    ['🔎 검색 · 🧭 IA 트리', '사이드바 검색으로 ID·화면·테이블·경로 즉시 점프. IA 트리로 메뉴 계층 탐색.'],
+  ];
 
   const GUIDE_PIPELINES = [
     { icon: '🔍', title: '기존 코드 (RECON)',
@@ -166,7 +185,6 @@
     { name: 'SDD 파이프라인', color: '#a371f7', cmds: [
       ['/sl-context', 'project-context.md 생성 — 프레임워크·공통패턴 학습', 'INF 존재'],
       ['/sl-status', '추적 통합 — 커버리지·진행·갭·게시 (--coverage/--next/--publish)', 'FUNC_MAP.md'],
-      ['/sl-drift', '스펙-코드 드리프트 감지 — 소스 변경 vs INF 미갱신', 'git, INF'],
     ]},
     { name: '변경 관리 — DELTA', color: 'var(--status-review)', cmds: [
       ['/sl-change <SR-ID>', '변경 전주기(--full) — CIA→TO-BE diff→스펙동기화→RTM→승인 토큰', 'docs/05_설계서/'],
@@ -245,6 +263,13 @@
 
         <div class="sl-g-section-h">📋 전체 명령어</div>
         <div class="sl-g-cats">${cats}</div>
+
+        <div class="sl-g-section-h">🖥 이 뷰어(SpecLens) 기능</div>
+        <div class="sl-g-cmds">${GUIDE_VIEWER_FEATURES.map(([t, d]) => `
+          <div class="sl-g-cmd">
+            <div class="sl-g-cmd-name" style="color:var(--accent)">${t}</div>
+            <div class="sl-g-cmd-desc" style="grid-column:2 / span 2">${d}</div>
+          </div>`).join('')}</div>
 
         <div class="sl-g-section-h">🧭 동작 방식</div>
         <div class="sl-g-modes">${modes}</div>
@@ -330,6 +355,29 @@
   }
 
   // ── INF / UIS 도메인 탭 뷰 ──────────────────────────────────
+  function coverageOf(domain, kind) {
+    const d = (INDEX && INDEX.domains && INDEX.domains[domain]) || {};
+    return (d.coverage || {})[kind] || null;
+  }
+
+  // 미생성(expected이지만 .md 없음) 항목 행 — 회색 + [⚙ 생성] 버튼
+  function renderMissingRows(domain, kind) {
+    const c = coverageOf(domain, kind);
+    if (!c || !c.missing || !c.missing.length) return '';
+    const rows = c.missing.map(m => `
+      <div class="sl-miss-row" data-search="${_cardSearch([m.id, m.label])}">
+        <span class="sl-miss-badge">미생성</span>
+        <span class="sl-miss-id">${escAttr(m.id)}</span>
+        <span class="sl-miss-label">${escAttr(m.label || '')}</span>
+        <span class="sl-miss-gen" role="button" tabindex="0"
+              title="이 ${kind.toUpperCase()} 생성 (speclinker 명령 — /sl-viewer 세션 필요)"
+              onclick="SlViewer.genSpec('${escAttr(m.id)}','${kind}')">⚙ 생성</span>
+      </div>`).join('');
+    return `<div class="sl-miss-group">
+        <div class="sl-miss-head">⚠ 미생성 ${c.missing.length}건 <span class="sl-miss-sub">(전체 ${c.expected}건 중 ${c.generated}건 생성됨)</span></div>
+        ${rows}</div>`;
+  }
+
   function renderDomainView(domain, tab) {
     ACTIVE_DOMAIN = domain;
     ACTIVE_TAB = tab || 'inf';
@@ -347,9 +395,18 @@
       .concat((d.srs_count || 0) > 0 ? ['srs'] : []);
     const tabCount = (t) => t === 'srs' ? (d.srs_count || 0) : (d[t] || 0);
     const tabLabel = (t) => t === 'srs' ? '기능명세' : t.toUpperCase();
+    // 커버리지 있으면 '생성/전체', 없으면 개수만. 미생성 있으면 빨강 강조.
+    const tabBadgeHtml = (t) => {
+      const c = coverageOf(domain, t);
+      if (c) {
+        const miss = c.expected - c.generated;
+        return `${tabLabel(t)} <span class="sl-tab-cov${miss > 0 ? ' has-missing' : ''}">${c.generated}/${c.expected}</span>`;
+      }
+      return `${tabLabel(t)} ${tabCount(t)}`;
+    };
     const tabs = tabKeys.map(t =>
       `<div class="sl-tab ${ACTIVE_TAB === t ? 'active' : ''}" role="button" tabindex="0"
-            onclick="SlViewer.selectTab('${t}')">${tabLabel(t)} ${tabCount(t)}</div>`
+            onclick="SlViewer.selectTab('${t}')">${tabBadgeHtml(t)}</div>`
     ).join('');
 
     let body = '';
@@ -358,22 +415,22 @@
       body = `<div class="sl-inf-list">${
         infs.length > 0
           ? infs.map(renderInfCard).join('')
-          : '<div style="padding:16px;color:var(--text-muted)">INF 파일 없음</div>'
-      }</div>`;
+          : (coverageOf(domain, 'inf') ? '' : '<div style="padding:16px;color:var(--text-muted)">INF 파일 없음</div>')
+      }${renderMissingRows(domain, 'inf')}</div>`;
     } else if (ACTIVE_TAB === 'uis') {
       const uis = (INDEX.uis || []).filter(u => u.domain === domain);
       body = `<div class="sl-uis-grid">${
         uis.length > 0
           ? uis.map(renderUisCard).join('')
-          : '<div style="padding:16px;color:var(--text-muted)">UIS 파일 없음</div>'
-      }</div>`;
+          : (coverageOf(domain, 'uis') ? '' : '<div style="padding:16px;color:var(--text-muted)">UIS 파일 없음</div>')
+      }</div>${renderMissingRows(domain, 'uis')}`;
     } else if (ACTIVE_TAB === 'sch') {
       const schs = (INDEX.schs || []).filter(s => s.domain === domain);
       body = `<div class="sl-inf-list">${
         schs.length > 0
           ? schs.map(renderSchCard).join('')
-          : '<div style="padding:16px;color:var(--text-muted)">SCH 파일 없음</div>'
-      }</div>`;
+          : (coverageOf(domain, 'sch') ? '' : '<div style="padding:16px;color:var(--text-muted)">SCH 파일 없음</div>')
+      }${renderMissingRows(domain, 'sch')}</div>`;
     } else if (ACTIVE_TAB === 'srs') {
       const srs = (INDEX.srs || []).filter(s => s.domain === domain);
       body = `<div class="sl-inf-list">${
@@ -559,6 +616,39 @@
     if (section) section.insertAdjacentElement('beforebegin', bc);
   }
 
+  // ── 연결관계 패널 너비 리사이즈 (드래그·반응형·영속) ──────────────
+  const REL_W_KEY = 'sl-relpanel-w';
+  const REL_W_MIN = 200;
+  function relWMax() { return Math.max(REL_W_MIN, Math.min(window.innerWidth * 0.6, 560)); }
+  function applyRelWidth(w) {
+    w = Math.max(REL_W_MIN, Math.min(relWMax(), Math.round(w)));
+    document.documentElement.style.setProperty('--sl-relpanel-w', w + 'px');
+    return w;
+  }
+  function loadRelWidth() {
+    const saved = parseInt(localStorage.getItem(REL_W_KEY) || '', 10);
+    if (saved) applyRelWidth(saved);
+  }
+  function startRelResize(ev) {
+    ev.preventDefault();
+    document.body.classList.add('sl-relpanel-resizing');
+    const onMove = (e) => applyRelWidth(window.innerWidth - e.clientX);
+    const onUp = () => {
+      document.body.classList.remove('sl-relpanel-resizing');
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      const cur = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sl-relpanel-w'), 10);
+      if (cur) localStorage.setItem(REL_W_KEY, String(cur));
+    };
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+  }
+  // 뷰포트가 줄면 저장된 너비를 최대치에 맞춰 다시 클램프(반응형)
+  window.addEventListener('resize', () => {
+    const cur = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sl-relpanel-w'), 10);
+    if (cur) applyRelWidth(cur);
+  });
+
   // ── 연결관계 패널 (INF/UIS/SCH 공통) ──────────────────────────
   function chip(id, label, kind) {
     return `<span class="sl-rel-chip sl-rel-${kind}" role="button" tabindex="0"
@@ -605,13 +695,15 @@
     }
     if (en.func) sections += relSection('linked FUNC', chip(en.func, en.func, 'func'));
     if (!sections) return;
+    loadRelWidth();
     const panel = document.createElement('div');
     panel.id = 'sl-rel-panel';
-    panel.innerHTML = `<div class="sl-rel-title">🔗 연결관계
+    panel.innerHTML = `<div class="sl-rel-resizer" title="드래그하여 패널 너비 조정"></div><div class="sl-rel-title">🔗 연결관계
         <span class="sl-graph-btn" role="button" tabindex="0" onclick="SlViewer.openGraph('${escAttr(e.id)}')">🕸 그래프</span>
         <span class="sl-regen-btn" role="button" tabindex="0" title="이 ${escAttr(e.type.toUpperCase())}만 재생성 (speclinker 명령 실행 — /sl-viewer 세션 필요)" onclick="SlViewer.regenSpec('${escAttr(e.id)}','${escAttr(e.type)}')">🔄 재생성</span>
       </div>${sections}`;
     document.body.appendChild(panel);
+    panel.querySelector('.sl-rel-resizer')?.addEventListener('pointerdown', startRelResize);
     document.querySelector('.content')?.classList.add('has-relpanel');
   }
 
@@ -937,8 +1029,8 @@
         : '<span class="sl-mat ok">✅ 충분</span>'}</div>
       <div class="sl-dr-mat">
         <div class="sl-dr-matpath">📁 ${escAttr((mat && mat.dossier_path) || ('docs/변경관리/' + sr.key))}/</div>
-        ${(mat && mat.attachments && mat.attachments.length) ? `<div class="sl-dr-matrow">첨부: ${mat.attachments.map(a => `<code class="sl-drift-src">${a.parseable ? '' : '✕ '}${escAttr(a.name)}</code>`).join(' ')}</div>` : ''}
-        <div class="sl-dr-matrow">보강(inputs): ${(mat && mat.inputs && mat.inputs.length) ? mat.inputs.map(f => `<code class="sl-drift-src">${escAttr(f)}</code>`).join(' ') : '<span class="sl-imp-none">없음 — 캡처/메모를 폴더에 넣어 보강하세요</span>'}</div>
+        ${(mat && mat.attachments && mat.attachments.length) ? `<div class="sl-dr-matrow">첨부: ${mat.attachments.map(a => `<code class="sl-sr-src">${a.parseable ? '' : '✕ '}${escAttr(a.name)}</code>`).join(' ')}</div>` : ''}
+        <div class="sl-dr-matrow">보강(inputs): ${(mat && mat.inputs && mat.inputs.length) ? mat.inputs.map(f => `<code class="sl-sr-src">${escAttr(f)}</code>`).join(' ') : '<span class="sl-imp-none">없음 — 캡처/메모를 폴더에 넣어 보강하세요</span>'}</div>
         <div class="sl-dr-gbtns"><button class="sl-bbtn mat" onclick="SlViewer.openDossier('${escAttr(key)}')">📁 폴더 열기</button>
           <button class="sl-bbtn" onclick="SlViewer.refreshMaterial('${escAttr(key)}')">자료 새로고침</button></div>
       </div>`;
@@ -987,7 +1079,7 @@
     },
     filterList(q) {
       q = (q || '').trim().toLowerCase();
-      const cards = document.querySelectorAll('#sl-main .sl-inf-card, #sl-main .sl-uis-card');
+      const cards = document.querySelectorAll('#sl-main .sl-inf-card, #sl-main .sl-uis-card, #sl-main .sl-miss-row');
       let shown = 0;
       cards.forEach(c => {
         const hit = !q || (c.getAttribute('data-search') || '').includes(q);
@@ -1051,6 +1143,10 @@
     regenSpec(id, kind) {
       slEnqueue('regen-spec', { target: id, kind: kind || '' });
       boardToast(id + ' 재생성 요청됨 — /sl-viewer 세션이 해당 스펙만 재생성합니다');
+    },
+    genSpec(id, kind) {
+      slEnqueue('regen-spec', { target: id, kind: kind || '', missing: true });
+      boardToast(id + ' 생성 요청됨 — /sl-viewer 세션이 미생성 스펙을 생성합니다');
     },
     goToId(id) {
       if (!INDEX) return;

@@ -15,8 +15,9 @@
 | 결정자 | 사용자 |
 | 작업 디렉토리 | `D:\gen-harness\plugins\speclinker` |
 | 목표 기간 | 약 3~4개월 (Phase 0~5) |
-| 현재 단계 | Phase 0 시작 직전 |
+| 현재 단계 | Phase 0~5 핵심 + Phase 6.1/6.2/6.4 완료 — 잔여 작업은 §12 "진행 예정" 참조 |
 | 선택 옵션 | **가 (풀 리팩토링)** — Phase 0~5 전체 |
+| ⚠ SSoT | **Phase 진행 상태의 단일 출처는 §12 "진행 추적" 섹션.** §4~9의 Phase별 체크박스는 최초 계획 스냅샷이며, 실제 완료 여부는 §12 기준. |
 
 ---
 
@@ -654,7 +655,7 @@
 - [x] **CDP attach 워크플로우** — 사용자가 Chrome `--remote-debugging-port=9222`로 로그인까지만, plugin이 메뉴 자동 진입 + 등록 클릭 + 8탭 캡처 + 마커 + spec.md 생성을 일괄 자동 수행
 - [x] **실서비스 검증** — `D:\nkshop-bos\nkshop-bos-admin` Pr201Form 8탭 / spec.md 52,231 chars 생성 확인
 
-### Phase 6.4 — 위젯 메타 자동 보완 (예정)
+### Phase 6.4 — 위젯 메타 자동 보완 (완료)
 
 Phase 6.2의 spec.md는 §4 표를 자동 채우지만 `placeholder`/`default`/`disabled_when`/`유효성`/`연결 API`/`§5 이벤트`/`§8 조건부 렌더링`은 모두 `[TBD]`. 사용자 요청: "지금 너가 말한거 다 보완 필요해". 다음 작업 후보:
 
@@ -674,50 +675,8 @@ Phase 6.2의 spec.md는 §4 표를 자동 채우지만 `placeholder`/`default`/`
 - [ ] templates/UI_Spec_v1.0_template.md 데모 화면(로그인) Phase 6.1 새 형식으로 갱신
 - [ ] §3 블록·§5 이벤트 표에도 `[N]` 번호 컬럼 일관성 (현재 §4만 가짐)
 
-**Phase 3 (컨벤션 학습)**
-- [ ] 3.1 convention-learner 에이전트 신설
-- [ ] 3.2 overlay 메커니즘 (effective_strategy 합성에 conventions.yaml 머지)
-- [ ] 3.3 사용자 검수 단계
-- [ ] 3.4 회귀 + tag
-
-**Phase 4 (메타-추출기)**
-- [ ] 4.1 meta-extractor 에이전트 (미지원 profile일 때 strategy yaml 초안 제안)
-- [ ] 4.2 yaml promote 워크플로우
-- [ ] 4.3 통합 테스트
-
-**Phase 5 (회귀 인프라 지속)**
-- [ ] 5.1 sample repo 매트릭스 확장 (스택 조합당 1개)
-- [ ] 5.2 회귀 측정 도구 (skill-creator aggregate_benchmark 흡수)
-
-**Phase 1**
-- [ ] 1.1 profile schema 설계
-- [ ] 1.2 profile-agent 신설
-- [ ] 1.3 사용자 confirm 흐름
-- [ ] 1.4 profile을 ddd-* 에이전트에 전달
-- [ ] 1.5 회귀 검증 + tag `phase-1-done`
-
-**Phase 2**
-- [ ] 2.1 Strategy schema
-- [ ] 2.2 빌트인 strategy 15~20개 (위 5번 섹션 체크리스트 참조)
-- [ ] 2.3 resolve_call_chain.py 리팩토링
-- [ ] 2.4 ddd-* 에이전트 슬림화
-- [ ] 2.5 회귀 검증 + tag `phase-2-done`
-
-**Phase 3**
-- [ ] 3.1 convention-learner
-- [ ] 3.2 overlay 메커니즘
-- [ ] 3.3 사용자 검수 단계
-- [ ] 3.4 회귀 검증 + tag `phase-3-done`
-
-**Phase 4**
-- [ ] 4.1 meta-extractor 에이전트
-- [ ] 4.2 yaml promote 워크플로우
-- [ ] 4.3 통합 테스트 + tag `phase-4-done`
-
-**Phase 5**
-- [ ] 5.1 sample repo 매트릭스
-- [ ] 5.2 회귀 측정 도구
-- [ ] 5.3 CI 통합 (선택)
+> **Phase 1~5 진행 상태는 위 §12 "진행 추적" 섹션이 단일 출처(SSoT)다.**
+> 요약: Phase 0~5 핵심 작업 + Phase 6.1/6.2/6.4 완료. 남은 잔여 작업은 §12 "진행 예정" 목록 참조.
 
 ---
 

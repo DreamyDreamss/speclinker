@@ -469,6 +469,156 @@ def compute_gaps(infs: list, uis: list) -> dict:
     }
 
 
+def _load_json(path: str):
+    try:
+        with open(path, encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+def build_manifest(spec_root: str) -> dict:
+    """도메인별 '생성되어야 할' 스펙 목록(expected) 스냅샷을 .speclinker/spec_manifest.json에
+    영속화한다. _tmp 산출물은 휘발성이므로, 신선한 소스가 있을 때만 해당 섹션을 갱신하고
+    없으면 직전 매니페스트를 보존한다(carry-forward).
+
+    스냅샷 대상:
+      inf — _tmp/router_inventory_with_chain.json (apiRoutes로 INF-ID 결정론적 재구성)
+      uis — .speclinker/screen_plan.confirmed.json → _tmp/screen_plan_static.json
+    SCH는 생성된 INF의 tables에서 매 실행 라이브 도출하므로 매니페스트에 저장하지 않는다.
+    """
+    mpath = os.path.join(spec_root, '.speclinker', 'spec_manifest.json')
+    manifest = _load_json(mpath) or {}
+
+    # ── INF expected ── router 인벤토리(있을 때만 갱신)
+    inv = _load_json(os.path.join(spec_root, '_tmp', 'router_inventory_with_chain.json'))
+    if isinstance(inv, list):
+        inf_items = []
+        for group in inv:
+            if not isinstance(group, list):
+                continue
+            for item in group:
+                if not isinstance(item, dict):
+                    continue
+                domain = item.get('domain', '')
+                dcode = item.get('domainCode', '')
+                start = item.get('infIdStart')
+                routes = item.get('apiRoutes') or []
+                fp = item.get('filePath', '')
+                base = os.path.basename(str(fp))
+                if not (dcode and isinstance(start, int)):
+                    continue
+                if routes:
+                    for j, r in enumerate(routes):
+                        if isinstance(r, dict):
+                            m = r.get('method') or r.get('httpMethod') or ''
+                            p = r.get('path') or r.get('url') or r.get('uri') or ''
+                            label = (str(m).upper() + ' ' + str(p)).strip() or base
+                        else:
+                            label = str(r)
+                        inf_items.append({'id': f'INF-{dcode}-{start + j:03d}',
+                                          'label': label, 'domain': domain})
+                else:
+                    inf_items.append({'id': f'INF-{dcode}-{start:03d}',
+                                      'label': base, 'domain': domain})
+        if inf_items:
+            manifest['inf'] = inf_items
+
+    # ── UIS expected ── screen_plan(confirmed 우선, static 폴백; 있을 때만 갱신)
+    plan = (_load_json(os.path.join(spec_root, '.speclinker', 'screen_plan.confirmed.json'))
+            or _load_json(os.path.join(spec_root, '_tmp', 'screen_plan_static.json')))
+    if isinstance(plan, dict) and isinstance(plan.get('screens'), list):
+        uis_items = []
+        for s in plan['screens']:
+            if not isinstance(s, dict):
+                continue
+            if str(s.get('status', '')).lower() == 'excluded':
+                continue
+            sid = s.get('id') or ''
+            if not sid:
+                continue
+            route = s.get('route') or ''
+            name = s.get('name') or ''
+            label = (name + (f' ({route})' if route else '')).strip() or sid
+            uis_items.append({'id': sid, 'label': label, 'domain': s.get('domain', '')})
+        if uis_items:
+            manifest['uis'] = uis_items
+
+    manifest['generated_at'] = datetime.now().isoformat(timespec='seconds')
+    try:
+        os.makedirs(os.path.dirname(mpath), exist_ok=True)
+        with open(mpath, 'w', encoding='utf-8') as f:
+            json.dump(manifest, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+    return manifest
+
+
+def build_coverage(spec_root: str, domains: dict, infs: list, schs: list, uis: list) -> None:
+    """expected(매니페스트+INF tables) vs generated(.md) 대조 → domains[d]['coverage'] 채움.
+    coverage[kind] = {expected, generated, missing:[{id,label}]}. 미생성 항목만 missing에 담는다
+    (생성분은 infs/uis/schs 배열에서 렌더). 소스 없으면 해당 kind 생략(graceful)."""
+    manifest = build_manifest(spec_root)
+
+    def ensure(d):
+        domains.setdefault(d, {'inf': 0, 'uis': 0, 'sch': 0, 'bat': 0, 'tbd_total': 0})
+
+    # ── INF ──
+    gen_inf = {i['id'] for i in infs}
+    inf_exp = manifest.get('inf') or []
+    if inf_exp:
+        per = {}
+        for it in inf_exp:
+            per.setdefault(it.get('domain', ''), []).append(it)
+        for d, items in per.items():
+            if not d:
+                continue
+            ensure(d)
+            missing = [{'id': it['id'], 'label': it.get('label', it['id'])}
+                       for it in items if it['id'] not in gen_inf]
+            domains[d].setdefault('coverage', {})['inf'] = {
+                'expected': len(items), 'generated': len(items) - len(missing), 'missing': missing}
+
+    # ── SCH ── 생성된 INF의 tables 합집합(도메인별) vs 생성된 SCH table
+    exp_tbl = {}   # domain -> set(table upper)
+    for i in infs:
+        d = i.get('domain', '')
+        for t in (i.get('tables') or []):
+            tu = str(t).strip().upper()
+            if tu:
+                exp_tbl.setdefault(d, {})[tu] = str(t).strip()
+    gen_tbl = {}   # domain -> set(table upper)
+    for s in schs:
+        d = s.get('domain', '')
+        tu = str(s.get('table', '')).strip().upper()
+        if tu:
+            gen_tbl.setdefault(d, set()).add(tu)
+    for d, tbls in exp_tbl.items():
+        if not d:
+            continue
+        ensure(d)
+        have = gen_tbl.get(d, set())
+        missing = [{'id': orig, 'label': orig} for tu, orig in sorted(tbls.items()) if tu not in have]
+        domains[d].setdefault('coverage', {})['sch'] = {
+            'expected': len(tbls), 'generated': len(tbls) - len(missing), 'missing': missing}
+
+    # ── UIS ──
+    gen_uis = {ui['id'] for ui in (uis or [])}
+    uis_exp = manifest.get('uis') or []
+    if uis_exp:
+        per = {}
+        for it in uis_exp:
+            per.setdefault(it.get('domain', ''), []).append(it)
+        for d, items in per.items():
+            if not d:
+                continue
+            ensure(d)
+            missing = [{'id': it['id'], 'label': it.get('label', it['id'])}
+                       for it in items if it['id'] not in gen_uis]
+            domains[d].setdefault('coverage', {})['uis'] = {
+                'expected': len(items), 'generated': len(items) - len(missing), 'missing': missing}
+
+
 def generate_index(spec_root: str, output_path: str) -> dict:
     """전체 스캔 실행 → spec_index.json 저장 → index dict 반환."""
     infs = scan_infs(spec_root)
@@ -514,6 +664,9 @@ def generate_index(spec_root: str, output_path: str) -> dict:
         d = s.get('domain')
         if d and d in domains:
             domains[d]['srs_count'] = domains[d].get('srs_count', 0) + 1
+
+    # 생성/미생성 커버리지 (expected vs generated) — domains[d]['coverage'] 채움
+    build_coverage(spec_root, domains, infs, schs, uis)
 
     index = {
         'generated_at': datetime.now().isoformat(timespec='seconds'),

@@ -21,6 +21,14 @@ argument-hint: [port]
 > 이 스크립트가 `docs/viewer/spec_index.json` 생성과 함께 부트스트랩 자산
 > (`index.html`·`docsify-sl.js`·`sl-theme.css`)을 플러그인에서 프로젝트
 > `docs/viewer/`로 자동 복사한다.
+>
+> **생성/미생성 커버리지**: gen_docsify는 도메인별 *생성되어야 할* 스펙 목록(expected)을
+> `.speclinker/spec_manifest.json`에 영속 스냅샷하고, 생성된 .md와 대조해 `spec_index.json`의
+> `domains[d].coverage`(INF/SCH/UIS별 expected/generated/missing)에 채운다.
+> expected 출처 — INF: `_tmp/router_inventory_with_chain.json`, UIS: `.speclinker/screen_plan.confirmed.json`
+> (없으면 `_tmp/screen_plan_static.json`), SCH: 생성된 INF의 `tables` 합집합(라이브 도출).
+> 소스가 휘발(_tmp 정리)돼도 매니페스트가 직전 expected를 carry-forward한다.
+> 뷰어는 미생성 항목을 회색 점선 행(⚠미생성 + [⚙ 생성] 버튼)으로, 탭/사이드바엔 `생성/전체` 비율로 표시한다.
 
 ---
 
@@ -85,12 +93,33 @@ mcp-atlassian 호출:
 ```
 → SpecLens 사이드바 **📋 SR 작업보드**에 칸반으로 표시된다.
 
-### 3-4. 버튼 클릭 처리 루프 (큐 폴링)
-화면 버튼은 `window.__slQueue`에 의도만 쌓는다. 세션이 주기적으로 비워 처리한다:
+### 3-4. 버튼 클릭 처리 루프 (자동 long-poll, 토큰-효율)
+
+화면 버튼은 `window.__slQueue`에 의도만 쌓는다(브라우저는 세션을 직접 깨우지 못함 — pull 방식).
+그래서 **`/sl-viewer`는 STEP 2~3 직후 자동으로 watch 루프에 진입한다.** `watch`는 Node 내부에서
+주기적으로 큐를 확인하다가 **실제 이벤트가 생겼을 때만** 1회 출력하고 종료하므로, 유휴 중에는
+LLM 토큰을 전혀 쓰지 않는다.
+
 ```bash
-!node "{PLUGIN_PATH}/scripts/sl_board_cdp.js" poll
+!node "{PLUGIN_PATH}/scripts/sl_board_cdp.js" watch
 ```
-반환 `requests[]`의 각 `{sr, action}` 분기:
+
+반환 `event`별 세션 동작:
+
+| event | 의미 | 세션 동작 |
+|-------|------|-----------|
+| `requests` | 버튼 클릭이 쌓임 (`requests[]`) | 아래 표대로 각 `{sr, action}` 처리 → **watch 재실행** |
+| `idle-timeout` | 약 25분간 클릭 없음(heartbeat) | 바로 **watch 재실행**(처리할 것 없음) |
+| `cdp-closed` | Chrome(9222)이 꺼짐 | **루프 종료 — 재실행하지 않는다.** "SR보드 라이브 종료(CDP 닫힘)" 안내 |
+| `no-viewer` | Chrome은 살아있으나 SpecLens 탭이 닫힘 | **루프 종료 — 재실행하지 않는다.** 탭 다시 열면 `/sl-viewer` 재실행 |
+| `error` | playwright-core 등 환경 문제 | 안내 후 종료 |
+
+> **CDP 생명주기 = 루프 생명주기.** watch가 `cdp-closed`/`no-viewer`를 반환하면 세션은 watch를
+> **재실행하지 않으므로** 루프가 자동으로 정리된다. 즉 사용자가 Chrome이나 탭을 닫으면 폴링도 함께 끝난다.
+> 토큰 부담을 더 줄이려면 `--interval`(기본 4000ms, 내부 확인 주기)·`--max-wait`(기본 ~25분) 조정 가능.
+> 시작 전 빠른 게이트가 필요하면 `sl_board_cdp.js alive`로 CDP 생존만 확인할 수 있다.
+
+`requests[]`의 각 `{sr, action}` 분기:
 | action | 처리 |
 |--------|------|
 | `sync` | 3-1~3-3 재수행(지라 재조회→주입) |
@@ -99,7 +128,7 @@ mcp-atlassian 호출:
 | `approve`/`reject` | 진행 중인 sl-change 게이트에 사람 결정 반영 후 계속/중단 |
 | `open-dossier` (`target`=SR) | `docs/변경관리/{SR}/inputs/` **없으면 생성** + OS 탐색기로 폴더 열기(`explorer`/`open`/`xdg-open`) → 사용자가 캡처·메모 투입. (DRM/부실 SR 보강용) |
 | `refresh-material` (`target`=SR) | `scan_sr_material.py --sr {SR}` 재실행 → 카드 `material` 갱신 후 inject(보강 반영) |
-| `regen-spec` (`target`=스펙ID, `kind`=inf/sch/uis/srs) | **그 스펙 1개만 재생성**(아래 STEP 5) — 백업→삭제→해당 speclinker 단계 재실행(멱등)→`gen_docsify`→상태 주입 |
+| `regen-spec` (`target`=스펙ID, `kind`=inf/sch/uis/srs) | **그 스펙 1개만 재생성**(아래 STEP 5) — 백업→삭제→해당 speclinker 단계 재실행(멱등)→`gen_docsify`→상태 주입. `missing:true`(미생성 [⚙ 생성] 버튼)면 **백업·삭제 생략** — 대상이 아직 없으므로 해당 단계가 새로 생성한다 |
 
 ---
 
@@ -110,6 +139,10 @@ mcp-atlassian 호출:
 > 세션이 **그 스펙 1개만** 재생성한다. 기존 멱등성(group_already_done / sch_todo)을 이용 — 대상만 지우면 그것만 다시 만들어진다.
 
 **공통 안전 절차**: 대상 파일을 `_tmp/regen_backup/`에 백업 → 삭제 → 재생성 → 실패 시 백업 복원. 진행상태는 `sl_board_cdp.js status`로 주입(재생성중→완료/실패).
+
+> **미생성 항목 생성**(도메인 뷰 [⚙ 생성] 버튼, 큐 `missing:true`): 대상이 아직 없으므로 백업·삭제는 건너뛴다.
+> SCH의 미생성 `target`은 **테이블명**(SCH-ID 미할당) — `build_sch_todo`가 INF tables 합집합에서 그 테이블을 새로 채번·생성한다.
+> INF는 `target`=INF-ID로 dispatch가 생성, UIS는 `target`=UIS-ID로 재캡처한다.
 
 | kind | 처리 (target=스펙ID) |
 |------|---------------------|
@@ -134,7 +167,8 @@ mcp-atlassian 호출:
 !node "{PLUGIN_PATH}/scripts/sl_board_cdp.js" status _tmp/board_status.json
 ```
 
-> **손 안 대고 운영**하려면 `/loop`로 3-4 폴링을 주기 실행한다(예: 5초). 단 `/sl-change`의
+> **손 안 대고 운영**: STEP 3-4의 `watch` 루프가 자동 폴링을 담당한다(`/loop` 수동 설정 불필요).
+> watch는 유휴 시 토큰을 쓰지 않고, 버튼 클릭·CDP 종료 때만 세션을 깨운다. 단 `/sl-change`의
 > **사람 승인 게이트는 유지**된다 — 게이트 도달 시 `state=승인대기`로 주입하고, 화면 [승인]/[반려]
 > 버튼이 큐로 결정을 보내면 그때 진행한다(자동 폭주 없음).
 

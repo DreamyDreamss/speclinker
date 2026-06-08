@@ -133,6 +133,20 @@ body.sl-custom-view .content { display: none !important; }
 .sl-tab { padding: 9px 0; border-bottom: 2px solid transparent; cursor: pointer; color: var(--text-muted); font-size: 13px; }
 .sl-tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
 .sl-tab:hover { color: var(--text-primary); }
+/* 탭 커버리지 배지 (생성/전체) */
+.sl-tab-cov { font-size: 11px; font-family: monospace; padding: 1px 6px; border-radius: 8px; background: var(--bg-tertiary); color: var(--text-muted); }
+.sl-tab-cov.has-missing { background: rgba(248,81,73,.14); color: #f85149; }
+
+/* 미생성 항목 행 (expected이나 .md 없음) */
+.sl-miss-group { padding: 4px 26px 20px; }
+.sl-miss-head { font-size: 12px; color: #f85149; font-weight: 600; margin: 14px 0 8px; }
+.sl-miss-head .sl-miss-sub { color: var(--text-faint); font-weight: 400; font-size: 11px; }
+.sl-miss-row { display: flex; align-items: center; gap: 11px; padding: 8px 12px; border: 1px dashed var(--border); border-radius: 8px; margin-bottom: 5px; background: repeating-linear-gradient(45deg, transparent, transparent 7px, rgba(127,127,127,.04) 7px, rgba(127,127,127,.04) 14px); opacity: .82; }
+.sl-miss-badge { font-size: 9.5px; font-weight: 700; color: #f85149; border: 1px solid #f85149; border-radius: 5px; padding: 1px 6px; white-space: nowrap; }
+.sl-miss-id { color: var(--text-muted); font-family: monospace; font-size: 11.5px; min-width: 110px; }
+.sl-miss-label { color: var(--text-muted); font-size: 12px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sl-miss-gen { font-size: 10.5px; color: var(--accent); border: 1px solid var(--accent); border-radius: 6px; padding: 2px 9px; cursor: pointer; white-space: nowrap; }
+.sl-miss-gen:hover { background: var(--accent); color: #1a1407; }
 
 /* 목록 필터 바 */
 .sl-list-filter { display: flex; align-items: center; gap: 12px; padding: 14px 26px 6px; }
@@ -170,6 +184,8 @@ body.sl-custom-view .content { display: none !important; }
 #sl-quick-nav a:hover { color: var(--text-primary); }
 #sl-quick-nav a.sl-hl { color: var(--accent); }
 .content.has-qnav { right: 175px !important; }
+/* 사이드바 도메인 미생성 배지 */
+.sl-di-miss { color: #f85149; font-size: 10px; font-weight: 700; }
 
 /* 크로스링크 */
 .sl-xlink { color: var(--accent) !important; text-decoration: none !important; border-bottom: 1px dashed var(--accent); cursor: pointer; }
@@ -185,9 +201,15 @@ body.sl-custom-view .content { display: none !important; }
 #sl-breadcrumb .sl-bc-back { margin-left: auto; border: 1px solid var(--border); border-radius: 4px; padding: 1px 8px; cursor: pointer; }
 #sl-breadcrumb .sl-bc-back:hover { border-color: var(--accent); color: var(--accent); }
 
-/* 연결관계 패널 (우측) */
-#sl-rel-panel { position: fixed; right: 0; top: 0; width: 240px; height: 100vh; overflow-y: auto;
+/* 연결관계 패널 (우측) — 너비는 --sl-relpanel-w(드래그로 조정, 기본 240px) */
+:root { --sl-relpanel-w: 240px; }
+#sl-rel-panel { position: fixed; right: 0; top: 0; width: var(--sl-relpanel-w, 240px); min-width: 200px; height: 100vh; overflow-y: auto;
   background: var(--bg-secondary); border-left: 1px solid var(--border); padding: 16px 14px; z-index: 60; box-sizing: border-box; }
+/* 좌측 가장자리 드래그 핸들 */
+#sl-rel-panel .sl-rel-resizer { position: absolute; left: 0; top: 0; width: 7px; height: 100%; cursor: ew-resize;
+  background: transparent; z-index: 62; touch-action: none; }
+#sl-rel-panel .sl-rel-resizer:hover, body.sl-relpanel-resizing #sl-rel-panel .sl-rel-resizer { background: var(--accent); opacity: .55; }
+body.sl-relpanel-resizing { cursor: ew-resize; user-select: none; }
 #sl-rel-panel .sl-rel-title { color: var(--accent); font-weight: 700; font-size: 13px; margin-bottom: 12px; }
 #sl-rel-panel .sl-rel-label { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-muted); margin: 10px 0 5px; }
 #sl-rel-panel .sl-rel-row { font-size: 11px; padding: 5px 8px; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 5px; margin-bottom: 4px; cursor: pointer; }
@@ -199,7 +221,7 @@ body.sl-custom-view .content { display: none !important; }
 .sl-rel-uis { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
 .sl-rel-func { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
 .sl-rel-srs { color: #a371f7; border-color: #a371f7; background: rgba(163,113,247,.10); }
-.content.has-relpanel { right: 264px !important; }
+.content.has-relpanel { right: calc(var(--sl-relpanel-w, 240px) + 24px) !important; }
 .has-relpanel #sl-quick-nav { display: none; }
 
 /* UIS 미리보기 확대(라이트박스) */

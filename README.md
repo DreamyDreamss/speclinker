@@ -56,7 +56,7 @@
 
 | 구성 | 수 | 내용 |
 |------|----|------|
-| 슬래시 커맨드(skills) | 12 | sl-init · sl-recon · sl-recon-uis · sl-recon-doc · sl-aidd · sl-change · sl-test · sl-status · sl-drift · sl-context · sl-ia · sl-viewer |
+| 슬래시 커맨드(skills) | 11 | sl-init · sl-recon · sl-recon-uis · sl-recon-doc · sl-aidd · sl-change · sl-test · sl-status · sl-context · sl-ia · sl-viewer |
 | 서브에이전트(agents) | 15 | rd/srs/sad/ddd-api/ddd-db/ddd-ui/ddd-batch/rtm(산출물) · dev/qa/test(코드) · spec/profile/convention-learner/meta-extractor |
 | 자동화 스크립트 | 38 | scan_source · resolve_call_chain · dispatch_* · build_sch_static · scan_query_patterns · gen_docsify · sl_board_cdp 등 (zero-LLM 우선) |
 | 문서 템플릿 | 9 | SRS/SAD/API_Design/DB_Schema/UI_Spec/RTM/TC/TR/SPEC_CONVENTIONS |

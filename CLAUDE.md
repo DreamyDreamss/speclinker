@@ -78,7 +78,6 @@
 | `/sl-status [--coverage\|--next\|--publish]` | `skills/sl-status/SKILL.md` | docs/00_FUNC/FUNC_MAP.md | 추적 (커버리지·진행·갭·게시 통합) |
 | `/sl-test` | `skills/sl-test/SKILL.md` | 소스 존재(SOURCE_*_PATH) | 전체 |
 | `/sl-context` | `skills/sl-context/SKILL.md` | docs/05_설계서/ INF 존재 | RECON 후 |
-| `/sl-drift [도메인] [--since Nd]` | `skills/sl-drift/SKILL.md` | git 저장소, docs/05_설계서/ INF | SDD 유지 |
 | `/sl-ia [도메인\|--update-only]` | `skills/sl-ia/SKILL.md` | docs/05_설계서/UIS/ spec.md 존재 | RECON 후 |
 
 ## 전제 조건 체크
@@ -113,6 +112,7 @@
 | QA 게이트 | `agents/qa-agent.md` | Sonnet | dev와 분리된 독립 컨텍스트 3-Layer 검증 — 유지 |
 | 테스트 | `agents/test-agent.md` | **Haiku** | TC 생성(기계적 — v3.24 sonnet→haiku) |
 
+> **v3.31.0** (drift 완전제거 + 뷰어 auto-loop + 생성/미생성 커버리지 + 리사이즈 패널): 사용자 설계검토 후속 4건. ①**sl-drift 완전 삭제**(mtime 휴리스틱=사용자가 거부한 그 방식이 스킬로 잔존): `skills/sl-drift/` 삭제, plugin.json/README(12→11)/CLAUDE/scripts-README/docsify-sl 명령팔레트에서 제거, 무효 CSS클래스 `sl-drift-src`→`sl-sr-src`. (변경감지는 추후 git-diff 기반 별도.) ②**REFACTOR_PLAN.md 모순정리**: 상단 §12(전부완료)와 정면충돌하던 하단 Phase1~5 중복 미완체크리스트(44줄) 제거 + 메타에 "§12가 진행상태 SSoT" 명시 + Phase6.4 (예정)→(완료). ③**뷰어 auto-loop(토큰-효율 long-poll)**: `sl_board_cdp.js`에 `watch`/`alive` 서브커맨드. watch는 Node 내부서 4초(–interval)마다 큐 확인하다 **실제 버튼클릭·CDP죽음·탭닫힘·idle(~25분)일 때만** 1회 이벤트출력 후 종료 → 유휴 시 LLM토큰 0. `cdp-closed`/`no-viewer` 반환 시 세션이 재실행 안 함 = **CDP 생명주기=루프 생명주기**(Chrome 닫으면 폴링 자동정리). sl-viewer STEP3-4를 watch 기반으로 교체. ④**생성/미생성 커버리지**: gen_docsify에 `build_manifest`(도메인별 expected 스냅샷을 `.speclinker/spec_manifest.json`에 영속, _tmp 휘발 시 carry-forward) + `build_coverage`(expected vs 생성.md → `domains[d].coverage{inf,sch,uis:{expected,generated,missing[]}}`). expected출처: INF=`_tmp/router_inventory_with_chain.json`(apiRoutes로 INF-ID 결정론 재구성), UIS=`.speclinker/screen_plan.confirmed.json`→static, SCH=생성INF의 tables 합집합(라이브). 뷰어: 도메인탭 `생성/전체`배지(미생성 빨강)·미생성 회색점선행+[⚙ 생성](genSpec→regen-spec큐 missing:true, 백업·삭제 생략)·사이드바 ✦N 배지. ⑤**우측 연결관계 패널 드래그 리사이즈+반응형**: 좌측 가장자리 핸들 pointer드래그 → `--sl-relpanel-w` CSS변수(min200/max min(60vw,560))·localStorage 기억·뷰포트축소 시 재클램프, `.content` right 연동. 가이드 GUIDE_VERSION 3.1.0→3.31.0 + "이 뷰어 기능" 섹션 신설. 테스트 88 그린(신규 test_coverage 3종).
 > **v3.30.2** (뷰어 3종 픽스 — 플러그인 원본 반영): nkshop 라이브서 발견(그 세션은 프로젝트 복사본만 고쳐 gen_docsify 재실행 시 소실 → 플러그인 원본 docs/viewer/docsify-sl.js에 영구반영). ①**FUNC_MAP/SRS 등 색인문서의 상대 `.md` 링크 404(빈화면)**: docsify가 `../03_기능명세서/...md`를 상대해석하며 docs/ 접두 잃던 버그 → beforeEach에서 현재 문서디렉토리(vm.route.file) 기준으로 **절대 라우트 `#/docs/...`로 사전변환**(`](상대.md#)` 정규화, http/절대/#/mailto 제외). ②**도메인 클릭 시 스크롤 최하단 잔존** → renderDomainView 끝에 `window.scrollTo(0,0)`. ③**사이드바 도메인 카운트에 SRS 수 추가**(✎ --c-srs, ⬡INF ▭UIS ⛁SCH 옆). 자산은 gen_docsify가 매 /sl-viewer 실행 시 플러그인→프로젝트 docs/viewer/ 복사(index.html/docsify-sl.js/sl-theme.css) — 영구반영은 원본 수정 필수.
 > **v3.30.1** (문서뷰 좌측정렬 버그픽스): 사용자 "화면 나오는거 가운데 몰려 보기 안좋다". 원인: docsify 기본 `.content{position:absolute;left:300px}`에 sl-theme의 `margin-left:220px`가 **합산돼 본문 left=520px**로 밀려 가운데처럼 보임(커스텀뷰 #sl-main은 정상, 문서뷰만). 수정: `.content`를 `left:220px !important; right:0; margin:0`로 docsify의 left 직접 덮어씀 + has-relpanel/has-qnav를 `margin-right`→`right`로(absolute 정합), 모바일도 `left:0`. 검증: computed content left 520→220, width 956(풀폭). 헤드리스 캡처 확인.
 > **v3.30.0** (개별 스펙 재생성 버튼 + mtime 변경점검 제거): 사용자 지적 "mtime 변경감지는 쓸데없다(clone/touch에 속음) — 걷어내고, 화면에서 개별 스펙 재생성 버튼을 달라". **제거**: v3.26 mtime 변경점검 일체(`detect_drift.py`+test+drift.sample.json, docsify-sl renderDrift/showDrift/driftScan/driftBadge/getDrift/tryDriftFallback·🔄변경점검 nav·__slDrift, sl_board_cdp `drift` 서브커맨드, sl-viewer STEP5 drift, drift CSS). (변경 *감지*는 추후 git diff 기반 재설계 — mtime은 부정확.) **추가**: SpecLens INF/SCH/UIS/SRS 상세의 **연결관계 패널에 [🔄 재생성] 버튼** → `regenSpec(id,kind)` → 큐 `{regen-spec,target,kind}` → /sl-viewer 세션이 **그 스펙 1개만 재생성**(speclinker 명령). 메커니즘=기존 멱등성: 대상 백업·삭제→해당 단계 재실행(INF=dispatch_inf_gen group_already_done / SCH=build_sch_todo→static→enrich / UIS=sl-recon-uis 재캡처 / SRS=recon-doc 9-3)→gen_docsify→status 주입. INF/SCH는 파일 1개 깔끔, UIS는 CDP 재캡처, SRS는 색인단위. `slEnqueue`는 보존(제네릭 큐). README/scripts-README/sl-viewer SKILL 동기화, scripts 39→38. 13+4 테스트 그린.
@@ -213,7 +213,6 @@
 | 변경·유지보수 (로컬) | sl-change --new SR-001 → (요구사항 작성) → sl-change SR-001 → **sl-aidd** |
 | **SDD 전체 파이프라인** | sl-recon → **sl-ia** → **sl-context** → sl-status → sl-change → **sl-aidd** (story 승인→구현→QA→테스트) |
 | SDD 소규모 변경 | **sl-change --quick** "설명" (SR 없이 경량 경로) |
-| SDD 드리프트 점검 | **sl-drift** (주기적 스펙-코드 정합성 감지) |
 
 ### AIDD 핵심 루프 (sl-aidd 내부)
 
