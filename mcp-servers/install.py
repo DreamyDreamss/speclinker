@@ -389,10 +389,61 @@ def register_global():
     print(c(GRAY, "Claude Code 재시작 후 모든 프로젝트에서 DB MCP 사용 가능. project.env엔 MCP_DB_{별칭}=true 만 두면 됨."))
 
 
+def register_global_template(dbs=None):
+    """비대화형 — 전역(사용자 스코프) MCP 설정파일에 DB 서버 항목을 placeholder(CHANGE_ME) creds로 추가.
+    creds(아이디/비번)는 사용자가 직접 파일을 열어 채운다. sl-init '전역' 선택에서 호출."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    cfg = os.path.join(os.path.expanduser("~"), ".claude.json")
+    chosen = [d for d in (dbs or list(DB_SPECS)) if d in DB_SPECS]
+    if not shutil.which("claude"):
+        print(c(RED, "claude CLI 없음 — 수동 등록 필요. 아래 명령을 참고하세요:"))
+        for db in chosen:
+            sp = DB_SPECS[db]
+            envs = " ".join(f"--env {k}=CHANGE_ME" for k, _, _ in sp["fields"])
+            print(c(GRAY, f"  claude mcp add {sp['alias']} --scope user {envs} -- python {os.path.join(here, sp['server'])}"))
+        return
+
+    added, skipped, edit_keys = [], [], {}
+    for db in chosen:
+        sp = DB_SPECS[db]
+        alias, server = sp["alias"], os.path.join(here, sp["server"])
+        ret, _ = run_silent(["claude", "mcp", "get", alias])
+        if ret == 0:
+            skipped.append(alias); continue
+        cmd = ["claude", "mcp", "add", alias, "--scope", "user"]
+        for key, _lbl, _d in sp["fields"]:
+            cmd += ["--env", f"{key}=CHANGE_ME"]      # placeholder — 사용자가 직접 교체
+        cmd += ["--", sys.executable, server]
+        ret, out = run_silent(cmd)
+        if ret == 0:
+            added.append(alias); edit_keys[alias] = [k for k, _, _ in sp["fields"]]
+        else:
+            print(c(YELLOW, f"  [!!] {alias} 등록 실패: {out[:160]}"))
+
+    print(f"\n{c(CYAN + BOLD, '=== 전역 DB MCP 항목 추가 완료 ===')}")
+    if added:
+        print(c(GREEN, f"추가됨: {', '.join(added)}  (전역 — 모든 프로젝트 공용)"))
+    if skipped:
+        print(c(GRAY, f"이미 등록(건너뜀): {', '.join(skipped)}"))
+    if added:
+        print(f"\n{c(BOLD, '⚠ 접속정보(아이디/비번 등)를 직접 입력하세요:')}")
+        print(f"  설정 파일: {c(CYAN, cfg)}")
+        print(c(GRAY, "  이 파일을 열어 각 서버의 env 중 'CHANGE_ME'를 실제 값으로 교체:"))
+        for alias, keys in edit_keys.items():
+            print(f"    [{alias}] {', '.join(keys)}")
+        print(c(GRAY, "  교체 후 Claude Code 재시작 → 모든 프로젝트에서 사용. 확인: claude mcp list"))
+
+
 # ---------------------------------------------------------------------------
 # 메인
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
+    if "--global-template" in sys.argv:
+        dbs = None
+        if "--db" in sys.argv:
+            dbs = [d.strip() for d in sys.argv[sys.argv.index("--db") + 1].split(",") if d.strip()]
+        register_global_template(dbs)
+        sys.exit(0)
     if "--global" in sys.argv:
         print(f"{c(CYAN+BOLD, '=== Speclinker MCP 전역 등록 ===')} {c(GRAY, f'({OS_NAME} / {ARCH})')}")
         register_global()

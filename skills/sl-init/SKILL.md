@@ -338,6 +338,40 @@ DB 종류를 선택해 주세요:
 
 ---
 
+### 4-1B. DB MCP 등록 스코프 선택 (DB ≥ 1일 때)
+
+DB가 1개 이상이면, 어디에 등록할지 사용자에게 질문한다:
+
+```
+DB MCP을 어디에 등록할까요?
+
+1) 이 프로젝트만        — 프로젝트 루트 .mcp.json (이 프로젝트에서만 사용)
+2) 전역 (모든 프로젝트)  — 사용자 스코프 설정파일 (회사 DB가 고정이면 한 번만 등록)
+3) 건너뜀               — 나중에 직접 설정
+```
+
+- **2) 전역** 선택 시 — **접속정보(아이디/비번)는 묻지 않는다.** 전역 설정파일에 항목만 placeholder로 추가하고 파일 위치를 안내한다.
+  내장 MCP가 있는 종류(**oracle / db2 / mariadb**)만 대상이다(postgresql·mssql은 npx 기반 → 프로젝트 .mcp.json로 처리):
+
+  ```bash
+  !python "{PLUGIN_PATH}/mcp-servers/install.py" --global-template --db <4-1에서 고른 내장 DB종류 쉼표구분, 예: oracle,mariadb>
+  ```
+
+  → `~/.claude.json`(전역)에 `db-oracle` 등 서버 항목이 `CHANGE_ME` placeholder creds로 추가되고, **사용자가 직접 채울 파일 경로·키가 출력된다.** 이때 **4-3 `.mcp.json`에는 이 DB들을 넣지 않는다**(Jira/Wiki만 들어감). 사용자에게 그대로 안내:
+  ```
+  [전역 DB MCP] ~/.claude.json 에 항목을 추가했습니다.
+    이 파일을 열어 각 DB의 ORA_HOST/ORA_USER/ORA_PASSWORD(등) 'CHANGE_ME'를 실제 값으로 교체하세요.
+    교체 후 Claude Code 재시작 → 모든 프로젝트에서 사용됩니다.
+  ```
+
+- **1) 이 프로젝트만**: 4-3에서 DB 포함 `.mcp.json`을 생성한다(기존 흐름, `{PLUGIN_PATH}` 치환, 접속정보는 사용자가 .mcp.json에서 입력).
+- **3) 건너뜀**: 4-3에서 DB 제외.
+
+> 어느 방식이든 **DB 접속정보는 비밀이라 자동 입력하지 않는다** — 전역=`~/.claude.json`, 프로젝트=`.mcp.json`에서 사용자가 직접 채운다.
+> 4-4의 `MCP_DB_{별칭}=true` 플래그는 스코프와 무관하게 기록한다(사용 의도 + 라이브러리 자동설치 신호).
+
+---
+
 ### 4-2. Jira / Wiki 연결 구성
 
 사용자에게 아래를 출력하여 질문한다:
@@ -395,6 +429,7 @@ Write-Output "PLUGIN_PATH=$PLUGIN_PATH"
 - 프로젝트의 어떤 파일(config, .env 등)도 읽지 않는다
 - DB 접속 정보는 "여기에_XXX_입력" 플레이스홀더로 작성한다
 - 사용자가 직접 파일을 열어 실제 값을 채워야 한다
+- **4-1B에서 '전역' 선택한 DB는 `.mcp.json`에 넣지 않는다** (이미 `~/.claude.json`에 등록됨). Jira/Wiki와 '프로젝트만' 선택 DB만 포함한다. (DB도 Jira도 모두 전역/없음이면 `.mcp.json` 생성을 건너뛴다.)
 
 **4-1, 4-2에서 수집한 정보를 바탕으로 Write tool을 사용해 프로젝트 루트에 `.mcp.json` 파일을 직접 생성한다.**
 
