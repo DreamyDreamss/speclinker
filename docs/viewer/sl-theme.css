@@ -33,7 +33,9 @@
 /* Docsify 기본 오버라이드 */
 body { background: var(--bg-primary); color: var(--text-primary); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0; }
 .sidebar, .sidebar-toggle { display: none !important; }
-.content { margin-left: 220px !important; background: var(--bg-primary); }
+/* docsify 기본 .content는 position:absolute; left:300px — 내 사이드바(220px)에 맞춰 left를 덮어쓴다
+   (margin-left를 더하면 docsify의 left:300과 합산돼 본문이 가운데로 밀림) */
+.content { left: 220px !important; right: 0 !important; margin: 0 !important; background: var(--bg-primary); }
 a { color: var(--accent); }
 
 /* 문서 본문 — docsify의 가운데정렬/좁은 폭 제거 → 좌측정렬 풀폭(잘림 방지) */
@@ -167,7 +169,7 @@ body.sl-custom-view .content { display: none !important; }
 #sl-quick-nav a { display: block; color: var(--text-muted); text-decoration: none; padding: 3px 0; line-height: 1.4; }
 #sl-quick-nav a:hover { color: var(--text-primary); }
 #sl-quick-nav a.sl-hl { color: var(--accent); }
-.content.has-qnav { margin-right: 175px !important; }
+.content.has-qnav { right: 175px !important; }
 
 /* 크로스링크 */
 .sl-xlink { color: var(--accent) !important; text-decoration: none !important; border-bottom: 1px dashed var(--accent); cursor: pointer; }
@@ -197,7 +199,7 @@ body.sl-custom-view .content { display: none !important; }
 .sl-rel-uis { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
 .sl-rel-func { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
 .sl-rel-srs { color: #a371f7; border-color: #a371f7; background: rgba(163,113,247,.10); }
-.content.has-relpanel { margin-right: 264px !important; }
+.content.has-relpanel { right: 264px !important; }
 .has-relpanel #sl-quick-nav { display: none; }
 
 /* UIS 미리보기 확대(라이트박스) */
@@ -220,9 +222,10 @@ body.sl-custom-view .content { display: none !important; }
   #sl-burger { display: block; }
   #sl-sidebar { transform: translateX(0); transition: transform .2s; box-shadow: 2px 0 12px rgba(0,0,0,.4); }
   body.sl-sidebar-hidden #sl-sidebar { transform: translateX(-100%); }
-  #sl-main, .content { margin-left: 0 !important; }
+  #sl-main { margin-left: 0 !important; }
+  .content { left: 0 !important; margin: 0 !important; }
   #sl-rel-panel { display: none; }
-  .content.has-relpanel, .content.has-qnav { margin-right: 0 !important; }
+  .content.has-relpanel, .content.has-qnav { right: 0 !important; }
 }
 
 /* ── 사용자 가이드 ─────────────────────────────────────── */
