@@ -404,6 +404,22 @@ Jira 또는 Wiki(Confluence)에 연결하시겠습니까?
 3) Jira + Wiki 모두
 ```
 
+**Jira를 선택한 경우 — SR 작업보드 조회 범위를 반드시 물어 `project.env`에 기록한다:**
+
+```
+SR 작업보드에 어떤 지라 업무를 가져올까요?
+
+1) 지라 프로젝트 키로 (내 미완료 SR)        → JIRA_PROJECT=<키>  (예: KSHOPSR)
+2) 커스텀 JQL로 (시스템·컴포넌트 등 직접 필터) → JIRA_JQL=<JQL>
+   예: (시스템구분 = "KDI/KDI파트너" OR component = KDI) AND statusCategory != Done ORDER BY updated DESC
+3) 나중에 (SR 보드 실행 시 다시 질문)
+```
+
+> - 1) → `JIRA_PROJECT=<키>` 기록. **워크스페이스 폴더명(`PROJECT_NAME`)은 지라 키가 아니다** — 사용자에게 실제 키를 받는다.
+> - 2) → `JIRA_JQL=<JQL>` 기록(최우선 적용).
+> - 3) → 아무것도 기록 안 함. SR 보드가 실행 시점에 다시 묻는다(전체 조회 금지).
+> 이 값은 4-3 `.mcp.json`이 아니라 **`project.env`(Step 4-4 append)** 에 들어간다.
+
 ---
 
 ### 4-3. .mcp.json 생성
