@@ -451,9 +451,14 @@ def scan_srs(spec_root: str) -> list:
                                              or inf_re.search(c) or func_re.search(c)):
                 name = c
                 break
+        # 실제 SRS-F 본문은 도메인 상세파일(domains/SRS_{도메인}.md)에 있다.
+        # 인덱스(SRS_v1.0.md)가 아니라 상세파일을 가리켜야 클릭 시 그 SRS 내용이 뜬다.
+        detail_rel = f'docs/03_기능명세서/domains/SRS_{domain}.md'
+        file_rel = (detail_rel if domain and os.path.isfile(os.path.join(spec_root, detail_rel))
+                    else 'docs/03_기능명세서/SRS_v1.0.md')
         out.append({
             'id': sids[0], 'name': name, 'domain': domain,
-            'file': 'docs/03_기능명세서/SRS_v1.0.md',
+            'file': file_rel,
             'uis': sorted(set(uis_re.findall(line))),
             'inf': sorted(set(inf_re.findall(line))),
             'func': funcs[0] if funcs else '',

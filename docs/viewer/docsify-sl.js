@@ -145,7 +145,7 @@
   }
 
   // ── 사용자 가이드 ────────────────────────────────────────────
-  const GUIDE_VERSION = '3.34.2';
+  const GUIDE_VERSION = '3.34.3';
 
   // 이 뷰어(SpecLens) 자체 기능 — 현행 반영
   const GUIDE_VIEWER_FEATURES = [
@@ -1216,7 +1216,7 @@
             if (parts[i] === '..') out.pop();
             else if (parts[i] !== '.' && parts[i] !== '') out.push(parts[i]);
           }
-          return '](#/' + out.join('/') + frag + ')';
+          return '](/' + out.join('/') + frag + ')';
         });
       return content;
     });
