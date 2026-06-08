@@ -50,55 +50,21 @@ argument-hint: [port]
 
 ---
 
-## STEP 3 — SR 작업보드 (선택 — `NETWORK=open` + `MCP_JIRA` + CDP Chrome)
+## STEP 3 — 인터랙티브 모드 (CDP Chrome 9222 + watch 루프) — **Jira 불필요**
 
-> 담당 지라 SR을 보드에 띄우고, 화면 버튼으로 영향분석·AIDD(`/sl-change`)를 트리거한다.
-> **새 명령어 없음** — `/sl-viewer` 세션이 MCP(지라)+CDP(SpecLens)를 둘 다 쥐고 있으므로 이 세션이 직접 처리한다.
+> 뷰어 버튼([🔄 재생성]·도메인 뷰 [⚙ 생성])은 `window.__slQueue`에 의도만 쌓는다(브라우저는 세션을
+> 직접 깨우지 못함 — pull 방식). 세션이 **watch 루프**로 큐를 비워 처리해야 버튼이 동작한다.
+> **재생성/생성 버튼만 쓸 거면 이 STEP만으로 충분 — 지라 불필요.** 담당 지라 SR을 칸반으로 띄우려면
+> STEP 4(SR 작업보드)를 추가한다.
 >
-> **전제**: SpecLens를 띄운 Chrome이 `--remote-debugging-port=9222`로 떠 있을 것(캡처와 동일).
-> MCP·CDP 권한은 이 세션에만 있으므로 **세션이 살아있는 동안** 라이브로 동작한다(닫으면 마지막 `sr_board.json` 정적 폴백).
+> **전제**: 버튼 인터랙션은 SpecLens를 띄운 Chrome이 `--remote-debugging-port=9222`로 떠 있어야 한다
+> (읽기전용 탐색은 CDP 불필요). 시작 전 `sl_board_cdp.js alive`로 CDP 생존만 빠르게 확인할 수 있다.
+> CDP 미동작이면 "읽기전용 뷰어"로 안내하고 watch는 진입하지 않는다.
 
-### 3-1. 지라에서 내 SR 수집 (MCP)
-```
-mcp-atlassian 호출:
-  tool: jira_search
-  args: { jql: "assignee = currentUser() AND project = {PROJECT} AND statusCategory != Done ORDER BY updated DESC",
-          fields: "summary,status,priority,assignee,issuetype,updated", limit: 50 }
-```
-각 이슈 → `{ key, summary, status, priority, assignee, jira_url(=<JIRA_URL>/browse/<key>), updated }`.
+### 3-1. watch 루프 시작 (자동 long-poll, 토큰-효율)
 
-### 3-2. SR별 영향 범위 + 자료 충분도 산정 (zero-LLM)
-**영향**: 각 SR 요약/설명에서 엔티티를 뽑아 영향 슬라이스를 계산한다:
-```bash
-!python "{PLUGIN_PATH}/scripts/build_change_context.py" "<SR 요약+설명 텍스트>" --json
-```
-→ 영향 INF/SCH/UIS/FUNC ID 목록을 각 카드 `impact`에 채운다. (그래프 미존재 시 spec_index 키워드 매칭 폴백)
-
-**자료 충분도**: 부실 SR/DRM 첨부를 감지해 "⚠ 보강 필요"를 띄운다. SR 도시에(`docs/변경관리/{SR}/`)를 점검:
-```bash
-!python "{PLUGIN_PATH}/scripts/scan_sr_material.py" . --sr <SR-KEY>
-```
-→ 산출 `{state(ok|thin|drm),note,dossier_path,attachments,inputs}`를 각 카드 `material`에 채운다.
-(thin=본문 부실+첨부없음, drm=첨부 추출불가, ok=본문 충분 or 사용자 inputs/ 보강 있음)
-
-### 3-3. 보드 데이터 작성 + 화면 주입
-`docs/viewer/sr_board.json`을 아래 형식으로 쓰고 CDP로 주입한다:
-```jsonc
-{ "generated_at":"<ISO>", "project":"{PROJECT}", "jql":"<위 JQL>",
-  "srs":[ { "key","summary","status","priority","assignee","jira_url","updated",
-            "description"(선택), "impact":{"inf":[],"sch":[],"uis":[],"func":[]}, "suggested":"/sl-change <key>" } ] }
-```
-```bash
-!node "{PLUGIN_PATH}/scripts/sl_board_cdp.js" inject docs/viewer/sr_board.json
-```
-→ SpecLens 사이드바 **📋 SR 작업보드**에 칸반으로 표시된다.
-
-### 3-4. 버튼 클릭 처리 루프 (자동 long-poll, 토큰-효율)
-
-화면 버튼은 `window.__slQueue`에 의도만 쌓는다(브라우저는 세션을 직접 깨우지 못함 — pull 방식).
-그래서 **`/sl-viewer`는 STEP 2~3 직후 자동으로 watch 루프에 진입한다.** `watch`는 Node 내부에서
-주기적으로 큐를 확인하다가 **실제 이벤트가 생겼을 때만** 1회 출력하고 종료하므로, 유휴 중에는
-LLM 토큰을 전혀 쓰지 않는다.
+`/sl-viewer`는 STEP 2 직후 CDP가 살아있으면 자동으로 watch에 진입한다. `watch`는 Node 내부에서 주기적으로
+큐를 확인하다가 **실제 이벤트가 생겼을 때만** 1회 출력하고 종료하므로, 유휴 중에는 LLM 토큰을 전혀 쓰지 않는다.
 
 ```bash
 !node "{PLUGIN_PATH}/scripts/sl_board_cdp.js" watch
@@ -108,34 +74,86 @@ LLM 토큰을 전혀 쓰지 않는다.
 
 | event | 의미 | 세션 동작 |
 |-------|------|-----------|
-| `requests` | 버튼 클릭이 쌓임 (`requests[]`) | 아래 표대로 각 `{sr, action}` 처리 → **watch 재실행** |
-| `idle-timeout` | 약 25분간 클릭 없음(heartbeat) | 바로 **watch 재실행**(처리할 것 없음) |
-| `cdp-closed` | Chrome(9222)이 꺼짐 | **루프 종료 — 재실행하지 않는다.** "SR보드 라이브 종료(CDP 닫힘)" 안내 |
-| `no-viewer` | Chrome은 살아있으나 SpecLens 탭이 닫힘 | **루프 종료 — 재실행하지 않는다.** 탭 다시 열면 `/sl-viewer` 재실행 |
+| `requests` | 버튼 클릭이 쌓임 (`requests[]`) | 아래 3-2 표대로 각 항목 처리 → **watch 재실행** |
+| `idle-timeout` | 약 25분간 클릭 없음(heartbeat) | 바로 **watch 재실행** |
+| `cdp-closed` | Chrome(9222)이 꺼짐 | **루프 종료 — 재실행 안 함.** "라이브 종료(CDP 닫힘)" 안내 |
+| `no-viewer` | Chrome 살아있으나 SpecLens 탭 닫힘 | **루프 종료 — 재실행 안 함.** 탭 다시 열면 `/sl-viewer` 재실행 |
 | `error` | playwright-core 등 환경 문제 | 안내 후 종료 |
 
-> **CDP 생명주기 = 루프 생명주기.** watch가 `cdp-closed`/`no-viewer`를 반환하면 세션은 watch를
-> **재실행하지 않으므로** 루프가 자동으로 정리된다. 즉 사용자가 Chrome이나 탭을 닫으면 폴링도 함께 끝난다.
-> 토큰 부담을 더 줄이려면 `--interval`(기본 4000ms, 내부 확인 주기)·`--max-wait`(기본 ~25분) 조정 가능.
-> 시작 전 빠른 게이트가 필요하면 `sl_board_cdp.js alive`로 CDP 생존만 확인할 수 있다.
+> **CDP 생명주기 = 루프 생명주기.** watch가 `cdp-closed`/`no-viewer`를 반환하면 재실행하지 않으므로
+> 루프가 자동 정리된다(Chrome/탭 닫으면 폴링도 끝남). `--interval`(기본 4000ms)·`--max-wait`(기본 ~25분) 조정 가능.
 
-`requests[]`의 각 `{sr, action}` 분기:
-| action | 처리 |
-|--------|------|
-| `sync` | 3-1~3-3 재수행(지라 재조회→주입) |
-| `analyze` | 해당 SR `build_change_context` 재계산 → 카드 impact 갱신 후 inject |
-| `change` | **`/sl-change <sr>` 실행** — 단계마다 `sl_board_cdp.js status`로 진행 주입(분석중→승인대기→구현중→QA→완료) |
-| `approve`/`reject` | 진행 중인 sl-change 게이트에 사람 결정 반영 후 계속/중단 |
-| `open-dossier` (`target`=SR) | `docs/변경관리/{SR}/inputs/` **없으면 생성** + OS 탐색기로 폴더 열기(`explorer`/`open`/`xdg-open`) → 사용자가 캡처·메모 투입. (DRM/부실 SR 보강용) |
-| `refresh-material` (`target`=SR) | `scan_sr_material.py --sr {SR}` 재실행 → 카드 `material` 갱신 후 inject(보강 반영) |
-| `regen-spec` (`target`=스펙ID, `kind`=inf/sch/uis/srs) | **그 스펙 1개만 재생성**(아래 STEP 5) — 백업→삭제→해당 speclinker 단계 재실행(멱등)→`gen_docsify`→상태 주입. `missing:true`(미생성 [⚙ 생성] 버튼)면 **백업·삭제 생략** — 대상이 아직 없으므로 해당 단계가 새로 생성한다 |
+### 3-2. 큐 액션 처리 (`requests[]`의 각 항목)
 
+| action | Jira | 처리 |
+|--------|:---:|------|
+| `regen-spec` (`target`=스펙ID, `kind`=inf/sch/uis/srs) | ✕ | **그 스펙 1개만 재생성**(STEP 5). `missing:true`(미생성 [⚙ 생성])면 백업·삭제 생략—신규 생성 |
+| `open-dossier`/`refresh-material` (`target`=SR) | △ | SR 도시에(`docs/변경관리/{SR}/`) 폴더 열기/자료 재점검(`scan_sr_material.py`) |
+| `sync` | ○ | STEP 4 재수행(지라 재조회→주입) |
+| `analyze` | ○ | 해당 SR `build_change_context` 재계산 → 카드 impact 갱신 후 inject |
+| `change` | ○ | **`/sl-change <sr>` 실행** — 단계마다 `sl_board_cdp.js status`로 진행 주입(분석중→승인대기→구현중→QA→완료) |
+| `approve`/`reject` | ○ | 진행 중 sl-change 게이트에 사람 결정 반영 후 계속/중단 |
+
+> Jira 열: ✕=지라 무관(항상 동작) · ○=SR 보드(STEP 4) 활성 필요 · △=SR 도시에 보강.
+> **사람 승인 게이트 유지** — `/sl-change`가 게이트 도달 시 `state=승인대기` 주입, 화면 [승인]/[반려] 버튼이 큐로 결정을 보냄(자동 폭주 없음).
+> **보안**: CDP 다리는 페이지 read/write만. 실제 코드 변경은 세션이 게이트를 거쳐 수행하며 큐엔 *의도*만 담긴다.
+
+---
+
+## STEP 4 — SR 작업보드 (선택 — Jira: `NETWORK=open` + `MCP_JIRA` + `JIRA_PROJECT`/`JIRA_JQL`)
+
+> 담당 지라 SR을 보드에 띄우고 화면 버튼으로 영향분석·AIDD(`/sl-change`)를 트리거한다.
+> **새 명령어 없음** — `/sl-viewer` 세션이 MCP(지라)+CDP(SpecLens)를 쥐고 직접 처리한다(STEP 3 watch가 버튼을 픽업).
+> 닫으면 마지막 `sr_board.json` 정적 폴백.
+
+### 4-1. 조회 범위 결정 + 지라 수집 (MCP)
+
+**JQL 우선순위 (project.env에서 결정):**
+1. **`JIRA_JQL` 있으면 → 그대로 사용**(최우선). 시스템구분/컴포넌트 등 임의 필터 가능.
+   예: `(시스템구분 = "KDI/KDI파트너" OR component = KDI) AND statusCategory != Done ORDER BY updated DESC`
+2. 없고 **`JIRA_PROJECT`만 있으면** → `assignee = currentUser() AND project = {JIRA_PROJECT} AND statusCategory != Done ORDER BY updated DESC`.
+3. **둘 다 없으면 → 전체를 긁지 말고 사용자에게 질문**: "어느 지라 프로젝트/JQL로 SR을 가져올까요?" 답을 project.env(`JIRA_PROJECT` 또는 `JIRA_JQL`)에 저장 후 진행.
+
+> ⚠️ `PROJECT_NAME`(워크스페이스 폴더명)은 **지라 프로젝트 키가 아니다** — JQL에 쓰지 말 것.
+
+```
+mcp-atlassian 호출:
+  tool: jira_search
+  args: { jql: "<위 우선순위로 결정된 JQL>",
+          fields: "summary,status,priority,assignee,issuetype,updated,components", limit: 50 }
+```
+각 이슈 → `{ key, summary, status, priority, assignee, jira_url(=<JIRA_URL>/browse/<key>), updated }`.
+
+### 4-2. SR별 영향 범위 + 자료 충분도 산정 (zero-LLM)
+**영향**: 각 SR 요약/설명에서 엔티티를 뽑아 영향 슬라이스를 계산한다:
+```bash
+!python "{PLUGIN_PATH}/scripts/build_change_context.py" "<SR 요약+설명 텍스트>" --json
+```
+→ 영향 INF/SCH/UIS/FUNC ID 목록을 각 카드 `impact`에 채운다. (그래프 미존재 시 spec_index 키워드 매칭 폴백)
+
+**자료 충분도**: 부실 SR/DRM 첨부를 감지해 "⚠ 보강 필요"를 띄운다:
+```bash
+!python "{PLUGIN_PATH}/scripts/scan_sr_material.py" . --sr <SR-KEY>
+```
+→ `{state(ok|thin|drm),note,dossier_path,attachments,inputs}`를 각 카드 `material`에 채운다.
+
+### 4-3. 보드 데이터 작성 + 화면 주입
+`docs/viewer/sr_board.json`을 쓰고 CDP로 주입한다:
+```jsonc
+{ "generated_at":"<ISO>", "project":"<JIRA_PROJECT 또는 JQL 출처>", "jql":"<4-1에서 결정된 JQL>",
+  "srs":[ { "key","summary","status","priority","assignee","jira_url","updated",
+            "description"(선택), "impact":{"inf":[],"sch":[],"uis":[],"func":[]}, "suggested":"/sl-change <key>" } ] }
+```
+```bash
+!node "{PLUGIN_PATH}/scripts/sl_board_cdp.js" inject docs/viewer/sr_board.json
+```
+→ SpecLens 사이드바 **📋 SR 작업보드**에 칸반으로 표시된다. 이후 버튼 클릭은 STEP 3 watch가 처리한다.
 ---
 
 ## STEP 5 — 개별 스펙 재생성 (화면 [🔄 재생성] 버튼)
 
 > SpecLens에서 INF/SCH/UIS/SRS 상세를 열면 연결관계 패널에 **[🔄 재생성]** 버튼이 있다.
-> 누르면 큐에 `{action:'regen-spec', target:<ID>, kind:<inf|sch|uis|srs>}`가 쌓이고(STEP 3-4 poll이 픽업),
+> 누르면 큐에 `{action:'regen-spec', target:<ID>, kind:<inf|sch|uis|srs>}`가 쌓이고(STEP 3 watch가 픽업),
 > 세션이 **그 스펙 1개만** 재생성한다. 기존 멱등성(group_already_done / sch_todo)을 이용 — 대상만 지우면 그것만 다시 만들어진다.
 
 **공통 안전 절차**: 대상 파일을 `_tmp/regen_backup/`에 백업 → 삭제 → 재생성 → 실패 시 백업 복원. 진행상태는 `sl_board_cdp.js status`로 주입(재생성중→완료/실패).
@@ -167,7 +185,7 @@ LLM 토큰을 전혀 쓰지 않는다.
 !node "{PLUGIN_PATH}/scripts/sl_board_cdp.js" status _tmp/board_status.json
 ```
 
-> **손 안 대고 운영**: STEP 3-4의 `watch` 루프가 자동 폴링을 담당한다(`/loop` 수동 설정 불필요).
+> **손 안 대고 운영**: STEP 3의 `watch` 루프가 자동 폴링을 담당한다(`/loop` 수동 설정 불필요).
 > watch는 유휴 시 토큰을 쓰지 않고, 버튼 클릭·CDP 종료 때만 세션을 깨운다. 단 `/sl-change`의
 > **사람 승인 게이트는 유지**된다 — 게이트 도달 시 `state=승인대기`로 주입하고, 화면 [승인]/[반려]
 > 버튼이 큐로 결정을 보내면 그때 진행한다(자동 폭주 없음).

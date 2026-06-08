@@ -593,14 +593,22 @@ MCP_DB_{별칭1}=true       ← 선택한 DB 수만큼 반복 (없으면 생략)
 MCP_DB_{별칭2}=true
 MCP_JIRA=true/false       ← Jira 선택 여부
 MCP_WIKI=true/false       ← Wiki 선택 여부
+# SR 작업보드 조회 범위 (MCP_JIRA=true일 때) — 아래 중 하나 권장
+# JIRA_PROJECT=PROJ            ← 지라 프로젝트 키(폴더명 아님). 내 미완료 SR 조회에 사용
+# JIRA_JQL=...                 ← 커스텀 JQL(최우선). 시스템/컴포넌트 등 임의 필터
 ```
 
-예시 (DB 2개 + Jira만 선택한 경우):
+> **Jira 선택 시 SR 보드 조회 범위를 물어 `JIRA_PROJECT` 또는 `JIRA_JQL`을 기록한다.**
+> 둘 다 없으면 SR 보드는 전체를 긁지 않고 실행 시점에 다시 질문한다(`PROJECT_NAME`=폴더명은 지라 키가 아님).
+
+예시 (DB 2개 + Jira, 시스템 기준 JQL):
 ```
 MCP_DB_main=true
 MCP_DB_sub1=true
 MCP_JIRA=true
 MCP_WIKI=false
+JIRA_PROJECT=KSHOPSR
+JIRA_JQL=(시스템구분 = "KDI/KDI파트너" OR component = KDI) AND statusCategory != Done ORDER BY updated DESC
 ```
 
 DB가 0개이고 Jira/Wiki도 선택하지 않은 경우, 아래만 추가한다:

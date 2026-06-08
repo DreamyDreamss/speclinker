@@ -145,7 +145,7 @@
   }
 
   // ── 사용자 가이드 ────────────────────────────────────────────
-  const GUIDE_VERSION = '3.33.0';
+  const GUIDE_VERSION = '3.34.0';
 
   // 이 뷰어(SpecLens) 자체 기능 — 현행 반영
   const GUIDE_VIEWER_FEATURES = [
