@@ -4,7 +4,6 @@
  *
  * 별도 서버 없음. 기존 캡처와 동일한 CDP(9222) 채널로 SpecLens 탭과 통신한다.
  *   inject <board.json>  : window.__slBoard 주입 + SlViewer.renderBoard()
- *   drift  <drift.json>  : window.__slDrift 주입 + SlViewer.onDrift() (변경 점검 결과)
  *   status <status.json> : window.__slStatus 병합 + 재렌더 (진행상태 갱신)
  *   poll                 : window.__slQueue 읽어 비우고 JSON 출력(버튼 클릭 요청)
  *
@@ -58,8 +57,8 @@ async function findViewerPage(browser) {
 }
 
 (async () => {
-  if (!['inject', 'drift', 'status', 'poll'].includes(CMD)) {
-    out({ error: 'usage: sl_board_cdp.js <inject|drift|status|poll> [file] [--port=9222]' });
+  if (!['inject', 'status', 'poll'].includes(CMD)) {
+    out({ error: 'usage: sl_board_cdp.js <inject|status|poll> [file] [--port=9222]' });
     process.exit(1);
   }
   if (!(await isChromeAlive())) {
@@ -86,14 +85,6 @@ async function findViewerPage(browser) {
         }
       }, data);
       out({ ok: true, injected: (data.srs || []).length });
-
-    } else if (CMD === 'drift') {
-      const data = readJson(FILE);
-      await page.evaluate((d) => {
-        window.__slDrift = d;
-        if (window.SlViewer && window.SlViewer.onDrift) window.SlViewer.onDrift();
-      }, data);
-      out({ ok: true, drift: (data.items || []).length });
 
     } else if (CMD === 'status') {
       const st = readJson(FILE);

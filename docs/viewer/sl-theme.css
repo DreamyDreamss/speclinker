@@ -438,23 +438,10 @@ body.sl-custom-view .content { display: none !important; }
   opacity: 0; pointer-events: none; transition: opacity .18s, transform .18s; }
 #sl-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-/* 변경 점검(Drift) */
-.sl-nav-count.warn { background: var(--method-delete); color: #fff; }
-.sl-driftview { padding: 22px 26px 60px; }
-.sl-drift-group { margin-bottom: 22px; }
-.sl-drift-dom { font-size: 13px; font-weight: 700; color: var(--text-primary); padding: 6px 2px 10px;
-  border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
-.sl-drift-dombtn { margin-left: auto; }
-.sl-drift-item { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center;
-  padding: 10px 4px; border-bottom: 1px solid var(--border-soft); }
-.sl-drift-main { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
-.sl-drift-type { font-size: 10px; font-weight: 700; border: 1px solid; border-radius: 5px; padding: 1px 6px; }
-.sl-drift-id { font-size: 13px; font-weight: 600; cursor: pointer; }
-.sl-drift-reason { font-size: 12px; color: var(--status-review); }
-.sl-drift-srcs { grid-column: 1 / 2; display: flex; flex-wrap: wrap; gap: 5px; }
-.sl-drift-src { font-size: 10.5px; background: var(--bg-tertiary); border: 1px solid var(--border-soft);
-  border-radius: 5px; padding: 1px 6px; color: var(--text-muted); }
-.sl-drift-act { grid-row: 1 / 2; grid-column: 2 / 3; }
+/* 개별 스펙 재생성 버튼 (연결관계 패널) */
+.sl-regen-btn { float: right; margin-right: 6px; font-size: 10px; font-weight: 600; color: var(--accent);
+  border: 1px solid var(--accent); border-radius: 4px; padding: 1px 7px; cursor: pointer; }
+.sl-regen-btn:hover { background: var(--accent); color: #1a1407; }
 
 /* 티켓 자료(dossier) */
 .sl-mat { font-size: 10px; font-weight: 700; border: 1px solid; border-radius: 6px; padding: 1px 6px; white-space: nowrap; }

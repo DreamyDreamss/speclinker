@@ -99,27 +99,34 @@ mcp-atlassian 호출:
 | `approve`/`reject` | 진행 중인 sl-change 게이트에 사람 결정 반영 후 계속/중단 |
 | `open-dossier` (`target`=SR) | `docs/변경관리/{SR}/inputs/` **없으면 생성** + OS 탐색기로 폴더 열기(`explorer`/`open`/`xdg-open`) → 사용자가 캡처·메모 투입. (DRM/부실 SR 보강용) |
 | `refresh-material` (`target`=SR) | `scan_sr_material.py --sr {SR}` 재실행 → 카드 `material` 갱신 후 inject(보강 반영) |
-| `drift-scan` | **변경 점검**(아래 STEP 5) — `detect_drift.py` 실행 → `sl_board_cdp.js drift`로 결과 주입 |
-| `regen-spec` (`target`=스펙ID) | 해당 INF/SCH/UIS만 강제 재생성 → `gen_docsify` → 인덱스/drift 재주입 (※ 디스패처 `--only` = 후속 슬라이스) |
-| `regen-domain` (`target`=도메인) | 그 도메인 `/sl-recon` 재실행(변경분만) → `gen_docsify` → 재주입 |
+| `regen-spec` (`target`=스펙ID, `kind`=inf/sch/uis/srs) | **그 스펙 1개만 재생성**(아래 STEP 5) — 백업→삭제→해당 speclinker 단계 재실행(멱등)→`gen_docsify`→상태 주입 |
 
 ---
 
-## STEP 5 — 변경 점검 (스펙 최신화 — 버튼 트리거)
+## STEP 5 — 개별 스펙 재생성 (화면 [🔄 재생성] 버튼)
 
-> 소스가 바뀌었는데 스펙이 안 따라온 INF/SCH/UIS를 찾아 SpecLens **🔄 변경 점검** 화면에 띄운다.
-> 사용자가 화면에서 **[🔄 변경 점검 실행]** 을 누르면 큐에 `drift-scan`이 쌓이고(STEP 3-4 poll이 픽업), 세션이 아래를 수행한다:
+> SpecLens에서 INF/SCH/UIS/SRS 상세를 열면 연결관계 패널에 **[🔄 재생성]** 버튼이 있다.
+> 누르면 큐에 `{action:'regen-spec', target:<ID>, kind:<inf|sch|uis|srs>}`가 쌓이고(STEP 3-4 poll이 픽업),
+> 세션이 **그 스펙 1개만** 재생성한다. 기존 멱등성(group_already_done / sch_todo)을 이용 — 대상만 지우면 그것만 다시 만들어진다.
 
+**공통 안전 절차**: 대상 파일을 `_tmp/regen_backup/`에 백업 → 삭제 → 재생성 → 실패 시 백업 복원. 진행상태는 `sl_board_cdp.js status`로 주입(재생성중→완료/실패).
+
+| kind | 처리 (target=스펙ID) |
+|------|---------------------|
+| `inf` | `docs/05_설계서/{도메인}/INF/{ID}.md` 백업·삭제 → `dispatch_inf_gen.py .`(없으면 STEP1 scan 후) → 삭제분만 재생성 |
+| `sch` | `docs/05_설계서/{도메인}/SCH/{ID}.md` 백업·삭제 → `build_sch_todo.py`→`build_sch_static.py`→`dispatch_sch_gen.py`→`link_inf_sch_new.py`(누락 테이블만) |
+| `uis` | `docs/05_설계서/{도메인}/UIS/{ID}_*/` → `/sl-recon-uis`로 그 화면만 재캡처+ddd-ui-agent (Chrome CDP 필요) |
+| `srs` | `/sl-recon-doc` 9-0+9-3(srs-agent) 재실행 → SRS 재생성(현재 SRS는 색인 단위라 SRS_v1.0 갱신) |
+
+재생성 후:
 ```bash
-!python "{PLUGIN_PATH}/scripts/detect_drift.py" . --out docs/viewer/drift.json
-!node "{PLUGIN_PATH}/scripts/sl_board_cdp.js" drift docs/viewer/drift.json
+!python "{PLUGIN_PATH}/scripts/gen_docsify.py" .          # spec_index 갱신
+!node "{PLUGIN_PATH}/scripts/sl_board_cdp.js" status _tmp/regen_status.json   # {ID:{state:'완료'}} 주입
 ```
+그리고 사용자가 화면에서 해당 스펙을 새로고침하면 갱신된 내용이 보인다.
 
-`detect_drift.py`(zero-LLM)는 각 스펙 frontmatter `anchors:`의 소스 mtime과 스펙 .md mtime을 비교해
-**소스가 더 최신이면 STALE**(=재생성 필요), 소스가 사라졌으면 MISSING으로 판정한다(freshness 게이트와 동일 원칙).
-화면에 도메인별로 변경 스펙이 뜨고, 각 항목 **[재생성]**(→`regen-spec`)·**[도메인 재생성]**(→`regen-domain`) 버튼으로 최신화한다.
-
-> 세션이 없을 땐 SpecLens가 마지막 `docs/viewer/drift.json`을 정적 폴백으로 읽어 보여준다(읽기 전용).
+> **정밀도**: INF/SCH는 *그 파일 1개*만 깔끔히 재생성된다(멱등). UIS는 재캡처(세션·CDP 필요), SRS는 색인 단위 재생성.
+> 변경 *감지*(어느 스펙이 낡았는지 자동 판별)는 추후 **git diff 기반**으로 별도 제공 예정 — 현재는 사용자가 보고 직접 [재생성].
 
 진행상태 주입 예:
 ```bash

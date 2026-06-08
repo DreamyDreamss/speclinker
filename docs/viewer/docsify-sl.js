@@ -84,7 +84,6 @@
         <span class="sl-nav-link" onclick="SlViewer.showGuide()">📖 사용자 가이드</span>
         <span class="sl-nav-link" onclick="SlViewer.showDashboard()">🏠 대시보드</span>
         <span class="sl-nav-link sl-nav-board" onclick="SlViewer.showBoard()">📋 SR 작업보드${boardBadge()}</span>
-        <span class="sl-nav-link sl-nav-drift" onclick="SlViewer.showDrift()">🔄 변경 점검${driftBadge()}</span>
         <a class="sl-nav-link" href="#/docs/00_FUNC/FUNC_MAP">🗂 FUNC_MAP</a>
         <span class="sl-nav-link" onclick="SlViewer.openSpec('.speclinker/sprint-status.yaml')">⚡ Sprint</span>
       </div>
@@ -607,7 +606,10 @@
     if (!sections) return;
     const panel = document.createElement('div');
     panel.id = 'sl-rel-panel';
-    panel.innerHTML = `<div class="sl-rel-title">🔗 연결관계 <span class="sl-graph-btn" role="button" tabindex="0" onclick="SlViewer.openGraph('${escAttr(e.id)}')">🕸 그래프</span></div>${sections}`;
+    panel.innerHTML = `<div class="sl-rel-title">🔗 연결관계
+        <span class="sl-graph-btn" role="button" tabindex="0" onclick="SlViewer.openGraph('${escAttr(e.id)}')">🕸 그래프</span>
+        <span class="sl-regen-btn" role="button" tabindex="0" title="이 ${escAttr(e.type.toUpperCase())}만 재생성 (speclinker 명령 실행 — /sl-viewer 세션 필요)" onclick="SlViewer.regenSpec('${escAttr(e.id)}','${escAttr(e.type)}')">🔄 재생성</span>
+      </div>${sections}`;
     document.body.appendChild(panel);
     document.querySelector('.content')?.classList.add('has-relpanel');
   }
@@ -963,69 +965,10 @@
     document.body.appendChild(el);
   }
 
-  // ── 변경 점검(Drift) ────────────────────────────────────────
-  const TYPE_COLOR = { INF: 'var(--c-inf)', SCH: 'var(--c-sch)', UIS: 'var(--c-uis)' };
-  function getDrift() { return (window.__slDrift && Array.isArray(window.__slDrift.items)) ? window.__slDrift : null; }
-  function driftBadge() {
-    const d = getDrift();
-    return d && d.total ? ` <span class="sl-nav-count warn">${d.total}</span>` : '';
-  }
+  // ── 큐 헬퍼 (버튼 → 세션) ────────────────────────────────────
   function slEnqueue(action, extra) {
     window.__slQueue = window.__slQueue || [];
     window.__slQueue.push(Object.assign({ id: 'q-' + Date.now(), action: action, ts: new Date().toISOString() }, extra || {}));
-  }
-  function driftRow(it) {
-    const col = TYPE_COLOR[it.type] || 'var(--text-muted)';
-    const srcs = (it.sources || []).map(s => `<code class="sl-drift-src">${escAttr(s)}</code>`).join(' ');
-    return `<div class="sl-drift-item">
-      <div class="sl-drift-main">
-        <span class="sl-drift-type" style="color:${col};border-color:${col}">${escAttr(it.type)}</span>
-        <span class="sl-xlink sl-drift-id" role="button" tabindex="0" onclick="SlViewer.goToId('${escAttr(it.id)}')">${escAttr(it.id)}</span>
-        <span class="sl-drift-reason">${escAttr(it.reason || '')}</span>
-      </div>
-      ${srcs ? `<div class="sl-drift-srcs">${srcs}</div>` : ''}
-      <div class="sl-drift-act"><button class="sl-bbtn primary" onclick="SlViewer.regenSpec('${escAttr(it.id)}')">재생성</button></div>
-    </div>`;
-  }
-  function renderDrift() {
-    const main = document.getElementById('sl-main'); if (!main) return;
-    removeQuickNav(); removeRelationPanel();
-    document.getElementById('sl-breadcrumb')?.remove();
-    document.body.classList.add('sl-custom-view');
-    renderSidebar();
-    const d = getDrift();
-    const head = `<div class="sl-board-head">
-        <div><div class="sl-board-title">🔄 변경 점검</div>
-          <div class="sl-board-sub">${d ? `${d.total}건 변경 감지 · 점검 ${escAttr(d.scanned_at || '')}` : '아직 점검하지 않음 — 버튼을 누르세요'}</div></div>
-        <button class="sl-bbtn primary" onclick="SlViewer.driftScan()">🔄 변경 점검 실행</button>
-      </div>`;
-    let body;
-    if (!d) {
-      body = `<div class="sl-board-empty"><div class="sl-be-icon">🔄</div>
-        <div class="sl-be-title">변경 점검을 실행하세요</div>
-        <div class="sl-be-desc"><b>🔄 변경 점검 실행</b>을 누르면 세션이 각 스펙의 근거 소스(anchors) 변경 여부를 검사해<br>
-        재생성이 필요한 INF/SCH/UIS를 표시합니다. (<code>/sl-viewer</code> 세션 필요)</div></div>`;
-      tryDriftFallback();
-    } else if (!d.items.length) {
-      body = `<div class="sl-board-empty"><div class="sl-be-icon">✅</div>
-        <div class="sl-be-title">모든 스펙이 최신입니다</div>
-        <div class="sl-be-desc">소스 대비 낡은 스펙이 없습니다. (점검 ${escAttr(d.scanned_at || '')})</div></div>`;
-    } else {
-      const byDom = {};
-      d.items.forEach(it => { const k = it.domain || '(기타)'; (byDom[k] = byDom[k] || []).push(it); });
-      body = Object.entries(byDom).map(([dom, items]) => `
-        <div class="sl-drift-group">
-          <div class="sl-drift-dom">${escAttr(dom)} <span class="sl-bcol-n">${items.length}</span>
-            <button class="sl-bbtn sl-drift-dombtn" onclick="SlViewer.regenDomain('${escAttr(dom)}')">도메인 재생성</button></div>
-          ${items.map(driftRow).join('')}
-        </div>`).join('');
-    }
-    main.innerHTML = `<div class="sl-driftview">${head}${body}</div>`;
-  }
-  function tryDriftFallback() {
-    fetch('drift.json?_=' + Date.now()).then(r => r.ok ? r.json() : null).then(j => {
-      if (j && Array.isArray(j.items)) { window.__slDrift = j; if (document.querySelector('#sl-main .sl-driftview')) renderDrift(); }
-    }).catch(function () {});
   }
 
   // ── 공개 API ──────────────────────────────────────────────────
@@ -1103,13 +1046,11 @@
     closeDrawer() { document.getElementById('sl-drawer')?.remove(); },
     openDossier(sr) { slEnqueue('open-dossier', { target: sr }); boardToast(sr + ' 자료 폴더 — 세션이 생성·탐색기로 엽니다. 캡처/메모를 넣은 뒤 [자료 새로고침]'); },
     refreshMaterial(sr) { slEnqueue('refresh-material', { target: sr }); boardToast(sr + ' 자료 재점검 요청됨'); },
-    // ── 변경 점검 ──
-    showDrift() { renderDrift(); },
-    renderDrift() { renderDrift(); },          // 세션(CDP)이 __slDrift 주입 후 호출
-    onDrift() { renderSidebar(); if (document.querySelector('#sl-main .sl-driftview')) renderDrift(); },
-    driftScan() { slEnqueue('drift-scan'); boardToast('변경 점검 요청됨 — 세션이 소스 변경을 검사합니다'); },
-    regenSpec(id) { slEnqueue('regen-spec', { target: id }); boardToast(id + ' 재생성 요청됨'); },
-    regenDomain(d) { slEnqueue('regen-domain', { target: d }); boardToast(d + ' 도메인 재생성 요청됨'); },
+    // ── 개별 스펙 재생성 (화면 버튼 → 세션이 speclinker 명령 수행) ──
+    regenSpec(id, kind) {
+      slEnqueue('regen-spec', { target: id, kind: kind || '' });
+      boardToast(id + ' 재생성 요청됨 — /sl-viewer 세션이 해당 스펙만 재생성합니다');
+    },
     goToId(id) {
       if (!INDEX) return;
       const inf = INDEX.infs && INDEX.infs.find(i => i.id === id);
