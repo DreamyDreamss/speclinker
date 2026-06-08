@@ -962,104 +962,28 @@ _tmp/batch_inventory_with_chain.json의 각 그룹에 대해 Agent 도구 호출
 
 ---
 
-## STEP 5 — SCH 명세 생성 (ddd-db-agent)
+## STEP 5 — INF 생성 완료 → SCH는 `/sl-recon-sch`
 
-> `resolve_call_chain.py`가 생성한 `_tmp/sch_draft/` + INF 파일의 `tables:` frontmatter를 기반으로  
-> 도메인별 DB 스키마(SCH)를 생성한다.
+> **SCH(DB 스키마) 생성은 `/sl-recon-sch`로 분리되었다.** INF가 추출대상 테이블의 권위이므로
+> INF 생성이 끝난 지금 시점에 별도 명령으로 실행한다(INF/UIS를 고친 뒤 SCH만 재실행하기 쉽다).
 
-```bash
-!python -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
-import json, os
-plan = json.load(open('docs/05_설계서/_domain_plan.json'))
-sch_draft_dir = '_tmp/sch_draft'
-domains_with_draft = []
-if os.path.exists(sch_draft_dir):
-    for d in plan['domains']:
-        domain_draft = os.path.join(sch_draft_dir, d['name'])
-        if os.path.isdir(domain_draft):
-            tables = os.listdir(domain_draft)
-            domains_with_draft.append((d['name'], len(tables)))
-if domains_with_draft:
-    print('SCH 초안 (sch_draft):')
-    for name, cnt in domains_with_draft:
-        print(f'  {name}: 테이블 {cnt}개')
-else:
-    print('sch_draft 없음 — ddd-db-agent가 INF tables: frontmatter + SQL 직접 분석')
-print()
-print(f'처리 도메인: {len(plan[\"domains\"])}개')
-"
+```
+/sl-recon-sch
 ```
 
-### STEP 5-0: SCH 스킵 판정 (idempotency)
-
-도메인별로 **기대 테이블(INF `tables:` 합집합) 대비 이미 생성된 SCH(frontmatter `table:`)**를 비교해, 누락 테이블이 없는 도메인은 스킵하고 **생성 대상만 `_tmp/sch_todo.json`에 기록**한다. (INF의 `group_already_done`과 동형 — recon 재실행 안전)
-
-```bash
-!python "{PLUGIN_PATH}/scripts/build_sch_todo.py" .
-```
-
-> 누락 테이블이 0인 도메인은 스킵된다(sch_todo.json에서 제외). 부분 생성 도메인은 `existing`을 넘겨 **누락분만** 생성한다.
-
-### STEP 5-0.5: 쿼리 패턴 채굴 (zero-token — JIT 기계 레이어)
-
-소스 SQL/XML에서 **관찰된 조인쌍 + 상시 필터 관례**(`scan_query_patterns.py`)와 **코드값 리터럴**(`scan_code_literals.py`)을
-`docs/05_설계서/_machine/`(영속)에 추출한다. build_sch_static이 이를 읽어 SCH의 `### 관계`·`🔧 쿼리 작성 가이드`를 채우고,
-AIDD/JIT는 이 JSON을 **마크다운 재파싱 없이 직접 소비**한다. (조인 정확성·상시필터 = 소스에만 존재하는 사실 → 카탈로그로는 불가)
-
-```bash
-!python "{PLUGIN_PATH}/scripts/scan_query_patterns.py" . --out docs/05_설계서/_machine/query_patterns.json
-!python "{PLUGIN_PATH}/scripts/scan_code_literals.py" . --out docs/05_설계서/_machine/code_literals.json
-```
-
-> 레거시 DB는 FK 미선언이 흔해 `*_get_foreign_keys`가 비어 나온다 — 이때 **관찰 조인이 유일한 JOIN 근거**다.
-> 무소스/무쿼리면 빈 JSON(graceful) — build_sch_static은 관찰 섹션을 생략한다.
-
-### STEP 5-A: 정적 스켈레톤 생성 (build_sch_static.py — zero-token)
-
-사실(컬럼·타입·키·인덱스·FK·관찰조인·상시필터·mini-ERD·크로스링크·도메인개요·전역색인)을 **스크립트로** 생성한다. LLM 토큰 0.
-의미 섹션(코드값·비즈니스 주의사항·컬럼 한글설명·상시필터 의미)은 `<!-- LLM-TODO -->` 마커로 남긴다.
-
-```bash
-!python "{PLUGIN_PATH}/scripts/build_sch_static.py" .
-```
-
-> **컬럼 타입 권위 순위**: DB 드라이버(project.env `DB_TYPE`/`DB_HOST`/…) > `CREATE TABLE`(*.sql) > ORM > sch_draft(이름만).
-> 무DB·무DDL이면 컬럼명 스켈레톤 + 타입칸 `<!-- LLM-TODO -->`. 산출물: 개별 `SCH-{CODE}-NNN.md` + `DB_{도메인}.md` + `DB_Schema.md` + `_tmp/sch_enrich_todo.json`(의미보강 필요 도메인).
-> 기존 SCH는 재생성하지 않고 채번을 이어간다(멱등). 3NF 검증 결과·통과 여부는 작성하지 않는다.
-
-### STEP 5-B: 의미 enrichment 디스패치 (dispatch_sch_gen.py)
-
-코드성 컬럼/INF 비즈규칙이 있어 보강이 필요한 도메인(`_tmp/sch_enrich_todo.json`)만,
-`ddd-db-agent`(enrichment 모드)를 **서브프로세스로 병렬 호출**해 `<!-- LLM-TODO -->`만 채운다.
-사실 섹션은 건드리지 않으며, 메인 컨텍스트에 SCH 본문이 쌓이지 않는다(컨텍스트 격리).
-
-```bash
-!python "{PLUGIN_PATH}/scripts/dispatch_sch_gen.py" .
-```
-
-> exit 0 = 완료(또는 enrichment 대상 없음 — 전부 정적으로 충분).
-> exit 1이면 `_tmp/sch_dispatch_status.json`의 `failed` 확인 후 재실행 — 완료 도메인은 자동 스킵.
-
----
-
-### STEP 5-1: INF → SCH 링크 패치 (link_inf_sch_new.py)
-
-ddd-db-agent 완료 후, INF 파일의 `## 참조 테이블` 셀 `[TBD]`를 `[[SCH-{CODE}-NNN]]` 링크로 교체한다.  
-LLM 재호출 없이 스크립트가 `{도메인}/SCH/SCH-*.md` frontmatter를 읽어 테이블명↔SCH-ID를 매칭 — 토큰 절약.  
-**이 패치가 뷰어 INF→SCH 네비게이션(`goToId`/크로스링크)의 근거다.**
-
-```bash
-!python "{PLUGIN_PATH}/scripts/link_inf_sch_new.py" .
-```
+> `/sl-recon-sch`가 수행: 추출대상 테이블 레지스트리 갱신(`build_table_registry.py`) →
+> SCH 스킵판정(`build_sch_todo.py`) → 쿼리패턴 채굴 → 정적 스켈레톤(`build_sch_static.py`) →
+> 의미 enrichment(`dispatch_sch_gen.py`) → INF↔SCH 링크 패치(`link_inf_sch_new.py`).
 
 ---
 
 ## STEP 6 — 완료 체크포인트 + 다음 단계 안내
 
-INF/SCH 생성이 끝났습니다. 체크포인트를 저장하고 `/sl-recon-uis`로 이동합니다.
+INF 생성이 끝났습니다. 체크포인트를 저장합니다. **다음은 `/sl-recon-sch`(DB 스키마)** 입니다.
 
-> UIS(화면 설계서)는 `/sl-recon-uis`가 전담합니다.  
-> `PREVIEW_BASE_URL`이 설정되어 있으면 BFS 브라우저 탐색, 없으면 `screen_inventory_static.json` 기반 정적 분석으로 자동 분기합니다.
+> 단계 순서: `/sl-recon`(INF) → **`/sl-recon-sch`(SCH)** → `/sl-recon-uis`(화면) → `/sl-recon-doc`(FUNC/SRS).
+> SCH는 INF의 `tables:`를 권위로 추출하므로 INF 완료 직후 별도 명령으로 실행한다.
+> UIS는 `/sl-recon-uis`가 전담(PREVIEW_BASE_URL 있으면 라이브 캡처, 없으면 정적 fallback).
 
 ```bash
 !python -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
@@ -1072,8 +996,7 @@ json.dump({
 }, open('_tmp/recon_checkpoint.json', 'w'), ensure_ascii=False, indent=2)
 print('체크포인트 저장 완료 → _tmp/recon_checkpoint.json')
 print()
-print('다음 커맨드: /sl-recon-uis')
-print('  PREVIEW_BASE_URL 설정됨 → BFS 브라우저 탐색 (정확)')
-print('  PREVIEW_BASE_URL 없음   → screen_inventory_static.json 정적 fallback (자동)')
+print('다음 커맨드: /sl-recon-sch  (DB 스키마 SCH 생성)')
+print('  이후: /sl-recon-uis (화면) → /sl-recon-doc (FUNC/SRS)')
 "
 ```

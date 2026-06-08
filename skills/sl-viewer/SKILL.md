@@ -148,8 +148,8 @@ LLM 토큰을 전혀 쓰지 않는다.
 |------|---------------------|
 | `inf` | `docs/05_설계서/{도메인}/INF/{ID}.md` 백업·삭제 → `dispatch_inf_gen.py .`(없으면 STEP1 scan 후) → 삭제분만 재생성 |
 | `sch` | `docs/05_설계서/{도메인}/SCH/{ID}.md` 백업·삭제 → `build_sch_todo.py`→`build_sch_static.py`→`dispatch_sch_gen.py`→`link_inf_sch_new.py`(누락 테이블만) |
-| `uis` | `docs/05_설계서/{도메인}/UIS/{ID}_*/` → `/sl-recon-uis`로 그 화면만 재캡처+ddd-ui-agent (Chrome CDP 필요) |
-| `srs` | `/sl-recon-doc` 9-0+9-3(srs-agent) 재실행 → SRS 재생성(현재 SRS는 색인 단위라 SRS_v1.0 갱신) |
+| `uis` | `docs/05_설계서/{도메인}/UIS/{ID}_*/` → `/sl-recon-uis`로 그 화면만 재캡처+ddd-ui-agent (Chrome CDP 필요) → **`link_uis_inf.py . --screen-id={screenId}`로 그 화면 INF 매핑 갱신**(.md `[INF-ID]` 치환 + INF.screens 역기록) |
+| `srs` | **그 SRS-F 1개만**(SRS-F는 화면 1:1). target=SRS-F-id면 spec_index `srs`에서 그 SRS-F의 UIS-ID를 역해석 → `srs-agent` **단일 SRS-F 재생성 모드**(`build_funcs_index.py . --screen {UIS-ID} --out _tmp/funcs_index.single.json` → 그 화면 SRS-F 섹션만 `SRS_{도메인}.md`에서 교체 + `SRS_v1.0.md` 색인 행 갱신, 나머지 보존). target이 UIS-ID면 그대로 사용 |
 
 재생성 후:
 ```bash

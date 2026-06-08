@@ -145,7 +145,7 @@
   }
 
   // ── 사용자 가이드 ────────────────────────────────────────────
-  const GUIDE_VERSION = '3.31.0';
+  const GUIDE_VERSION = '3.32.0';
 
   // 이 뷰어(SpecLens) 자체 기능 — 현행 반영
   const GUIDE_VIEWER_FEATURES = [
@@ -360,15 +360,27 @@
     return (d.coverage || {})[kind] || null;
   }
 
+  // 발견출처 태그 (sch 테이블 — inf/sql/uis)
+  const SRC_LABEL = { inf: 'INF', sql: 'SQL', uis: '화면', sch: 'SCH' };
+  function srcTags(m) {
+    const srcs = (m.sources || []).filter(s => s !== 'sch');
+    let html = srcs.map(s => `<span class="sl-src-tag sl-src-${s}">${SRC_LABEL[s] || s}</span>`).join('');
+    if (m.screens && m.screens.length) {
+      html += `<span class="sl-src-screens" title="${escAttr(m.screens.join(', '))}">↳화면 ${m.screens.length}</span>`;
+    }
+    return html;
+  }
+
   // 미생성(expected이지만 .md 없음) 항목 행 — 회색 + [⚙ 생성] 버튼
   function renderMissingRows(domain, kind) {
     const c = coverageOf(domain, kind);
     if (!c || !c.missing || !c.missing.length) return '';
     const rows = c.missing.map(m => `
-      <div class="sl-miss-row" data-search="${_cardSearch([m.id, m.label])}">
+      <div class="sl-miss-row" data-search="${_cardSearch([m.id, m.label].concat(m.sources || []))}">
         <span class="sl-miss-badge">미생성</span>
         <span class="sl-miss-id">${escAttr(m.id)}</span>
         <span class="sl-miss-label">${escAttr(m.label || '')}</span>
+        ${srcTags(m)}
         <span class="sl-miss-gen" role="button" tabindex="0"
               title="이 ${kind.toUpperCase()} 생성 (speclinker 명령 — /sl-viewer 세션 필요)"
               onclick="SlViewer.genSpec('${escAttr(m.id)}','${kind}')">⚙ 생성</span>
@@ -392,7 +404,7 @@
     const d = INDEX.domains[domain] || {};
     const tabKeys = ['inf', 'uis', 'sch']
       .concat((d.bat || 0) > 0 ? ['bat'] : [])
-      .concat((d.srs_count || 0) > 0 ? ['srs'] : []);
+      .concat(((d.srs_count || 0) > 0 || coverageOf(domain, 'srs')) ? ['srs'] : []);
     const tabCount = (t) => t === 'srs' ? (d.srs_count || 0) : (d[t] || 0);
     const tabLabel = (t) => t === 'srs' ? '기능명세' : t.toUpperCase();
     // 커버리지 있으면 '생성/전체', 없으면 개수만. 미생성 있으면 빨강 강조.
@@ -436,8 +448,8 @@
       body = `<div class="sl-inf-list">${
         srs.length > 0
           ? srs.map(renderSrsCard).join('')
-          : '<div style="padding:16px;color:var(--text-muted)">SRS 없음</div>'
-      }</div>`;
+          : (coverageOf(domain, 'srs') ? '' : '<div style="padding:16px;color:var(--text-muted)">SRS 없음</div>')
+      }${renderMissingRows(domain, 'srs')}</div>`;
     } else {
       body = `<div style="padding:24px;color:var(--text-muted)">BAT 산출물 없음</div>`;
     }
@@ -673,9 +685,19 @@
         const badge = inf.method ? `<span class="sl-rel-m">${escAttr(inf.method)}</span>` : '';
         return `<div class="sl-rel-row" role="button" tabindex="0" onclick="SlViewer.goToId('${escAttr(id)}')">${badge}${escAttr(id)} ${escAttr(inf.name || '')}</div>`;
       }).join('');
-      const schIds = [...new Set(infIds.flatMap(id => ((INDEX.infs || []).find(i => i.id === id) || {}).sch_ids || []))];
       sections += relSection('호출 API (' + infIds.length + ')', apis);
-      sections += relSection('관련 테이블 (' + schIds.length + ')', schIds.map(s => chip(s, ((INDEX.schs || []).find(x => x.id === s) || {}).table || s, 'sch')).join(''));
+      // 이 화면이 쓰는 테이블(호출 INF의 tables) — SCH 생성/미생성 상태까지 표시
+      const infList = infIds.map(id => (INDEX.infs || []).find(i => i.id === id)).filter(Boolean);
+      const tableSet = [...new Set(infList.flatMap(i => i.tables || []).map(t => String(t).trim()).filter(Boolean))];
+      const tblHtml = tableSet.map(t => {
+        const tu = t.toUpperCase();
+        const sch = (INDEX.schs || []).find(s => String(s.table || '').toUpperCase() === tu);
+        return sch
+          ? chip(sch.id, sch.table || t, 'sch')
+          : `<span class="sl-rel-miss" role="button" tabindex="0" title="SCH 미생성 — 클릭 시 생성 요청" onclick="SlViewer.genSpec('${escAttr(t)}','sch')">${escAttr(t)} <span class="sl-miss-badge">미생성</span></span>`;
+      }).join('');
+      const tblGen = tableSet.filter(t => (INDEX.schs || []).some(s => String(s.table || '').toUpperCase() === t.toUpperCase())).length;
+      if (tableSet.length) sections += relSection('참조 테이블 (SCH ' + tblGen + '/' + tableSet.length + ')', tblHtml);
     } else if (e.type === 'inf') {
       const schIds = en.sch_ids || [];
       const usedBy = (INDEX.uis || []).filter(u => (u.inf_ids || []).includes(en.id));

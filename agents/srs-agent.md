@@ -24,6 +24,25 @@ model: claude-sonnet-4-6
 
 ---
 
+## 단일 SRS-F 재생성 모드 (화면 1개)
+
+> SpecLens [⚙ 생성]/[🔄 재생성] 버튼이나 `/sl-viewer`가 **target=UIS-ID 1개**를 줄 때 사용. 전체 색인을 새로 쓰지 않고 **그 화면의 SRS-F만** 갱신한다(SRS-F는 화면 1:1이므로 안전).
+
+1. 단일 화면 인덱스 생성:
+   ```bash
+   !python "{PLUGIN_PATH}/scripts/build_funcs_index.py" . --screen {UIS-ID} --out _tmp/funcs_index.single.json
+   ```
+2. `_tmp/funcs_index.single.json`(그 화면 1건)으로 **합성형 6섹션 SRS-F**를 작성한다(아래 RECON 포맷).
+3. **부분 갱신(나머지 보존)**:
+   - `docs/03_기능명세서/domains/SRS_{도메인}.md`에서 그 화면의 기존 `## SRS-F-{NNN}: …` 블록(연관 화면=target UIS)을 찾아 **그 블록만 교체**. 없으면 도메인 파일 끝에 추가(SRS-F 번호는 기존 색인 최대+1, 화면의 UIS-ID와 1:1).
+   - `docs/03_기능명세서/SRS_v1.0.md` 색인표에서 그 UIS-ID 행만 갱신/추가(`| SRS-F-XXX | 화면명 | UIS-ID | 호출 INF | FUNC-ID |`).
+   - **다른 SRS-F·다른 도메인 파일은 건드리지 않는다.**
+4. 완료 보고: `✅ SRS-F {ID} 재생성 ({UIS-ID})` 1줄.
+
+> 전체(전 화면) 재생성은 아래 RECON 모드(Phase 0~). 단일 모드는 위 4스텝만 수행하고 종료한다.
+
+---
+
 ## Phase 0: RECON 입력 로드 (통합 인덱스 1차 사용)
 
 `_tmp/funcs_index.json` 을 1차 입력으로 사용한다.  

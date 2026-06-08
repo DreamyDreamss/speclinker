@@ -392,9 +392,33 @@ def main():
         },
     }
 
-    os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
-    with open(OUT_PATH, 'w', encoding='utf-8') as f:
+    # --screen <UIS-ID|screen_id>: 단일 화면만 남긴다(SRS 단일 재생성용). --out으로 별도 경로 저장 권장.
+    target = None
+    out_path = OUT_PATH
+    argv = sys.argv
+    if '--screen' in argv:
+        i = argv.index('--screen')
+        if i + 1 < len(argv):
+            target = argv[i + 1]
+    if '--out' in argv:
+        i = argv.index('--out')
+        if i + 1 < len(argv):
+            out_path = os.path.abspath(argv[i + 1])
+    if target:
+        out['funcs'] = [f for f in out['funcs']
+                        if f.get('uisId') == target or f.get('screen') == target]
+        out['screens'] = {k: v for k, v in out['screens'].items()
+                          if k == target or v.get('screenId') == target}
+        out['summary']['totalFuncs'] = len(out['funcs'])
+        out['summary']['totalScreens'] = len(out['screens'])
+        out['summary']['filteredScreen'] = target
+
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    with open(out_path, 'w', encoding='utf-8') as f:
         json.dump(out, f, ensure_ascii=False, indent=2)
+    if target:
+        print(f'[단일 화면 모드] {target} → funcs {len(out["funcs"])} / screens {len(out["screens"])} → {out_path}')
+        return
 
     print(f'== funcs_index 생성 완료 ({datetime.now().isoformat(timespec="seconds")}) ==')
     print(f'총 기능: {len(funcs)}개 | 화면: {len(screens_map)}개 | INF: {len(inf_index)}개')

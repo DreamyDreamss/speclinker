@@ -554,7 +554,7 @@ def build_manifest(spec_root: str) -> dict:
     return manifest
 
 
-def build_coverage(spec_root: str, domains: dict, infs: list, schs: list, uis: list) -> None:
+def build_coverage(spec_root: str, domains: dict, infs: list, schs: list, uis: list, srs: list = None) -> None:
     """expected(매니페스트+INF tables) vs generated(.md) 대조 → domains[d]['coverage'] 채움.
     coverage[kind] = {expected, generated, missing:[{id,label}]}. 미생성 항목만 missing에 담는다
     (생성분은 infs/uis/schs 배열에서 렌더). 소스 없으면 해당 kind 생략(graceful)."""
@@ -562,6 +562,14 @@ def build_coverage(spec_root: str, domains: dict, infs: list, schs: list, uis: l
 
     def ensure(d):
         domains.setdefault(d, {'inf': 0, 'uis': 0, 'sch': 0, 'bat': 0, 'tbd_total': 0})
+
+    # 테이블 레지스트리 갱신·영속(매 인덱스 빌드 시 — 뷰어 신선도) — 순환 import 회피 위해 지연 import
+    registry = None
+    try:
+        import build_table_registry as BTR
+        registry = BTR.write_registry(spec_root)
+    except Exception:
+        registry = None
 
     # ── INF ──
     gen_inf = {i['id'] for i in infs}
@@ -579,28 +587,44 @@ def build_coverage(spec_root: str, domains: dict, infs: list, schs: list, uis: l
             domains[d].setdefault('coverage', {})['inf'] = {
                 'expected': len(items), 'generated': len(items) - len(missing), 'missing': missing}
 
-    # ── SCH ── 생성된 INF의 tables 합집합(도메인별) vs 생성된 SCH table
-    exp_tbl = {}   # domain -> set(table upper)
-    for i in infs:
-        d = i.get('domain', '')
-        for t in (i.get('tables') or []):
-            tu = str(t).strip().upper()
+    # ── SCH ── 추출대상 테이블 레지스트리(INF∪SQL∪UIS) vs 생성된 SCH
+    if registry and registry.get('tables'):
+        per = {}
+        for t in registry['tables']:
+            per.setdefault(t.get('domain', ''), []).append(t)
+        for d, tbls in per.items():
+            if not d:
+                continue
+            ensure(d)
+            missing = [{'id': t['table'], 'label': t['table'],
+                        'sources': t.get('sources', []),
+                        'screens': t.get('used_by_screens', [])}
+                       for t in tbls if not t.get('generated')]
+            domains[d].setdefault('coverage', {})['sch'] = {
+                'expected': len(tbls), 'generated': len(tbls) - len(missing), 'missing': missing}
+    else:
+        # 폴백: 레지스트리 없으면 INF tables 합집합에서 도출(구 동작)
+        exp_tbl = {}
+        for i in infs:
+            d = i.get('domain', '')
+            for t in (i.get('tables') or []):
+                tu = str(t).strip().upper()
+                if tu:
+                    exp_tbl.setdefault(d, {})[tu] = str(t).strip()
+        gen_tbl = {}
+        for s in schs:
+            d = s.get('domain', '')
+            tu = str(s.get('table', '')).strip().upper()
             if tu:
-                exp_tbl.setdefault(d, {})[tu] = str(t).strip()
-    gen_tbl = {}   # domain -> set(table upper)
-    for s in schs:
-        d = s.get('domain', '')
-        tu = str(s.get('table', '')).strip().upper()
-        if tu:
-            gen_tbl.setdefault(d, set()).add(tu)
-    for d, tbls in exp_tbl.items():
-        if not d:
-            continue
-        ensure(d)
-        have = gen_tbl.get(d, set())
-        missing = [{'id': orig, 'label': orig} for tu, orig in sorted(tbls.items()) if tu not in have]
-        domains[d].setdefault('coverage', {})['sch'] = {
-            'expected': len(tbls), 'generated': len(tbls) - len(missing), 'missing': missing}
+                gen_tbl.setdefault(d, set()).add(tu)
+        for d, tbls in exp_tbl.items():
+            if not d:
+                continue
+            ensure(d)
+            have = gen_tbl.get(d, set())
+            missing = [{'id': orig, 'label': orig} for tu, orig in sorted(tbls.items()) if tu not in have]
+            domains[d].setdefault('coverage', {})['sch'] = {
+                'expected': len(tbls), 'generated': len(tbls) - len(missing), 'missing': missing}
 
     # ── UIS ──
     gen_uis = {ui['id'] for ui in (uis or [])}
@@ -617,6 +641,24 @@ def build_coverage(spec_root: str, domains: dict, infs: list, schs: list, uis: l
                        for it in items if it['id'] not in gen_uis]
             domains[d].setdefault('coverage', {})['uis'] = {
                 'expected': len(items), 'generated': len(items) - len(missing), 'missing': missing}
+
+    # ── SRS ── 화면 1:1 원칙: 생성된 화면(UIS)마다 SRS-F가 있어야 함
+    srs = srs or []
+    covered_uis = set()       # SRS가 다루는 UIS-ID
+    for s in srs:
+        for u in (s.get('uis') or []):
+            covered_uis.add(u)
+    uis_by_dom = {}
+    for ui in (uis or []):
+        d = ui.get('domain', '')
+        if d:
+            uis_by_dom.setdefault(d, []).append(ui)
+    for d, items in uis_by_dom.items():
+        ensure(d)
+        missing = [{'id': ui['id'], 'label': (ui.get('name') or ui['id'])}
+                   for ui in items if ui['id'] not in covered_uis]
+        domains[d].setdefault('coverage', {})['srs'] = {
+            'expected': len(items), 'generated': len(items) - len(missing), 'missing': missing}
 
 
 def generate_index(spec_root: str, output_path: str) -> dict:
@@ -666,7 +708,7 @@ def generate_index(spec_root: str, output_path: str) -> dict:
             domains[d]['srs_count'] = domains[d].get('srs_count', 0) + 1
 
     # 생성/미생성 커버리지 (expected vs generated) — domains[d]['coverage'] 채움
-    build_coverage(spec_root, domains, infs, schs, uis)
+    build_coverage(spec_root, domains, infs, schs, uis, srs)
 
     index = {
         'generated_at': datetime.now().isoformat(timespec='seconds'),
