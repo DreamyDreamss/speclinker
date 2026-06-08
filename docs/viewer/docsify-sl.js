@@ -105,7 +105,7 @@
       `<div class="sl-domain-item ${ACTIVE_DOMAIN === name ? 'active' : ''}" role="button" tabindex="0"
             onclick="SlViewer.selectDomain('${escAttr(name)}')">
         <span class="sl-di-name">${name}</span>
-        <span class="sl-di-counts"><span style="color:var(--c-inf)">⬡${info.inf || 0}</span> <span style="color:var(--c-uis)">▭${info.uis || 0}</span> <span style="color:var(--c-sch)">⛁${info.sch || 0}</span></span>
+        <span class="sl-di-counts"><span style="color:var(--c-inf)">⬡${info.inf || 0}</span> <span style="color:var(--c-uis)">▭${info.uis || 0}</span> <span style="color:var(--c-sch)">⛁${info.sch || 0}</span> <span style="color:var(--c-srs)">✎${info.srs_count || 0}</span></span>
       </div>`
     ).join('');
   }
@@ -396,6 +396,7 @@
       </div>
       ${body}`;
     SlViewer.filterList('');
+    window.scrollTo(0, 0);   // 도메인 전환 시 항상 최상단부터 보이게 (이전 스크롤 위치 잔존 방지)
   }
 
   function _cardSearch(parts) { return escAttr(parts.filter(Boolean).join(' ').toLowerCase()); }
@@ -1083,6 +1084,20 @@
       content = content.replace(/!\[\[([^\]]+)\]\]/g, function (_, p) {
         return '![](' + p.trim() + ')';
       });
+      // 상대 .md 링크 → 절대 docsify 라우트(#/...)로 사전 변환.
+      // FUNC_MAP·SRS 등 색인문서의 `../03_기능명세서/...md` 링크가 docsify 상대해석에서
+      // docs/ 접두를 잃고 404(빈 화면)나던 문제 방지 — 현재 문서 디렉토리 기준으로 미리 절대화한다.
+      var curFile = (vm && vm.route && vm.route.file) || '';        // 예: docs/00_FUNC/FUNC_MAP.md
+      var curDir = curFile.indexOf('/') >= 0 ? curFile.replace(/[^/]*$/, '') : '';
+      content = content.replace(/\]\((?!https?:|\/|#|mailto:)([^)\s]+?\.md)((?:#[^)\s]*)?)\)/g,
+        function (_, rel, frag) {
+          var parts = (curDir + rel).split('/'), out = [];
+          for (var i = 0; i < parts.length; i++) {
+            if (parts[i] === '..') out.pop();
+            else if (parts[i] !== '.' && parts[i] !== '') out.push(parts[i]);
+          }
+          return '](#/' + out.join('/') + frag + ')';
+        });
       return content;
     });
 
