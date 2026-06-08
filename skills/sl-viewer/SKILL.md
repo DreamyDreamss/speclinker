@@ -124,30 +124,31 @@ mcp-atlassian 호출:
 ```
 각 이슈 → `{ key, summary, status, priority, assignee, jira_url(=<JIRA_URL>/browse/<key>), updated }`.
 
-### 4-2. SR별 영향 범위 + 자료 충분도 산정 (zero-LLM)
-**영향**: 각 SR 요약/설명에서 엔티티를 뽑아 영향 슬라이스를 계산한다:
-```bash
-!python "{PLUGIN_PATH}/scripts/build_change_context.py" "<SR 요약+설명 텍스트>" --json
-```
-→ 영향 INF/SCH/UIS/FUNC ID 목록을 각 카드 `impact`에 채운다. (그래프 미존재 시 spec_index 키워드 매칭 폴백)
+### 4-2. 보드 데이터 작성 + 화면 주입 (목록만 — 분석 안 함)
 
-**자료 충분도**: 부실 SR/DRM 첨부를 감지해 "⚠ 보강 필요"를 띄운다:
-```bash
-!python "{PLUGIN_PATH}/scripts/scan_sr_material.py" . --sr <SR-KEY>
-```
-→ `{state(ok|thin|drm),note,dossier_path,attachments,inputs}`를 각 카드 `material`에 채운다.
+> **보드 가져오기는 단순 목록 조회다.** 영향분석·자료충분도는 **티켓마다 자동 실행하지 않는다**
+> (69건이면 69번 분석 = 낭비). 분석은 사용자가 카드에서 [영향분석]/[자료]를 누를 때 **그 SR 1개만** 지연 실행한다(STEP 3-2 `analyze`/`refresh-material`).
 
-### 4-3. 보드 데이터 작성 + 화면 주입
-`docs/viewer/sr_board.json`을 쓰고 CDP로 주입한다:
+4-1의 결과로 `docs/viewer/sr_board.json`을 쓰고 CDP로 주입한다. `impact`/`material`은 **비워 둔다**(미분석 상태로 렌더):
 ```jsonc
 { "generated_at":"<ISO>", "project":"<JIRA_PROJECT 또는 JQL 출처>", "jql":"<4-1에서 결정된 JQL>",
   "srs":[ { "key","summary","status","priority","assignee","jira_url","updated",
-            "description"(선택), "impact":{"inf":[],"sch":[],"uis":[],"func":[]}, "suggested":"/sl-change <key>" } ] }
+            "impact":null, "material":null, "suggested":"/sl-change <key>" } ] }
 ```
 ```bash
 !node "{PLUGIN_PATH}/scripts/sl_board_cdp.js" inject docs/viewer/sr_board.json
 ```
-→ SpecLens 사이드바 **📋 SR 작업보드**에 칸반으로 표시된다. 이후 버튼 클릭은 STEP 3 watch가 처리한다.
+→ SpecLens 사이드바 **📋 SR 작업보드**에 칸반으로 표시된다(목록만). 이후 버튼 클릭은 STEP 3 watch가 처리한다.
+
+### 4-3. (지연) 카드별 분석 — 사용자가 버튼 누를 때만
+
+| 버튼(큐 action) | 그 SR 1개에 대해 |
+|------|------|
+| [영향분석] (`analyze`) | `build_change_context.py "<요약+설명>" --json` → 영향 INF/SCH/UIS/FUNC를 그 카드 `impact`에 채워 inject (그래프 없으면 spec_index 키워드 폴백) |
+| [자료] (`refresh-material`) | `scan_sr_material.py . --sr <KEY>` → `{state(ok|thin|drm)…}`를 그 카드 `material`에 채워 inject |
+| [변경] (`change`) | `/sl-change <KEY>` 실행(분석은 그 안에서 수행) |
+
+> 즉 보드 로드 = 지라 목록 조회 1회. 무거운 분석은 **선택한 SR에만** 일어난다.
 ---
 
 ## STEP 5 — 개별 스펙 재생성 (화면 [🔄 재생성] 버튼)
