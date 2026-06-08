@@ -24,6 +24,38 @@ function log(msg) {
   process.stdout.write('[speclinker] ' + msg + '\n');
 }
 
+// ── 0. PLUGIN_PATH 자가 치유 (업데이트 내성) ──────────────────────────────────
+// project.env의 PLUGIN_PATH가 비었거나(미설정) 더 이상 존재하지 않는 경로
+// (플러그인 업데이트로 옛 버전 캐시 폴더가 삭제됨)면 → 현재 설치 경로(PLUGIN_ROOT)로 갱신.
+// 유효한 경로(개발용 로컬 경로 포함)는 건드리지 않는다 — dev override 존중.
+// SessionStart 훅은 현재 설치 버전의 setup-deps.js가 실행되므로 PLUGIN_ROOT가 항상 최신이다.
+(function selfHealPluginPath() {
+  const candidates = [
+    process.env.CLAUDE_PROJECT_DIR ? path.join(process.env.CLAUDE_PROJECT_DIR, 'project.env') : null,
+    path.join(process.cwd(), 'project.env'),
+  ].filter(Boolean);
+  const envFile = candidates.find((p) => { try { return fs.existsSync(p); } catch (_) { return false; } });
+  if (!envFile) return;                          // 프로젝트 미초기화 — 스킵
+  let text;
+  try { text = fs.readFileSync(envFile, 'utf-8'); } catch (_) { return; }
+
+  const m = text.match(/^[ \t]*PLUGIN_PATH[ \t]*=[ \t]*(.+?)[ \t]*$/m);
+  const cur = m ? m[1] : undefined;
+  const valid = !!cur && (() => { try { return fs.existsSync(cur); } catch (_) { return false; } })();
+  if (valid) return;                             // 유효(로컬 dev 포함) — 존중, 변경 안 함
+
+  const fresh = PLUGIN_ROOT.replace(/\\/g, '/');
+  const next = (cur === undefined)
+    ? text.replace(/\n?$/, '\n') + 'PLUGIN_PATH=' + fresh + '\n'        // 키 없음 → 추가
+    : text.replace(/^[ \t]*PLUGIN_PATH[ \t]*=.*$/m, 'PLUGIN_PATH=' + fresh);  // stale → 교체
+  try {
+    fs.writeFileSync(envFile, next, 'utf-8');
+    log('PLUGIN_PATH 자가치유: ' + (cur || '(없음)') + ' → ' + fresh);
+  } catch (e) {
+    log('[WARN] PLUGIN_PATH 자가치유 실패: ' + e.message);
+  }
+})();
+
 // ── 1. playwright-core ────────────────────────────────────────────────────────
 const nmPlaywright = path.join(PLUGIN_ROOT, 'node_modules', 'playwright-core');
 if (!fs.existsSync(nmPlaywright)) {
