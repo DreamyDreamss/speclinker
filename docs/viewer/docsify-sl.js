@@ -150,8 +150,9 @@
   // 이 뷰어(SpecLens) 자체 기능 — 현행 반영
   const GUIDE_VIEWER_FEATURES = [
     ['📊 대시보드', '도메인별 커버리지 링·연결 갭 배지·stale 경고로 산출물 완성도 한눈에.'],
-    ['📁 생성/미생성 커버리지', '도메인 탭(INF/SCH/UIS)에 <code>생성/전체</code> 비율 표시. 미생성 스펙은 회색 점선 행으로 나열되고 <b>[⚙ 생성]</b> 버튼으로 그 자리에서 생성 요청.'],
-    ['🔗 연결관계 패널', 'INF/UIS/SCH 상세 우측에 호출 API·관련 테이블·linked FUNC. <b>좌측 가장자리를 드래그해 너비 조정</b>(반응형·기억됨). 🕸 그래프로 N-hop 탐색.'],
+    ['📁 생성/미생성 커버리지', '도메인 탭(INF/SCH/UIS/SRS)에 <code>생성/전체</code> 비율 표시. 미생성 스펙은 회색 점선 행으로 나열되고 <b>[⚙ 생성]</b> 버튼으로 그 자리에서 생성 요청.'],
+    ['🗂 추출대상 테이블 레지스트리', 'SCH 탭의 미생성 테이블에 발견출처 태그(INF/SQL/화면) 표시. <code>.speclinker/table_registry.json</code>이 INF∪SQL∪UIS에서 발견한 모든 테이블의 SCH 생성여부를 영속 관리.'],
+    ['🔗 연결관계 패널', 'INF/UIS/SCH 상세 우측에 호출 API·관련 테이블·linked FUNC. UIS는 <b>참조 테이블(SCH N/M)</b>로 그 화면이 쓰는 테이블의 생성여부까지. <b>좌측 가장자리 드래그로 너비 조정</b>(반응형·기억됨). 🕸 그래프로 N-hop 탐색.'],
     ['🔄 개별 재생성', '연결관계 패널 [🔄 재생성]으로 그 스펙 1개만 다시 생성(/sl-viewer 세션 필요).'],
     ['📋 SR 작업보드', '담당 지라 SR을 칸반으로. [동기화]·[영향분석]·[변경(AIDD)] 버튼이 세션을 자동으로 깨워 처리(토큰-효율 watch 루프, Chrome CDP 닫으면 자동 종료).'],
     ['🔎 검색 · 🧭 IA 트리', '사이드바 검색으로 ID·화면·테이블·경로 즉시 점프. IA 트리로 메뉴 계층 탐색.'],
@@ -159,8 +160,8 @@
 
   const GUIDE_PIPELINES = [
     { icon: '🔍', title: '기존 코드 (RECON)',
-      steps: ['sl-init', 'sl-recon', 'sl-recon-uis', '납품'],
-      desc: '소스코드를 역분석해 설계서 추출' },
+      steps: ['sl-init', 'sl-recon', 'sl-recon-sch', 'sl-recon-uis', 'sl-recon-doc', '납품'],
+      desc: '소스코드를 역분석해 설계서 추출 (INF→SCH→화면→FUNC/SRS)' },
     { icon: '🔧', title: '변경·유지보수 (DELTA)',
       steps: ['sl-change', 'sl-aidd'],
       desc: '변경요청(SR) 영향분석→스펙수정→코드' },
@@ -177,9 +178,10 @@
       ['/sl-aidd [FUNC-ID]', 'FUNC=story 단위 AIDD 루프 (story→승인→구현→QA게이트→테스트→커버리지)', 'FUNC_MAP.md'],
     ]},
     { name: '역분석 — RECON', color: 'var(--status-prog)', cmds: [
-      ['/sl-recon', '소스코드 역분석 → 도메인 선택 → INF·SCH 명세 생성', 'project.env, 소스'],
+      ['/sl-recon', '소스코드 역분석 → 도메인 선택 → INF(API) 명세 생성', 'project.env, 소스'],
+      ['/sl-recon-sch', 'INF 기반 DB 스키마(SCH) 생성 + 추출대상 테이블 레지스트리 갱신', 'INF 존재'],
       ['/sl-recon-uis', '메뉴진입 화면 캡처 → SOP급 UIS 생성(가이드형)', 'recon 후/독립'],
-      ['/sl-recon-doc', 'INF 기반 추가 설계 문서 보강', 'INF 존재'],
+      ['/sl-recon-doc', 'INF 기반 FUNC/SRS/FUNC_MAP 생성', 'INF 존재'],
       ['/sl-ia', 'IA(메뉴 계층) 문서 자동 생성 + UIS menu-path 보완', 'UIS 존재'],
     ]},
     { name: 'SDD 파이프라인', color: '#a371f7', cmds: [
