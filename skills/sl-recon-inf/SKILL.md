@@ -67,8 +67,8 @@ else:
 import json, os, math
 
 idx  = json.load(open('_tmp/source_index.json', encoding='utf-8'))
-plan = json.load(open('docs/05_설계서/_domain_plan.json'))
-env  = dict(l.strip().split('=',1) for l in open('project.env') if '=' in l and not l.startswith('#'))
+plan = json.load(open('docs/05_설계서/_domain_plan.json', encoding='utf-8'))
+env  = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8') if '=' in l and not l.startswith('#'))
 
 def norm(p): return (p or '').replace(os.sep, '/')
 
@@ -256,6 +256,62 @@ print(f'{api_msg} | {bat_msg}')
 print(form_msg)
 "
 ```
+
+## ✋ STEP I-1 — 생성 범위 확인 (필수 체크포인트)
+
+> **도메인은 여기서 새로 판단하지 않는다.** `/sl-recon`(STEP 2~3 ✋게이트)에서 확정한
+> `docs/05_설계서/_domain_plan.json`을 그대로 따른다. "왜 도메인이 N개냐"는 그 확정 결과이며,
+> **도메인 구성을 바꾸려면 `/sl-recon`을 먼저 재실행**해 재확정해야 한다(여기선 변경 불가).
+>
+> STEP 4-1이 집계한 **미생성 INF만** 생성 대상이다(이미 생성된 것은 멱등 스킵). 대량 생성은
+> 서브에이전트 디스패치(STEP 4-3)이므로 **반드시 사용자에게 범위를 확인받은 뒤** 진행한다.
+
+```bash
+!python -c "import sys;sys.stdout.reconfigure(encoding='utf-8',errors='replace');
+import json, os, glob, re
+plan = json.load(open('docs/05_설계서/_domain_plan.json', encoding='utf-8'))
+targets = json.load(open('.speclinker/inf_targets.json', encoding='utf-8'))
+env = dict(l.strip().split('=',1) for l in open('project.env', encoding='utf-8') if '=' in l and not l.startswith('#'))
+gen_ids = set()
+for f in glob.glob('docs/05_설계서/*/INF/INF-*.md'):
+    m = re.search(r'(INF-[A-Z]+-\d+)', os.path.basename(f))
+    if m: gen_ids.add(m.group(1))
+def ids_of(it):
+    code=it.get('domainCode',''); start=it.get('infIdStart'); routes=it.get('apiRoutes') or []
+    if not (code and isinstance(start,int)): return []
+    return [f'INF-{code}-{start+j:03d}' for j in range(max(len(routes),1))]
+per={}
+for it in targets:
+    d=it.get('domain','')
+    if not d: continue
+    e=per.setdefault(d,[0,0])
+    for iid in ids_of(it):
+        e[0]+=1
+        if iid in gen_ids: e[1]+=1
+doms=', '.join(f\"{x['name']}[{x.get('code','?')}]\" for x in plan['domains'])
+print('확정 도메인(_domain_plan.json 기준 — 여기서 새로 판단하지 않음):', doms)
+print()
+print('도메인별 INF  (전체 / 생성 / 미생성):')
+tot=0
+for d,(ex,gn) in per.items():
+    print(f'  {d}: {ex} / {gn} / {ex-gn}')
+    tot+=ex-gn
+print()
+poc = env.get('POC_MODE','false').lower()=='true' or bool(env.get('POC_DOMAINS','').strip())
+print(f'이번 생성 대상(미생성 합계): {tot}건')
+if poc:
+    print('POC 모드 -> 자동 진행 (STEP 4-2/4-3)')
+else:
+    print('진행하려면 선택하세요: [전체 생성] / [특정 도메인만] / [도메인 재확정=/sl-recon] / [취소]')
+"
+```
+
+**일반 모드**: 위 요약을 사용자에게 보여주고 **명시적 확인("계속"/도메인 지정/취소)을 받기 전 STEP 4-2·4-3 절대 진행 금지.**
+- "특정 도메인만" 지정 시 → `_tmp/router_inventory_with_chain.json`에서 그 도메인 그룹만 남기고 dispatch(나머지는 다음 기회).
+- "취소" → 여기서 종료(미생성 census는 `.speclinker/inf_targets.json`에 남아 뷰어에 표시됨).
+**POC 모드**(`POC_MODE`/`POC_DOMAINS`): 위 스크립트가 자동 진행을 출력하면 바로 STEP 4-2로.
+
+---
 
 ### STEP 4-2: call chain 사전 계산 (서비스·DAO·쿼리 파일 경로 주입)
 
