@@ -495,11 +495,18 @@ def build_manifest(spec_root: str) -> dict:
     mpath = os.path.join(spec_root, '.speclinker', 'spec_manifest.json')
     manifest = _load_json(mpath) or {}
 
-    # ── INF expected ── router 인벤토리(있을 때만 갱신)
-    inv = _load_json(os.path.join(spec_root, '_tmp', 'router_inventory_with_chain.json'))
-    if isinstance(inv, list):
+    # ── INF expected ──
+    # 우선순위: (1) .speclinker/inf_targets.json — RECON STEP 4-1이 영속화한 *전체* INF 대상 census
+    #          (2) _tmp/router_inventory_with_chain.json — pending(미생성)만 담는 휘발성 폴백
+    # (1)은 생성 완료 후에도 남으므로 SCH처럼 미생성 census가 유지된다. 둘 다 flat/grouped 모두 허용.
+    src = _load_json(os.path.join(spec_root, '.speclinker', 'inf_targets.json'))
+    if not (isinstance(src, list) and src):
+        src = _load_json(os.path.join(spec_root, '_tmp', 'router_inventory_with_chain.json'))
+    if isinstance(src, list):
+        # flat([item,...]) / grouped([[item,...],...]) 양쪽 정규화
+        groups = src if (src and isinstance(src[0], list)) else [src]
         inf_items = []
-        for group in inv:
+        for group in groups:
             if not isinstance(group, list):
                 continue
             for item in group:
@@ -515,14 +522,21 @@ def build_manifest(spec_root: str) -> dict:
                     continue
                 if routes:
                     for j, r in enumerate(routes):
+                        mth = pth = ''
                         if isinstance(r, dict):
                             m = r.get('method') or r.get('httpMethod') or ''
                             p = r.get('path') or r.get('url') or r.get('uri') or ''
-                            label = (str(m).upper() + ' ' + str(p)).strip() or base
+                            mth = str(m).strip(); pth = str(p).strip()
+                            label = (mth.upper() + ' ' + pth).strip() or base
                         else:
                             label = str(r)
-                        inf_items.append({'id': f'INF-{dcode}-{start + j:03d}',
-                                          'label': label, 'domain': domain})
+                        item = {'id': f'INF-{dcode}-{start + j:03d}',
+                                'label': label, 'domain': domain}
+                        # 라우트 식별자(method+path)를 함께 보존 → 커버리지가 예측 ID가 아닌
+                        # 라우트로 매칭하여 ID 채번 어긋남에 의한 false-missing을 방지한다.
+                        if mth and pth:
+                            item['method'] = mth; item['path'] = pth
+                        inf_items.append(item)
                 else:
                     inf_items.append({'id': f'INF-{dcode}-{start:03d}',
                                       'label': base, 'domain': domain})
@@ -577,7 +591,23 @@ def build_coverage(spec_root: str, domains: dict, infs: list, schs: list, uis: l
         registry = None
 
     # ── INF ──
+    # 매칭은 (도메인, method, path) 라우트 키 우선 — 생성 INF의 실제 ID가 census 예측 ID와
+    # 어긋나도(에이전트 채번 편차) 라우트가 같으면 '생성됨'으로 본다. 라우트 정보 없는 항목만 ID 폴백.
+    def _normp(p):
+        p = (p or '').strip()
+        if not p:
+            return ''
+        if not p.startswith('/'):
+            p = '/' + p
+        if len(p) > 1 and p.endswith('/'):
+            p = p[:-1]
+        return p
     gen_inf = {i['id'] for i in infs}
+    gen_routes = set()
+    for i in infs:
+        pth = _normp(i.get('path'))
+        if pth:
+            gen_routes.add((i.get('domain', ''), (i.get('method') or '').strip().upper(), pth))
     inf_exp = manifest.get('inf') or []
     if inf_exp:
         per = {}
@@ -587,8 +617,16 @@ def build_coverage(spec_root: str, domains: dict, infs: list, schs: list, uis: l
             if not d:
                 continue
             ensure(d)
-            missing = [{'id': it['id'], 'label': it.get('label', it['id'])}
-                       for it in items if it['id'] not in gen_inf]
+            missing = []
+            for it in items:
+                mth = (it.get('method') or '').strip().upper()
+                pth = _normp(it.get('path'))
+                if mth and pth:                       # 라우트 키 매칭(권위)
+                    matched = (d, mth, pth) in gen_routes
+                else:                                 # 라우트 정보 없으면 예측 ID 폴백
+                    matched = it['id'] in gen_inf
+                if not matched:
+                    missing.append({'id': it['id'], 'label': it.get('label', it['id'])})
             domains[d].setdefault('coverage', {})['inf'] = {
                 'expected': len(items), 'generated': len(items) - len(missing), 'missing': missing}
 

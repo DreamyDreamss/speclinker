@@ -18,7 +18,7 @@ if not os.path.exists(cp):
     errors.append('[FAIL] recon_checkpoint.json 없음 — /sl-recon 먼저 실행')
 inf_files = glob.glob('docs/05_설계서/*/INF/INF-*.md')
 if not inf_files:
-    errors.append('[FAIL] INF 파일 없음 — /sl-recon 먼저 실행 (STEP 4-3에서 INF 생성)')
+    errors.append('[FAIL] INF 파일 없음 — /sl-recon-inf 먼저 실행 (INF 생성)')
 # 화면(UIS) 전제: 현행 {도메인}/UIS/{화면}/spec.md (구버전 UI/ 하위호환)
 uis_files = glob.glob('docs/05_설계서/*/UIS/*/spec.md') + glob.glob('docs/05_설계서/*/UI/*/spec.md')
 if not uis_files:

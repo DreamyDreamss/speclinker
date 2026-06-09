@@ -1,6 +1,6 @@
 ---
 name: sl-recon-sch
-description: RECON Phase 2.5 — INF 생성 후 DB 스키마(SCH) 명세를 생성한다. 추출대상 테이블 레지스트리 갱신 + ddd-db-agent enrichment. /sl-recon(INF) 완료 후 실행.
+description: RECON Phase 2.5 — INF 생성 후 DB 스키마(SCH) 명세를 생성한다. 추출대상 테이블 레지스트리 갱신 + ddd-db-agent enrichment. /sl-recon-inf(INF) 완료 후 실행.
 triggers:
   - /sl-recon-sch
 ---
@@ -18,7 +18,7 @@ plan=os.path.exists('docs/05_설계서/_domain_plan.json');
 import glob; inf=len(glob.glob('docs/05_설계서/*/INF/INF-*.md'));
 print('_domain_plan.json:', '있음' if plan else '없음');
 print('INF 파일:', inf, '개');
-print('→ /sl-recon(INF) 먼저 실행 필요' if not (plan and inf) else '→ SCH 생성 진행 가능')"
+print('→ /sl-recon-inf 먼저 실행 필요' if not (plan and inf) else '→ SCH 생성 진행 가능')"
 ```
 
 - `docs/05_설계서/_domain_plan.json` 없음 또는 INF 0개 → **중단**, `/sl-recon` 먼저 안내.

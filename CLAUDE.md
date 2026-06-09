@@ -70,7 +70,8 @@
 | 사용자 입력 | 라우팅 스킬 | 전제 조건 | 분류 |
 |-----------|-----------|---------|------|
 | `/sl-init` | `skills/sl-init/SKILL.md` | 없음 | 공통 |
-| `/sl-recon` | `skills/sl-recon/SKILL.md` | project.env, 소스코드 존재 | RECON (INF) |
+| `/sl-recon` | `skills/sl-recon/SKILL.md` | project.env, 소스코드 존재 | RECON (스캔·도메인 확정) |
+| `/sl-recon-inf` | `skills/sl-recon-inf/SKILL.md` | docs/05_설계서/_domain_plan.json | RECON (INF/BAT 분리) |
 | `/sl-recon-sch` | `skills/sl-recon-sch/SKILL.md` | docs/05_설계서/_domain_plan.json + INF 존재 | RECON (SCH 분리) |
 | `/sl-recon-uis` | `skills/sl-recon-uis/SKILL.md` | _tmp/recon_checkpoint.json | RECON |
 | `/sl-recon-doc` | `skills/sl-recon-doc/SKILL.md` | docs/05_설계서/ INF 존재, _tmp/recon_checkpoint.json | RECON |
@@ -113,6 +114,7 @@
 | QA 게이트 | `agents/qa-agent.md` | Sonnet | dev와 분리된 독립 컨텍스트 3-Layer 검증 — 유지 |
 | 테스트 | `agents/test-agent.md` | **Haiku** | TC 생성(기계적 — v3.24 sonnet→haiku) |
 
+> **v3.35.0** (INF 페이즈 분리 `/sl-recon-inf` + INF 커버리지 census·라우트매칭): 사용자 설계검토 — "INF만 메가커맨드(`/sl-recon`)에 갇혀 SCH/UIS/doc처럼 단독 재실행이 안 된다. 스펙 현행화·개별 재수행하려면 분리 필요". **분리(B안)**: `/sl-recon`은 STEP 0~3(스캔·도메인 확정·✋게이트)까지만, **INF/BAT 생성(STEP 4)을 신규 `skills/sl-recon-inf/SKILL.md`로 이관** — sch/uis/doc과 동일한 페이즈-커맨드 패밀리(슬래시 메뉴 발견성이 파라미터 분기보다 우위 = 별개 작업은 별개 커맨드). 과거 v2.57에서 삭제됐던 recon-inf의 재도입이나, 삭제 원인(STEP 0 프리앰블 중복 드리프트)은 가벼운 `## 전제 조건` 가드만 두는 패밀리 컨벤션으로 차단. `/sl-recon-inf`는 source_index 자동 재스캔(POC_SKIP_UA 시 재사용)+project.env 가드. **INF 커버리지 fix**: ①RECON STEP 4-1이 *전체* INF 대상 census를 `.speclinker/inf_targets.json`에 영속화(기존엔 pending만 _tmp에 휘발 → 생성 완료 후 expected 소실로 미생성 표시 안 됨) → gen_docsify가 INF expected로 우선 사용. ②build_coverage가 예측 INF-ID가 아닌 **(도메인,method,path) 라우트 키로 매칭** — 에이전트 채번 편차로 인한 false-missing 방지(라우트정보 없으면 ID 폴백). plugin.json skills 12→13, 라우팅표·파이프라인·README·SETUP·RECON_PIPELINE 동기화. 회귀 test_coverage 4종(드리프트 생존 추가) 그린.
 > **v3.34.3** (SRS·UIS 링크 클릭 이동 버그 2종 — CDP 라이브 검증): ①**SRS 클릭→인덱스가 뜸**: `scan_srs`가 모든 SRS의 `file`을 인덱스(`SRS_v1.0.md`)로 박아 클릭 시 색인이 떴음 → **도메인 상세(`domains/SRS_{도메인}.md`)로 가리키게 수정**(존재 시, 없으면 인덱스 폴백). ②**UIS 내 INF 링크 이동 안 됨**: beforeEach `.md` 상대링크 재작성이 `](#/docs/...)` 형식이라 **docsify가 `#`를 같은-페이지 헤딩 앵커로 해석→`?id=` 쿼리로 변질**(라우트 이동 X). → **`#/`→`/`(절대경로 라우트 링크)로 수정**. docsify가 `/docs/...md`를 정상 라우터 링크로 변환. (FUNC_MAP·색인문서 인라인 .md 링크 전부 동일 수혜.) **CDP(9222) 라이브 검증**: UIS-PRD-002의 INF-PRD-528 클릭→INF 문서 이동 확인, SRS 클릭→SRS_product.md(SRS-F-001 본문) 렌더 확인. 14 테스트 그린.
 > **v3.34.2** (SR보드 로드=목록만, 분석은 지연): 사용자 지적 "보드에서 지라 가져오는 건 목록 조회인데 왜 전수 분석을 하나". v3.34.0 STEP4-2가 티켓마다 build_change_context+scan_sr_material 자동 실행(69건=69회 낭비)이던 것을 제거. **STEP4-2=목록만 inject**(`impact:null`/`material:null`), **STEP4-3=카드 버튼([영향분석]/[자료]/[변경]) 누를 때 그 SR 1개만 지연 분석**. 뷰어는 이미 null→"영향 미산정"+[영향] 버튼으로 지연분석 지원(로직 무변경, SKILL 과잉사양만 제거).
 > **v3.34.1** (sl-init이 SR보드 JQL을 실제로 질문): v3.34.0이 project.env 템플릿엔 JIRA_PROJECT/JIRA_JQL을 넣었지만 init에 *명시적 질문 단계*가 없었음. **Step 4-2에 Jira 선택 시 "SR 보드 조회 범위" 질문 추가** — 1)JIRA_PROJECT 키 2)커스텀 JIRA_JQL 3)나중에(보드 실행 시 질문). 폴더명(PROJECT_NAME)≠지라키 경고 포함.
@@ -215,7 +217,7 @@
 | 상황 | 파이프라인 |
 |------|-----------|
 | 기존 코드 (RECON + AIDD) | sl-init → sl-recon → **sl-aidd** → sl-test |
-| 기존 코드 (RECON 분석만) | sl-init(스캔) → sl-recon(INF) → **sl-recon-sch(SCH)** → sl-recon-uis(화면) → sl-recon-doc(FUNC/SRS) → 납품 |
+| 기존 코드 (RECON 분석만) | sl-init(스캔) → sl-recon(도메인 확정) → **sl-recon-inf(INF)** → sl-recon-sch(SCH) → sl-recon-uis(화면) → sl-recon-doc(FUNC/SRS) → 납품 |
 | 변경·유지보수 (Jira) | sl-change &lt;SR&gt; → **sl-aidd** |
 | 변경·유지보수 (로컬) | sl-change --new SR-001 → (요구사항 작성) → sl-change SR-001 → **sl-aidd** |
 | **SDD 전체 파이프라인** | sl-recon → **sl-ia** → **sl-context** → sl-status → sl-change → **sl-aidd** (story 승인→구현→QA→테스트) |

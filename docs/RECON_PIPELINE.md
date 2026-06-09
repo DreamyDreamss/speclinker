@@ -1,18 +1,16 @@
 # RECON 파이프라인 전체 문서
 
-> **현행 기준: v2.57** (2026-06-04 재작성 — 실제 SKILL 파일 기준)
-> 커맨드 흐름: **`/sl-recon` → `/sl-recon-uis` → `/sl-recon-doc`** (3-Phase)
+> **현행 기준: v3.35.0**
+> 커맨드 흐름: **`/sl-recon`(스캔·도메인 확정) → `/sl-recon-inf`(INF/BAT) → `/sl-recon-sch`(SCH) → `/sl-recon-uis`(화면) → `/sl-recon-doc`(FUNC/SRS)** — 페이즈별 독립 재실행 가능
 >
-> ⚠️ **변경 이력 주의:** v2.19 시절엔 INF/SCH 생성을 별도 `/sl-recon-inf`가 담당하는 4-Phase
-> 구조였으나, **도메인 선택형 RECON 리팩토링**으로 INF·SCH 생성이 `/sl-recon` 내부(STEP 4-3 / 5)로
-> 통합되었고 `/sl-recon-inf`는 **삭제(deprecated→removed)** 되었다. 이 문서는 현행 3-Phase 기준이다.
+> ⚠️ **변경 이력 주의:** ① v2.53 도메인 선택형 리팩토링으로 INF·SCH가 `/sl-recon`에 통합되며 구 `/sl-recon-inf`는 삭제됐었다. ② v3.32에서 SCH가 `/sl-recon-sch`로 분리됐고, ③ **v3.35에서 INF/BAT 생성이 다시 `/sl-recon-inf`로 분리**됐다(스펙 현행화·개별 재수행 목적 — sch/uis/doc과 동일한 페이즈-커맨드 패밀리). 따라서 `/sl-recon`은 이제 **스캔·도메인 확정까지만** 수행한다.
 
 ---
 
 ## 전체 흐름 요약
 
 ```
-/sl-recon  (STEP 0~6)  ── 스캔·도메인확정·INF·BAT·SCH 생성까지
+/sl-recon  (STEP 0~3)  ── 스캔·도메인 확정 (✋ 사용자 게이트)
   STEP 0     MCP 연결 상태 확인
   STEP 0.5   POC 모드 상태 확인
   STEP 1     소스 구조 스캔 (scan_source.js) → _tmp/source_index.json
@@ -20,18 +18,24 @@
   STEP 1.5   프로젝트 Profile 생성·로드 (.speclinker/profile.yaml)
   STEP 2     Phase-A: SAD + 도메인 목록 확정
              2-0 소스 인덱스 압축 / 2-1 spec-agent 도메인 확정 / 2-2 POC 도메인 필터
-  STEP 3     ✋ 사용자 도메인 검토 (필수 체크포인트)
+  STEP 3     ✋ 사용자 도메인 검토 (필수 체크포인트) → 다음: /sl-recon-inf
+
+/sl-recon-inf  (STEP 4)  ── INF(API)·BAT 명세 생성 [v3.35 분리]
+  STEP I-0   source_index 갱신 (소스 변경 자동 재스캔 / POC_SKIP_UA 시 기존 재사용)
   STEP 4     router_inventory 생성 + INF 명세 작성
-             4-1 router_inventory / 4-2 call chain 사전계산(+sch_draft)
+             4-1 router_inventory + 전체 INF 대상 census(.speclinker/inf_targets.json — 뷰어 커버리지 expected)
+             4-2 call chain 사전계산(+sch_draft)
              4-3 INF 생성 (dispatch_inf_gen.py → ddd-api-agent ×N배치) + INF/_TOC.md
                  ※ v3.8.0: INF frontmatter anchors[](full-chain) + 코드값 의도(scan_code_literals), 본문=abstract
              4-B BAT 생성 (ddd-batch-agent)
+  STEP 6     완료 체크포인트(phase=recon-analysis) → 다음: /sl-recon-sch
+
+/sl-recon-sch  (STEP 5)  ── DB 스키마(SCH) 생성 [v3.32 분리]
   STEP 5-0   SCH 스킵 게이트 (build_sch_todo.py) — 이미 생성된 테이블 제외(idempotent)
   STEP 5-0.5 쿼리 패턴 채굴 (scan_query_patterns.py + scan_code_literals.py) — 관찰조인·상시필터·코드값 → _machine/*.json (zero-token JIT 레이어)
   STEP 5-A   SCH 정적 스켈레톤 (build_sch_static.py) — 컬럼(키열)·인덱스·FK+관찰조인·상시필터·ERD·링크·색인 zero-token, 의미는 LLM-TODO
   STEP 5-B   SCH 의미 enrichment (dispatch_sch_gen.py → ddd-db-agent) — 코드값·비즈주의·상시필터의미 + 다중DB MCP 타입·FK참조컬럼, 필요 도메인 병렬
-  STEP 5-1   INF→SCH 링크 패치 (link_inf_sch_new.py)
-  STEP 6     완료 체크포인트(phase=recon-analysis) → 다음: /sl-recon-uis
+  STEP 5-1   INF→SCH 링크 패치 (link_inf_sch_new.py) → 다음: /sl-recon-uis
 
 /sl-recon-uis  (STEP U*)  ── SOP급 화면설계서 (가이드형 대화 세션, v3.9.0 재설계)
   STEP U1   Chrome CDP + 로그인 (인터랙티브). 사용자가 메뉴로 화면 진입
@@ -58,9 +62,9 @@
 
 ---
 
-## Phase 1: `/sl-recon` (STEP 0~6)
+## Phase 1~2.5: `/sl-recon` (STEP 0~3) · `/sl-recon-inf` (STEP 4) · `/sl-recon-sch` (STEP 5)
 
-기존 소스코드를 정적 분석해 **도메인을 확정하고 INF(API 명세)·BAT(배치)·SCH(DB 스키마)까지 생성**한다.
+기존 소스코드를 정적 분석해 도메인을 확정(`/sl-recon`)하고, 확정 도메인 기준으로 INF(API)·BAT(`/sl-recon-inf`)와 DB 스키마 SCH(`/sl-recon-sch`)를 생성한다. 아래 표는 STEP별 상세이며, **STEP 0~3은 `/sl-recon`, STEP 4(4-*/4-B)는 `/sl-recon-inf`, STEP 5(5-*)는 `/sl-recon-sch`**가 수행한다(v3.32 SCH 분리, v3.35 INF 분리).
 
 | STEP | 핵심 동작 | 스크립트 / 에이전트 | 주요 출력 |
 |------|----------|-------------------|----------|

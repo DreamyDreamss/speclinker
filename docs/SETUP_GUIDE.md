@@ -216,7 +216,9 @@ Chrome 창이 열리면:
 3개 Phase로 순서대로 실행:
 
 ```
-/sl-recon       (소스 스캔, 도메인 확정, INF·SCH 생성)
+/sl-recon       (소스 스캔, 도메인 확정)
+/sl-recon-inf   (INF·BAT 명세 생성)
+/sl-recon-sch   (DB 스키마 SCH 생성)
 /sl-recon-uis   (화면 캡처, UIS 설계서)
 /sl-recon-doc   (FUNC/SRS/RTM/IA 생성)
 ```

@@ -79,6 +79,28 @@ def test_manifest_carry_forward_when_tmp_cleared():
     assert [m['id'] for m in cov2['inf']['missing']] == ['INF-ORD-002']
 
 
+def test_inf_route_match_survives_id_drift():
+    """생성 INF의 실제 ID가 census 예측 ID와 어긋나도(에이전트 채번 편차),
+    (method,path) 라우트가 일치하면 '생성됨'으로 판정 -> false-missing 방지.
+    미생성은 진짜로 라우트가 없는 것만 잡힌다."""
+    ws = tempfile.mkdtemp()
+    infd = os.path.join(ws, 'docs', '05_설계서', 'order', 'INF'); os.makedirs(infd)
+    # 예측은 INF-ORD-001(/a)·002(/b)·003(/c)이지만, 실제 생성 ID는 050/051로 드리프트
+    open(os.path.join(infd, 'INF-ORD-050.md'), 'w', encoding='utf-8').write(
+        _mk_inf('order', 'INF-ORD-050', 'GET', '/a', []))
+    open(os.path.join(infd, 'INF-ORD-051.md'), 'w', encoding='utf-8').write(
+        _mk_inf('order', 'INF-ORD-051', 'POST', '/b', []))  # /c 는 미생성
+    os.makedirs(os.path.join(ws, '_tmp'))
+    inv = [[{"domain": "order", "domainCode": "ORD", "infIdStart": 1, "filePath": "OrderController.java",
+             "apiRoutes": [{"method": "get", "path": "/a"},
+                           {"method": "post", "path": "/b"},
+                           {"method": "get", "path": "/c"}]}]]
+    json.dump(inv, open(os.path.join(ws, '_tmp', 'router_inventory_with_chain.json'), 'w'))
+    cov = _build(ws)['domains']['order']['coverage']
+    assert cov['inf']['expected'] == 3 and cov['inf']['generated'] == 2, cov['inf']
+    assert [m['id'] for m in cov['inf']['missing']] == ['INF-ORD-003'], cov['inf']['missing']
+
+
 def test_no_sources_no_coverage():
     """expected 소스가 전혀 없으면 coverage 미설정(graceful) — SCH는 INF tables 있으면 도출."""
     ws = tempfile.mkdtemp()
@@ -93,5 +115,6 @@ def test_no_sources_no_coverage():
 if __name__ == '__main__':
     test_coverage_inf_sch_uis()
     test_manifest_carry_forward_when_tmp_cleared()
+    test_inf_route_match_survives_id_drift()
     test_no_sources_no_coverage()
     print('OK')

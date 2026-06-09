@@ -58,12 +58,73 @@ argument-hint: [port]
 > STEP 4(SR 작업보드)를 추가한다.
 >
 > **전제**: 버튼 인터랙션은 SpecLens를 띄운 Chrome이 `--remote-debugging-port=9222`로 떠 있어야 한다
-> (읽기전용 탐색은 CDP 불필요). 시작 전 `sl_board_cdp.js alive`로 CDP 생존만 빠르게 확인할 수 있다.
-> CDP 미동작이면 "읽기전용 뷰어"로 안내하고 watch는 진입하지 않는다.
+> (읽기전용 탐색은 CDP 불필요). 아래 **3-0 자동 기동**이 이 전제를 스스로 충족시킨다 —
+> CDP가 죽어 있으면 전용 프로필로 Chrome을 직접 띄우고, 떠 있는데 탭만 없으면 뷰어 탭을 주입한다.
+> 자동 기동이 끝내 실패할 때만 "읽기전용 뷰어"로 안내하고 watch는 진입하지 않는다.
+
+### 3-0. 자동 기동 (CDP 보장 — 읽기전용으로 떨어지기 전에 스스로 인터랙티브로 올린다)
+
+STEP 2 직후 `alive`를 확인하고, 상태에 따라 **자동으로** CDP Chrome과 SpecLens 탭을 준비한다.
+순서대로 처리한다(이미 충족된 단계는 건너뜀):
+
+```bash
+!node "{PLUGIN_PATH}/scripts/sl_board_cdp.js" alive
+```
+
+**(A) `alive:false` — Chrome이 9222로 안 떠 있음 → 전용 프로필로 자동 기동.**
+> ⚠️ 사용자의 평소 Chrome(기본 프로필)은 절대 건드리지 않는다. **반드시 별도 `--user-data-dir`**(예:
+> `%TEMP%\chrome-cdp`)로 새 인스턴스를 띄워야 9222가 실제로 열린다 — 기본 프로필로 띄우면 기존 Chrome에
+> 탭만 추가되고 디버그 포트는 활성화되지 않는다(이게 "자동으로 안 뜨던" 근본 원인).
+>
+> 경로 인자는 **변수 확장이 보장되는 방식**으로 넘긴다(작은따옴표 안에 `$env:TEMP`를 두면 리터럴로
+> 들어가 프로필이 깨진다 — 실제로 겪은 버그). win32(PowerShell):
+> ```powershell
+> $chrome = @("C:\Program Files\Google\Chrome\Application\chrome.exe",
+>             "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe") |
+>           Where-Object { Test-Path $_ } | Select-Object -First 1
+> $profileDir = Join-Path $env:TEMP "chrome-cdp"
+> $url = "http://localhost:{port|5173}/docs/viewer/index.html"
+> Start-Process $chrome -ArgumentList "--remote-debugging-port=9222","--user-data-dir=$profileDir",$url
+> ```
+> mac: `open -na "Google Chrome" --args --remote-debugging-port=9222 --user-data-dir="$TMPDIR/chrome-cdp" "<url>"`
+> linux: `google-chrome --remote-debugging-port=9222 --user-data-dir="/tmp/chrome-cdp" "<url>" &`
+>
+> 기동 후 **포트가 열릴 때까지 짧게 폴링**한다(보통 1~3초, 최대 ~8초). `alive:true`면 (C)로,
+> 끝내 `false`면 (D)로.
+
+**(B) `alive:true` — Chrome은 떠 있음 → SpecLens 탭이 있는지 확인.**
+CDP 타깃 목록(`http://127.0.0.1:9222/json/list`)에서 뷰어 URL을 가진 `page`가 있는지 본다.
+**뷰어 탭이 이미 있으면 그대로 재사용** → 바로 3-1(watch)로.
+
+**(C) `alive:true` 인데 SpecLens 탭 없음(`no-viewer`/`chrome://intro`만 등 stale 인스턴스) → 포트 선점 인스턴스를 킬하고 깔끔히 재기동.**
+> 잘못 떠 있던 인스턴스(엉뚱한 탭만, 깨진 프로필 등)가 9222를 쥐고 있으면 탭 주입으로 우회하지 말고
+> **그 인스턴스를 죽이고 (A)로 가서 새로 띄운다** — 가장 깔끔하고 재현성 있다.
+> 9222는 디버그 전용 포트지만, **오킬 방지를 위해 점유 프로세스가 chrome일 때만 종료**한다(혹시 다른
+> 프로세스가 9222를 쓰고 있으면 죽이지 않고 (D)로 넘어가 수동 안내). win32(PowerShell):
+> ```powershell
+> # 9222 점유 PID 중 chrome 프로세스만 종료 (다른 프로세스/메인 Chrome은 건드리지 않음)
+> $pid9222 = (Get-NetTCPConnection -LocalPort 9222 -State Listen -ErrorAction SilentlyContinue |
+>             Select-Object -First 1).OwningProcess
+> if ($pid9222) {
+>   $proc = Get-Process -Id $pid9222 -ErrorAction SilentlyContinue
+>   if ($proc -and $proc.ProcessName -match 'chrome') { Stop-Process -Id $pid9222 -Force -ErrorAction SilentlyContinue }
+>   else { Write-Host "9222 점유 프로세스가 chrome 아님($($proc.ProcessName)) — 킬 생략, (D) 수동 안내" }
+> }
+> # 잔여 디버그 프로필 락 정리(선택) 후 (A)로 가서 클린 재기동
+> ```
+> mac/linux: `lsof -ti :9222 -c chrome -c Chrome | xargs -r kill -9` (chrome만) 후 (A) 재기동.
+> chrome을 킬한 경우에만 (A)의 기동·폴링을 수행한다.
+
+**(D) 자동 기동 실패(Chrome 미설치·포트 끝내 안 열림) → 읽기전용 뷰어 안내.**
+이때만 watch를 진입하지 않고, 사용자에게 수동 기동 명령(별도 프로필)을 안내한다.
+
+> **요약 흐름**: `alive?` → false면 (A)기동·폴링 → true·뷰어탭있으면 재사용 → true·탭없으면(stale)
+> (C)에서 9222 점유 프로세스 킬 후 (A) 클린 재기동 → 탭 확보되면 3-1 watch.
+> 이 3-0 덕분에 `/sl-viewer` 한 번으로, 포트가 stale하게 물려 있어도 인터랙티브 모드까지 자동으로 올라간다.
 
 ### 3-1. watch 루프 시작 (자동 long-poll, 토큰-효율)
 
-`/sl-viewer`는 STEP 2 직후 CDP가 살아있으면 자동으로 watch에 진입한다. `watch`는 Node 내부에서 주기적으로
+`/sl-viewer`는 3-0이 CDP 탭을 확보하면 자동으로 watch에 진입한다. `watch`는 Node 내부에서 주기적으로
 큐를 확인하다가 **실제 이벤트가 생겼을 때만** 1회 출력하고 종료하므로, 유휴 중에는 LLM 토큰을 전혀 쓰지 않는다.
 
 ```bash
