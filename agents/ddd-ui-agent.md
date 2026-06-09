@@ -171,12 +171,16 @@ N. {저장} → {결과/후속}
 
 ## 4. 위젯·액션
 > 버튼/필드 + **동작 → API(raw) → 결과**. 번호 = 「0. 화면 미리보기」 마커 번호와 1:1. INF-ID는 link_uis_inf가 채움.
+>
+> ⚠️ **연결 API(raw)는 백틱으로 감싸지 말 것.** `METHOD /path` 처럼 백틱(`` ` ``) 안에 넣으면, link_uis_inf가
+> `[INF-ID](링크)`로 치환한 뒤에도 백틱이 남아 마크다운이 **코드로 렌더 → 링크가 죽는다**(클릭 불가).
+> raw 경로는 **평문**으로 적는다(예: `POST /product/prdreg/productList`). 추적 안 되면 `—`. **`[TBD]` 금지.**
 
 **(공통영역) 검색·액션 툴바** — 개요 마커(`preview_annotated`) 대응:
 
 | 번호 | 위젯 | 타입 | 레이블 | 동작 | 연결 API(raw) | 결과 |
 |---|------|------|--------|------|--------------|------|
-| (1) | `#btnSearch` | button | 조회 | 목록 조회 | `POST /product/prdreg/productList` | 그리드 갱신 |
+| (1) | `#btnSearch` | button | 조회 | 목록 조회 | POST /product/prdreg/productList | 그리드 갱신 |
 | (2) | `#btnPrdRegRowInsert` | button | 등록 | 신규 행 | — | 상세폼 초기화 |
 | (3) | `schMdId` | input | MD코드 | 검색 파라미터 | — | — |
 
@@ -192,10 +196,10 @@ N. {저장} → {결과/후속}
   ```markdown
   # 단품정보 탭 — UIS-{CODE}-{NNN} {화면명} 4.4
   ![단품정보](tab4_단품정보_annotated.png)
-  | 번호 | 위젯 | 동작 | 연결 API |
+  | 번호 | 위젯 | 동작 | 연결 API(raw, 백틱 없이) |
   |---|------|------|---------|
-  | 1 | 단품그룹1 검색 | 단품 그룹1 코드 | [TBD] |
-  | 7 | 단품 자동생성 | 옵션 조합 자동생성 | [TBD] |
+  | 1 | 단품그룹1 검색 | 단품 그룹1 코드 | POST /product/prdreg/untGrpList |
+  | 7 | 단품 자동생성 | 옵션 조합 자동생성 | — |
   ```
 - 허브 4.9 목차 행: `| 4.4 단품정보 | 옵션/단품 | productUntGrid | [tab4_단품정보.md](tabs/tab4_단품정보.md) |`
 
@@ -208,12 +212,19 @@ N. {저장} → {결과/후속}
 | 상세폼 입력 | MD권한 보유(없으면 disabled-all) | `{js}:{라인}` |
 
 ## 6. 팝업·연계 화면
-> 이 화면이 띄우는 **팝업/모달**과 이동 대상. 트리거 위젯 → 팝업 → 용도. 팝업 URL은 api_hints에도 포함(link_uis_inf가 팝업 INF로 매핑).
+> 이 화면이 띄우는 **팝업/모달**과 이동 대상. 트리거 위젯 → 팝업 → 용도.
+>
+> ⚠️ **'연결 INF' 별도 열을 두지 말 것.** link_uis_inf는 raw 경로를 그 자리에서 `[INF](링크)`로 치환할 뿐,
+> 별도 placeholder 열은 못 채운다(경로가 없으니 영원히 `[TBD]`로 남는다). **단일 `연결 API/화면(raw)` 열**에
+> 백틱 없이 raw 경로만 적는다 → api 경로면 link_uis_inf가 INF 링크로 치환한다.
+>
+> **대부분의 팝업은 화면 열기(GET, `kind:form` 라우트)라 INF가 없다** — 이건 결함이 아니라 정상이다.
+> 이 경우 raw 경로를 그대로 두거나 `화면(INF 없음)`으로 적는다. 데이터 호출 팝업(POST `…List` 등 `kind:api`)만 INF로 치환된다. **`[TBD]` 금지.**
 
-| 트리거 위젯 | 팝업/연계 화면 | URL/route | 연결 INF | 용도 |
-|------------|--------------|-----------|---------|------|
-| `#schMdPop` | MD검색 팝업 | `/product/.../mdPop` | [TBD] | MD코드 선택 |
-| `#btnXxxPop` | {팝업명} | {url} | [TBD] | {무엇을 하는 팝업} |
+| 트리거 위젯 | 팝업/연계 화면 | 연결 API/화면 (raw → INF) | 용도 |
+|------------|--------------|--------------------------|------|
+| `#schMdPop` | MD검색 팝업 | GET /product/popUp/mdPop  ← form이면 INF 없음 | MD코드 선택 |
+| `#btnBnftPc` | 혜택가 팝업 | POST /product/prdreg/getBnftPc  ← api면 INF 치환 | 혜택가 확인 |
 
 > 팝업이 없으면 섹션 생략. 독립 라우트+독립저장 팝업은 별도 UIS 후보.
 

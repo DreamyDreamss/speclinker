@@ -595,6 +595,19 @@
       }
       if (replaced !== orig) el.innerHTML = replaced;
     });
+    // 백틱(인라인 코드) 안에 박힌 ID·마크다운링크도 클릭 가능하게.
+    // ddd-ui-agent가 'POST [INF-..](..)'를 코드로 감싸 마크다운 링크가 죽는 경우 구제 —
+    // `[ID](path)` 형태는 ID만 남겨 링크로 치환하고, bare ID도 링크화한다.
+    const codePat = /\[(INF-[A-Z]+-\d+|UIS-[A-Z]+-\d+(?:-T\d+)?|SCH-[A-Z]+-\d+|FUNC-[A-Za-z]+-\d+|SRS-F-\d+)\]\([^)]*\)|(INF-[A-Z]+-\d+|UIS-[A-Z]+-\d+(?:-T\d+)?|SCH-[A-Z]+-\d+|FUNC-[A-Za-z]+-\d+|SRS-F-\d+)/g;
+    section.querySelectorAll('code').forEach(el => {
+      if (el.querySelector('.sl-xlink')) return;
+      const orig = el.innerHTML;
+      const replaced = orig.replace(codePat, (full, gA, gB) => {
+        const id = gA || gB;
+        return `<span class="sl-xlink" onclick="SlViewer.goToId('${escAttr(id)}')" title="${escAttr(id)}로 이동">${id}</span>`;
+      });
+      if (replaced !== orig) el.innerHTML = replaced;
+    });
   }
 
   // ── 라우트 → 엔티티 해소 ──────────────────────────────────────
@@ -617,15 +630,35 @@
     document.getElementById('sl-breadcrumb')?.remove();
     const e = resolveCurrentEntity();
     if (!e) return;
+    // 현재 라우트 파일 — 탭(하위 문서)에 있으면 화면 ID 뒤에 탭 세그먼트를 추가한다.
+    const curFile = decodeURIComponent(window.location.hash || '').replace(/^#\//, '').replace(/[?].*$/, '');
+    const specFile = (e.entity && e.entity.file) || '';
+    let tabLabel = '';
+    if (specFile && curFile && curFile !== specFile) {
+      const screenDir = specFile.replace(/\/[^/]*$/, '');
+      if (curFile.indexOf(screenDir + '/') === 0 && /\.md$/i.test(curFile)) {
+        const base = curFile.split('/').pop().replace(/\.md$/i, '');
+        tabLabel = base.replace(/^tab\d+[_\-]?/i, '') || base;   // tab1_기초정보 → 기초정보
+      }
+    }
+    const dom = escAttr(e.domain || '');
+    const sep = `<span class="sl-bc-sep">›</span>`;
+    let html =
+      `<span class="sl-bc-link" role="button" tabindex="0" onclick="SlViewer.showDashboard()">🏠 대시보드</span>` + sep +
+      `<span class="sl-bc-link" role="button" tabindex="0" onclick="SlViewer.selectDomain('${dom}')">${escAttr(e.domain || '-')}</span>` + sep +
+      `<span class="sl-bc-link" role="button" tabindex="0" onclick="SlViewer.openDomainTab('${dom}','${e.type}')">${e.type.toUpperCase()}</span>` + sep;
+    if (tabLabel) {
+      // 탭에 있을 때: 화면 ID 클릭 → 화면(spec.md)으로 복귀, 마지막 세그먼트 = 현재 탭
+      html += `<span class="sl-bc-link" role="button" tabindex="0" onclick="SlViewer.goToId('${escAttr(e.id)}')">${escAttr(e.id)}</span>` + sep +
+              `<span class="sl-bc-cur">${escAttr(tabLabel)}</span>` +
+              `<span class="sl-bc-back" role="button" tabindex="0" onclick="SlViewer.goToId('${escAttr(e.id)}')">← 화면</span>`;
+    } else {
+      html += `<span class="sl-bc-cur">${escAttr(e.id)}</span>` +
+              `<span class="sl-bc-back" role="button" tabindex="0" onclick="SlViewer.selectDomain('${dom}')">← 도메인</span>`;
+    }
     const bc = document.createElement('div');
     bc.id = 'sl-breadcrumb';
-    bc.innerHTML =
-      `<span class="sl-bc-link" role="button" tabindex="0" onclick="SlViewer.showDashboard()">🏠 대시보드</span>` +
-      `<span class="sl-bc-sep">›</span>` +
-      `<span class="sl-bc-link" role="button" tabindex="0" onclick="SlViewer.selectDomain('${escAttr(e.domain || '')}')">${escAttr(e.domain || '-')}</span>` +
-      `<span class="sl-bc-sep">›</span><span class="sl-bc-type">${e.type.toUpperCase()}</span>` +
-      `<span class="sl-bc-sep">›</span><span class="sl-bc-cur">${escAttr(e.id)}</span>` +
-      `<span class="sl-bc-back" role="button" tabindex="0" onclick="SlViewer.selectDomain('${escAttr(e.domain || '')}')">← 도메인</span>`;
+    bc.innerHTML = html;
     const section = document.querySelector('.markdown-section');
     if (section) section.insertAdjacentElement('beforebegin', bc);
   }
@@ -1118,6 +1151,10 @@
     },
     selectTab(tab) {
       renderDomainView(ACTIVE_DOMAIN, tab);
+    },
+    openDomainTab(domain, type) {
+      const tabs = ['inf', 'uis', 'sch', 'srs'];
+      renderDomainView(domain, tabs.indexOf(type) >= 0 ? type : 'inf');
     },
     setSidebarMode(mode) {
       SIDEBAR_MODE = mode;

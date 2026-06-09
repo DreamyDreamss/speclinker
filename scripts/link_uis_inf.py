@@ -136,7 +136,14 @@ def patch_spec(spec_path, url_to_inf):
         if body != before:
             patched += 1
 
-    if patched > 0:
+    # 백틱 안에 INF 링크가 들어가면 마크다운이 코드로 렌더돼 링크가 죽는다(클릭 불가) →
+    # `[INF](link)` / `METHOD [INF](link)` 형태의 감싼 백틱을 벗긴다(메서드·링크는 보존).
+    # ddd-ui-agent가 raw API를 백틱으로 감싼 기존 산출물도 재실행 시 정상 링크로 복구된다.
+    unwrapped = re.sub(r'`\s*([A-Z]+\s+)?(\[INF-[A-Z]+-\d+\]\([^)]*\))\s*`', r'\1\2', body)
+    changed = (patched > 0) or (unwrapped != body)
+    body = unwrapped
+
+    if changed:
         with open(spec_path, 'w', encoding='utf-8') as f:
             f.write(body)
     return patched, ''
