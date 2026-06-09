@@ -600,7 +600,7 @@
     // `[ID](path)` 형태는 ID만 남겨 링크로 치환하고, bare ID도 링크화한다.
     const codePat = /\[(INF-[A-Z]+-\d+|UIS-[A-Z]+-\d+(?:-T\d+)?|SCH-[A-Z]+-\d+|FUNC-[A-Za-z]+-\d+|SRS-F-\d+)\]\([^)]*\)|(INF-[A-Z]+-\d+|UIS-[A-Z]+-\d+(?:-T\d+)?|SCH-[A-Z]+-\d+|FUNC-[A-Za-z]+-\d+|SRS-F-\d+)/g;
     section.querySelectorAll('code').forEach(el => {
-      if (el.querySelector('.sl-xlink')) return;
+      if (el.classList.contains('lang-mermaid') || el.querySelector('.sl-xlink')) return;
       const orig = el.innerHTML;
       const replaced = orig.replace(codePat, (full, gA, gB) => {
         const id = gA || gB;
@@ -1225,6 +1225,32 @@
   };
 
   // ── Docsify 플러그인 등록 ──────────────────────────────────────
+  // 문서 본문에 박힌 ```mermaid 블록(SCH 미니 ERD 등)을 다이어그램으로 렌더한다.
+  // docsify는 ```mermaid를 <pre><code class="lang-mermaid">로만 출력하므로(라이브러리는 로드돼 있어도
+  // 본문 블록엔 호출이 없음) — 여기서 직접 mermaid.render를 호출해 SVG로 치환한다.
+  let _erdSeq = 0;
+  async function renderContentMermaid() {
+    if (!window.mermaid) return;
+    const blocks = document.querySelectorAll(
+      '.markdown-section pre code.lang-mermaid, .content pre code.lang-mermaid');
+    if (!blocks.length) return;
+    try { window.mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', theme: 'dark' }); } catch (e) {}
+    for (const code of blocks) {
+      const pre = code.closest('pre');
+      if (!pre || pre.dataset.slErd) continue;
+      pre.dataset.slErd = '1';
+      try {
+        const { svg } = await window.mermaid.render('sl-erd-' + (++_erdSeq), code.textContent);
+        const div = document.createElement('div');
+        div.className = 'mermaid sl-erd';
+        div.innerHTML = svg;
+        pre.replaceWith(div);
+      } catch (e) {
+        pre.dataset.slErd = 'err';   // 실패 시 원본 코드 유지(진단 가능)
+      }
+    }
+  }
+
   function SlPlugin(hook, vm) {
     // 이미지 경로 재작성: spec.md 안의 ![[x]](Obsidian) 및 상대 ![](x) 를
     // 현재 문서 디렉토리 기준 경로로 변환 → 화면당 디렉토리/tabs 자산이 렌더된다.
@@ -1279,6 +1305,7 @@
       document.body.classList.remove('sl-custom-view');
       // 모든 마크다운 문서에 크로스링크·강조 적용 (FUNC_MAP/SRS/FUNC_v1.0 등 색인문서 포함)
       setTimeout(function () {
+        renderContentMermaid();
         injectBreadcrumb();
         injectRelationPanel();
         injectQuickNav();
