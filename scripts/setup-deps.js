@@ -9,6 +9,10 @@
  *   1. playwright-core  (npm)  — capture_screen_dom.js CDP 연결
  *   2. tree-sitter      (npm)  — scan_source.js AST 파싱 (미설치 시 regex fallback)
  *   3. Pillow           (pip)  — annotate_preview.py 마커 이미지 생성
+ *   4. DB MCP deps      (pip)  — project.env MCP_DB_*=true 선언 시: mcp·sqlalchemy·pandas·dotenv + 드라이버(oracledb/pymysql/ibm_db)
+ *   4b. uv(uvx)         (pip)  — project.env MCP_JIRA/MCP_WIKI=true 선언 시: Atlassian MCP 실행기(`uvx mcp-atlassian`)
+ *
+ * ※ 자동화 안 되는 항목(설계상): Python·Node 본체(전제), DB 접속 creds/.mcp.json(보안), DB2 IBM CLI Driver(네이티브), 인터넷.
  */
 'use strict';
 
@@ -143,7 +147,10 @@ if (!fs.existsSync(nmTreeSitter)) {
   const oracle = flag('MCP_DB_oracle');
   const db2    = flag('MCP_DB_db2');
   const maria  = flag('MCP_DB_mariadb') || flag('MCP_DB_mysql');
-  if (!(oracle || db2 || maria)) return;      // DB MCP 미사용 — 스킵
+  const jira   = flag('MCP_JIRA');
+  const wiki   = flag('MCP_WIKI');
+  const wantDB = oracle || db2 || maria;
+  if (!(wantDB || jira || wiki)) return;       // MCP 전혀 미사용 — 스킵
 
   const pyHas = (mod) => {
     try {
@@ -162,8 +169,33 @@ if (!fs.existsSync(nmTreeSitter)) {
     }
   };
 
-  ensure('core', ['mcp', 'sqlalchemy', 'pandas', 'dotenv'], '"mcp[cli]" sqlalchemy pandas python-dotenv');
-  if (oracle) ensure('oracle', ['oracledb'], 'oracledb');
-  if (maria)  ensure('mysql/mariadb', ['pymysql'], 'pymysql');
-  if (db2)    ensure('db2', ['ibm_db'], 'ibm_db ibm_db_sa');  // ※ IBM CLI Driver 별도 필요할 수 있음
+  // 4a. DB MCP(내장 python 서버) 드라이버
+  if (wantDB) {
+    ensure('core', ['mcp', 'sqlalchemy', 'pandas', 'dotenv'], '"mcp[cli]" sqlalchemy pandas python-dotenv');
+    if (oracle) ensure('oracle', ['oracledb'], 'oracledb');
+    if (maria)  ensure('mysql/mariadb', ['pymysql'], 'pymysql');
+    if (db2)    ensure('db2', ['ibm_db'], 'ibm_db ibm_db_sa');  // ※ IBM CLI Driver 별도 필요할 수 있음
+  }
+
+  // 4b. Atlassian(Jira/Confluence) MCP = `uvx mcp-atlassian` → uv 실행기 자동 설치.
+  // (mcp-atlassian 패키지 자체는 uvx가 첫 실행 시 자동 다운로드 — pip 불필요.)
+  if (jira || wiki) {
+    let hasUvx = false;
+    try { hasUvx = spawnSync('uvx', ['--version'], { encoding: 'utf-8', timeout: 5000 }).status === 0; } catch (_) {}
+    if (!hasUvx) {
+      try { hasUvx = spawnSync('uv', ['--version'], { encoding: 'utf-8', timeout: 5000 }).status === 0; } catch (_) {}
+    }
+    if (hasUvx) {
+      log('uv/uvx OK (Atlassian MCP, skip)');
+    } else {
+      log('Atlassian MCP용 uv(uvx) 설치 중...');
+      try {
+        execSync(`${pyCmd} -m pip install --quiet uv`, { stdio: 'inherit', timeout: 120000 });
+        log('uv 설치 완료 — uvx mcp-atlassian 사용 가능(패키지는 첫 실행 시 자동 다운로드)');
+      } catch (e) {
+        log('[WARN] uv 설치 실패: ' + e.message);
+        log('       수동: ' + pyCmd + ' -m pip install uv');
+      }
+    }
+  }
 })();
