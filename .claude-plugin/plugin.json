@@ -1,0 +1,55 @@
+{
+  "name": "speclinker",
+  "description": "SM(운영 시스템) 스펙 역생성 + AIDD 자동화 — 현행 소스에서 INF/SCH/UIS/FUNC 역추출, FUNC-ID 체이닝, 변경관리(SR). (SI/신규구축용은 별도 플러그인)",
+  "version": "3.35.7",
+  "author": {
+    "name": "DreamyDreamss"
+  },
+  "skills": [
+    "./skills/sl-init",
+    "./skills/sl-recon",
+    "./skills/sl-recon-inf",
+    "./skills/sl-recon-sch",
+    "./skills/sl-recon-uis",
+    "./skills/sl-recon-doc",
+    "./skills/sl-aidd",
+    "./skills/sl-change",
+    "./skills/sl-test",
+    "./skills/sl-viewer",
+    "./skills/sl-context",
+    "./skills/sl-status",
+    "./skills/sl-ia"
+  ],
+  "agents": [
+    "./agents/spec-agent.md",
+    "./agents/rd-agent.md",
+    "./agents/srs-agent.md",
+    "./agents/sad-agent.md",
+    "./agents/ddd-api-agent.md",
+    "./agents/ddd-db-agent.md",
+    "./agents/ddd-ui-agent.md",
+    "./agents/ddd-batch-agent.md",
+    "./agents/rtm-agent.md",
+    "./agents/dev-agent.md",
+    "./agents/qa-agent.md",
+    "./agents/test-agent.md",
+    "./agents/profile-agent.md",
+    "./agents/convention-learner.md",
+    "./agents/meta-extractor.md"
+  ],
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PLUGIN_ROOT}/scripts/setup-deps.js"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
