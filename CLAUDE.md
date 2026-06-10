@@ -44,6 +44,7 @@
 | 문서 | 무엇의 정본인가 | 언제 갱신 |
 |------|----------------|----------|
 | `docs/RECON_PIPELINE.md` | RECON 3-Phase 커맨드별 STEP·에이전트·산출물 흐름 | recon 계열 STEP/에이전트/산출경로 변경 시 |
+| `docs/COMMAND_REFERENCE.md` | 13개 커맨드 STEP별 상세동작 + 전체 플로우 | 커맨드 추가/삭제·STEP/플로우 변경 시 |
 | `CLAUDE.md` (이 파일) | 커맨드 라우팅표 · 서브에이전트 모델표 · 파이프라인 · **버전 노트** | 스킬/에이전트/라우팅/모델 변경 시 |
 | `scripts/README.md` | 스크립트 목록 · 사용 STEP · 스크립트 간 의존 흐름 | 스크립트 추가/삭제/호출위치 변경 시 |
 | `README.md` | 스킬 트리 · 파이프라인 개요 | 스킬 추가/삭제 시 |
@@ -114,6 +115,7 @@
 | QA 게이트 | `agents/qa-agent.md` | Sonnet | dev와 분리된 독립 컨텍스트 3-Layer 검증 — 유지 |
 | 테스트 | `agents/test-agent.md` | **Haiku** | TC 생성(기계적 — v3.24 sonnet→haiku) |
 
+> **v3.35.8** (커맨드 레퍼런스 정본화): 사용자 요청 — 13개 커맨드의 STEP별 상세동작 + 전체 플로우를 `docs/COMMAND_REFERENCE.md`로 정리(현행 v3.35.x: RECON 페이즈 분리·✋게이트·서브에이전트·산출경로·MCP). 정본 참조 문서 레지스트리에 등록.
 > **v3.35.7** (plugin.json 복구 — 빈 파일 사고): 버전 bump 스크립트의 `open("w").write(open().read())` 한 줄 패턴이 "w"가 read 전에 파일을 truncate해 **plugin.json을 0바이트로 만들어 origin에 푸시됨**(v3.35.5~3.35.6 동안 플러그인 메타 깨짐 — skills/agents/hooks/version 전부 소실). dcb07e3(v3.35.4)에서 복원 + 안전 bump(읽기→변수→쓰기). **교훈: 버전 bump은 read를 변수에 담은 뒤 write할 것**(한 줄 truncate-before-read 금지).
 > **v3.35.6** (의존성 자동설치 확대 — uv/uvx): 사용자 "설치 다 자동으로 안 되나". `setup-deps.js`(SessionStart)에 **Atlassian MCP용 uv 자동설치** 추가 — project.env `MCP_JIRA`/`MCP_WIKI=true`면 uvx 부재 시 `pip install uv`(mcp-atlassian 패키지는 uvx가 첫 실행 시 자동 다운로드). 기존 자동: playwright·tree-sitter·Pillow + (MCP_DB_*) mcp·sqlalchemy·pandas·dotenv·드라이버. **본질적 수동(설계상)**: Python·Node 본체(전제·닭달걀), DB 접속 creds/.mcp.json(보안), DB2 IBM CLI Driver(네이티브), 인터넷. 문서 주석에 자동/수동 경계 명시.
 > **v3.35.5** (SCH 미니 ERD 렌더 — 본문 mermaid 미렌더 수정): 사용자 지적 "SCH 문서 미니 ERD가 렌더 안 됨"(CDP 라이브 확인). 원인: docsify가 ```mermaid를 `<pre><code class=lang-mermaid>`로만 출력하는데 docsify-sl.js는 mermaid를 '연결 그래프'에만 쓰고 **본문 mermaid 블록 렌더가 없었음**(라이브러리는 로드됨, renderedSvg 0). → `renderContentMermaid()` 신설(doneEach·직접진입 path에서 호출): `pre code.lang-mermaid`를 `mermaid.render`로 SVG 치환(중복/실패 가드) + addCrosslinks 코드패스가 lang-mermaid 건너뛰게 가드. CDP 라이브 검증: 캐시 비활성 리로드 후 ERD SVG 렌더 확인(renderedErdSvg 0→1). 기존 프로젝트는 /sl-viewer 자산 재복사 + 하드 리프레시 필요.
