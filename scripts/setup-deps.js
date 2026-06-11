@@ -199,3 +199,61 @@ if (!fs.existsSync(nmTreeSitter)) {
     }
   }
 })();
+
+// ── 5. 전역 MCP 안정화 (버전 캐시 경로 → 고정 경로) ────────────────────────────
+// ~/.claude.json(user scope)에 등록된 내장 DB MCP 서버 경로가 버전 캐시(.../speclinker/<ver>/mcp-servers/..)를
+// 가리키면 /plugin update로 옛 캐시가 지워질 때 깨진다. mcp-servers/*.py를 **버전 무관 고정 경로**
+// (~/.claude/speclinker-mcp/)로 복사·갱신하고, ~/.claude.json의 stale 버전경로를 그 고정 경로로 self-heal한다.
+// → 한 번 고정경로로 등록되면 이후 update가 경로를 깨지 않는다(내용만 매 세션 갱신).
+(function stabilizeGlobalMcp() {
+  const os = require('os');
+  const SRC = path.join(PLUGIN_ROOT, 'mcp-servers');
+  if (!fs.existsSync(SRC)) return;
+  const STABLE = path.join(os.homedir(), '.claude', 'speclinker-mcp');
+
+  // 5-1. 서버 *.py 고정 경로로 복사·갱신 (내용 다를 때만)
+  let copied = 0;
+  try {
+    fs.mkdirSync(STABLE, { recursive: true });
+    for (const f of fs.readdirSync(SRC).filter((x) => x.endsWith('.py'))) {
+      const sBuf = fs.readFileSync(path.join(SRC, f));
+      const dst = path.join(STABLE, f);
+      let same = false;
+      try { same = fs.readFileSync(dst).equals(sBuf); } catch (_) {}
+      if (!same) { fs.writeFileSync(dst, sBuf); copied++; }
+    }
+  } catch (e) { log('[WARN] 전역 MCP 서버 복사 실패: ' + e.message); return; }
+  if (copied) log('전역 MCP 서버 갱신: ' + copied + '개 → ' + STABLE);
+
+  // 5-2. ~/.claude.json self-heal: 버전 캐시 경로 → 고정 경로 (안전 쓰기)
+  const cfgPath = path.join(os.homedir(), '.claude.json');
+  if (!fs.existsSync(cfgPath)) return;
+  let raw, cfg;
+  try { raw = fs.readFileSync(cfgPath, 'utf-8'); cfg = JSON.parse(raw); }
+  catch (_) { return; }                          // 파싱 불가 — 건드리지 않음
+  if (!cfg.mcpServers || typeof cfg.mcpServers !== 'object') return;
+  const reVerCache = /speclinker[\\/]+speclinker[\\/]+[^\\/]+[\\/]+mcp-servers[\\/]+([\w.-]+\.py)$/i;
+  let healed = 0;
+  for (const name of Object.keys(cfg.mcpServers)) {
+    const srv = cfg.mcpServers[name];
+    if (!srv || !Array.isArray(srv.args)) continue;
+    for (let i = 0; i < srv.args.length; i++) {
+      const a = srv.args[i];
+      if (typeof a !== 'string') continue;
+      const m = a.match(reVerCache);
+      if (m) {
+        const fixed = path.join(STABLE, m[1]);
+        if (a !== fixed && fs.existsSync(fixed)) { srv.args[i] = fixed; healed++; }
+      }
+    }
+  }
+  if (!healed) return;
+  try {
+    const out = JSON.stringify(cfg, null, 2);
+    JSON.parse(out);                             // 직렬화 결과 재검증(파손 방지)
+    try { fs.writeFileSync(cfgPath + '.speclinker-bak', raw); } catch (_) {}   // 1회 백업
+    fs.writeFileSync(cfgPath + '.tmp', out);
+    fs.renameSync(cfgPath + '.tmp', cfgPath);    // 원자적 교체
+    log('전역 MCP 경로 self-heal: ' + healed + '건 → 고정 경로(' + STABLE + ')');
+  } catch (e) { log('[WARN] ~/.claude.json self-heal 실패(미변경): ' + e.message); }
+})();

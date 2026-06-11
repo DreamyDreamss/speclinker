@@ -340,8 +340,28 @@ def _ask_secret(prompt: str) -> str:
         return ask(prompt)
 
 
-def register_global():
+def _stable_mcp_dir():
+    """mcp-servers/*.py를 버전 무관 **고정 경로**(~/.claude/speclinker-mcp/)에 복사하고 반환.
+    전역 MCP는 이 고정 경로로 등록해야 /plugin update(캐시 버전 교체·삭제)에도 경로가 안 깨진다.
+    내장 DB 서버 전부(oracle/db2/mariadb) + readonly_guard를 함께 복사한다(서버가 import)."""
     here = os.path.dirname(os.path.abspath(__file__))
+    stable = os.path.join(os.path.expanduser("~"), ".claude", "speclinker-mcp")
+    os.makedirs(stable, exist_ok=True)
+    for f in os.listdir(here):
+        if not f.endswith(".py"):
+            continue
+        src, dst = os.path.join(here, f), os.path.join(stable, f)
+        try:
+            same = os.path.exists(dst) and open(dst, "rb").read() == open(src, "rb").read()
+            if not same:
+                shutil.copyfile(src, dst)
+        except Exception:
+            pass
+    return stable
+
+
+def register_global():
+    stable = _stable_mcp_dir()
     if not shutil.which("claude"):
         print(c(RED, "claude CLI를 찾을 수 없습니다 — Claude Code 설치/PATH 확인 후 재실행"))
         return
@@ -373,7 +393,7 @@ def register_global():
             if v:
                 env[key] = v
         alias = ask(f"  MCP 별칭 [{spec['alias']}]: ").strip() or spec["alias"]
-        server = os.path.join(here, spec["server"])
+        server = os.path.join(stable, spec["server"])   # 고정 경로(버전 무관)
         cmd = ["claude", "mcp", "add", alias, "--scope", "user"]
         for k, v in env.items():
             cmd += ["--env", f"{k}={v}"]
@@ -392,7 +412,7 @@ def register_global():
 def register_global_template(dbs=None):
     """비대화형 — 전역(사용자 스코프) MCP 설정파일에 DB 서버 항목을 placeholder(CHANGE_ME) creds로 추가.
     creds(아이디/비번)는 사용자가 직접 파일을 열어 채운다. sl-init '전역' 선택에서 호출."""
-    here = os.path.dirname(os.path.abspath(__file__))
+    stable = _stable_mcp_dir()
     cfg = os.path.join(os.path.expanduser("~"), ".claude.json")
     chosen = [d for d in (dbs or list(DB_SPECS)) if d in DB_SPECS]
     if not shutil.which("claude"):
@@ -400,13 +420,13 @@ def register_global_template(dbs=None):
         for db in chosen:
             sp = DB_SPECS[db]
             envs = " ".join(f"--env {k}=CHANGE_ME" for k, _, _ in sp["fields"])
-            print(c(GRAY, f"  claude mcp add {sp['alias']} --scope user {envs} -- python {os.path.join(here, sp['server'])}"))
+            print(c(GRAY, f"  claude mcp add {sp['alias']} --scope user {envs} -- python {os.path.join(stable, sp['server'])}"))
         return
 
     added, skipped, edit_keys = [], [], {}
     for db in chosen:
         sp = DB_SPECS[db]
-        alias, server = sp["alias"], os.path.join(here, sp["server"])
+        alias, server = sp["alias"], os.path.join(stable, sp["server"])   # 고정 경로(버전 무관)
         ret, _ = run_silent(["claude", "mcp", "get", alias])
         if ret == 0:
             skipped.append(alias); continue
