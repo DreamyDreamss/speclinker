@@ -45,6 +45,7 @@
 |------|----------------|----------|
 | `docs/RECON_PIPELINE.md` | RECON 3-Phase 커맨드별 STEP·에이전트·산출물 흐름 | recon 계열 STEP/에이전트/산출경로 변경 시 |
 | `docs/COMMAND_REFERENCE.md` | 13개 커맨드 STEP별 상세동작 + 전체 플로우 | 커맨드 추가/삭제·STEP/플로우 변경 시 |
+| `docs/MCP_STANDALONE_SETUP.md` | 내장 DB MCP 단독 설치(타 PC/클라이언트) | MCP 서버·도구·등록방식 변경 시 |
 | `CLAUDE.md` (이 파일) | 커맨드 라우팅표 · 서브에이전트 모델표 · 파이프라인 · **버전 노트** | 스킬/에이전트/라우팅/모델 변경 시 |
 | `scripts/README.md` | 스크립트 목록 · 사용 STEP · 스크립트 간 의존 흐름 | 스크립트 추가/삭제/호출위치 변경 시 |
 | `README.md` | 스킬 트리 · 파이프라인 개요 | 스킬 추가/삭제 시 |
@@ -115,6 +116,7 @@
 | QA 게이트 | `agents/qa-agent.md` | Sonnet | dev와 분리된 독립 컨텍스트 3-Layer 검증 — 유지 |
 | 테스트 | `agents/test-agent.md` | **Haiku** | TC 생성(기계적 — v3.24 sonnet→haiku) |
 
+> **v3.35.10** (MCP 단독 설치 가이드): 사용자 요청 — 플러그인 없이 내장 DB 스키마 MCP만 다른 PC/클라이언트에 붙이는 self-contained 가이드 `docs/MCP_STANDALONE_SETUP.md` 신설(서버파일 4종·pip·Claude Desktop/Code/Cursor 등록·테스트·도구·트러블슈팅). 정본 레지스트리 등록.
 > **v3.35.9** (전역 MCP 고정경로 — /plugin update 내성): 사용자 지적 "오라클 등 내장 MCP 스크립트가 버전마다 경로가 바뀌어 매번 맞춰야 함". 원인: `~/.claude.json`(user scope) DB MCP 서버가 버전 캐시(`.../speclinker/<ver>/mcp-servers/`)를 가리켜 `/plugin update` 시 옛 캐시 삭제로 깨짐(project.env PLUGIN_PATH self-heal은 이걸 안 고침). 해법: `setup-deps.js`가 ①`mcp-servers/*.py`(oracle·db2·mariadb·readonly_guard **전부**)를 버전 무관 **고정경로 `~/.claude/speclinker-mcp/`**로 복사·갱신, ②`~/.claude.json`의 버전캐시 경로를 고정경로로 **self-heal**(백업+원자적 쓰기·재검증). `install.py --global/--global-template`도 고정경로로 등록. → 한 번 등록하면 이후 update에도 경로 무손상. 외부 MCP(atlassian uvx·github npx)는 버전경로 없어 무관.
 > **v3.35.8** (커맨드 레퍼런스 정본화): 사용자 요청 — 13개 커맨드의 STEP별 상세동작 + 전체 플로우를 `docs/COMMAND_REFERENCE.md`로 정리(현행 v3.35.x: RECON 페이즈 분리·✋게이트·서브에이전트·산출경로·MCP). 정본 참조 문서 레지스트리에 등록.
 > **v3.35.7** (plugin.json 복구 — 빈 파일 사고): 버전 bump 스크립트의 `open("w").write(open().read())` 한 줄 패턴이 "w"가 read 전에 파일을 truncate해 **plugin.json을 0바이트로 만들어 origin에 푸시됨**(v3.35.5~3.35.6 동안 플러그인 메타 깨짐 — skills/agents/hooks/version 전부 소실). dcb07e3(v3.35.4)에서 복원 + 안전 bump(읽기→변수→쓰기). **교훈: 버전 bump은 read를 변수에 담은 뒤 write할 것**(한 줄 truncate-before-read 금지).
